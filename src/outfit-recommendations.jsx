@@ -1082,52 +1082,54 @@ export default function OutfitRecommendations() {
             {view === "wardrobe" ? "My Wardrobe" : view === "outfit" ? (outfits.length > 0 ? outfits[current].vibe : "Outfits") : "Chat"}
           </h1>
 
-          <div style={{
-            display: "flex",
-            background: "#F0EFED",
-            borderRadius: 20,
-            padding: 3,
-            flexShrink: 0,
-          }}>
-            <button
-              onClick={() => setView("chat")}
-              style={{
-                height: "var(--tab-height)",
-                padding: `0 var(--tab-padding-x)`,
-                borderRadius: "calc(var(--tab-height) / 2)",
-                border: "none",
-                background: view === "chat" ? "#fff" : "transparent",
-                color: view === "chat" ? "#1A1A1A" : "#999",
-                fontSize: "var(--font-tab)",
-                fontWeight: 600,
-                fontFamily: "'DM Sans', sans-serif",
-                cursor: "pointer",
-                transition: "all 0.2s ease",
-                boxShadow: view === "chat" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-              }}
-            >
-              Chat
-            </button>
-            <button
-              onClick={() => setView("outfit")}
-              style={{
-                height: "var(--tab-height)",
-                padding: `0 var(--tab-padding-x)`,
-                borderRadius: "calc(var(--tab-height) / 2)",
-                border: "none",
-                background: view === "outfit" ? "#fff" : "transparent",
-                color: view === "outfit" ? "#1A1A1A" : "#999",
-                fontSize: "var(--font-tab)",
-                fontWeight: 600,
-                fontFamily: "'DM Sans', sans-serif",
-                cursor: "pointer",
-                transition: "all 0.2s ease",
-                boxShadow: view === "outfit" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-              }}
-            >
-              Outfits
-            </button>
-          </div>
+          {view !== "wardrobe" && (
+            <div style={{
+              display: "flex",
+              background: "#F0EFED",
+              borderRadius: 20,
+              padding: 3,
+              flexShrink: 0,
+            }}>
+              <button
+                onClick={() => setView("chat")}
+                style={{
+                  height: "var(--tab-height)",
+                  padding: `0 var(--tab-padding-x)`,
+                  borderRadius: "calc(var(--tab-height) / 2)",
+                  border: "none",
+                  background: view === "chat" ? "#fff" : "transparent",
+                  color: view === "chat" ? "#1A1A1A" : "#999",
+                  fontSize: "var(--font-tab)",
+                  fontWeight: 600,
+                  fontFamily: "'DM Sans', sans-serif",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  boxShadow: view === "chat" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                }}
+              >
+                Chat
+              </button>
+              <button
+                onClick={() => setView("outfit")}
+                style={{
+                  height: "var(--tab-height)",
+                  padding: `0 var(--tab-padding-x)`,
+                  borderRadius: "calc(var(--tab-height) / 2)",
+                  border: "none",
+                  background: view === "outfit" ? "#fff" : "transparent",
+                  color: view === "outfit" ? "#1A1A1A" : "#999",
+                  fontSize: "var(--font-tab)",
+                  fontWeight: 600,
+                  fontFamily: "'DM Sans', sans-serif",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  boxShadow: view === "outfit" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                }}
+              >
+                Outfits
+              </button>
+            </div>
+          )}
         </div>
 
         {view === "outfit" && outfits.length > 0 && (
