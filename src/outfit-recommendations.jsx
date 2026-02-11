@@ -343,7 +343,7 @@ function OutfitEmptyState({ onSwitchToChat }) {
   );
 }
 
-function ChatView({ messages, inputValue, setInputValue, onSend, onChipTap }) {
+function ChatView({ messages, inputValue, setInputValue, onSend, onChipTap, onCtaAction }) {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -466,6 +466,46 @@ function ChatView({ messages, inputValue, setInputValue, onSend, onChipTap }) {
               }}>
                 {msg.text}
               </div>
+              {msg.cta && (
+                <button
+                  onClick={() => onCtaAction(msg.cta.action)}
+                  style={{
+                    marginTop: 8,
+                    width: "100%",
+                    height: 48,
+                    borderRadius: 14,
+                    border: "none",
+                    background: "#1A1A1A",
+                    color: "#fff",
+                    fontSize: "var(--font-body)",
+                    fontWeight: 600,
+                    fontFamily: "'DM Sans', sans-serif",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    transition: "all 0.15s ease",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                  }}
+                  onPointerDown={(e) => {
+                    e.currentTarget.style.transform = "scale(0.97)";
+                    e.currentTarget.style.background = "#333";
+                  }}
+                  onPointerUp={(e) => {
+                    e.currentTarget.style.transform = "scale(1)";
+                    e.currentTarget.style.background = "#1A1A1A";
+                  }}
+                  onPointerLeave={(e) => {
+                    e.currentTarget.style.transform = "scale(1)";
+                    e.currentTarget.style.background = "#1A1A1A";
+                  }}
+                >
+                  <span style={{ fontSize: 16 }}>👗</span>
+                  {msg.cta.label}
+                  <span style={{ fontSize: 14, opacity: 0.7 }}>→</span>
+                </button>
+              )}
             </div>
           ))
         )}
@@ -810,7 +850,7 @@ export default function OutfitRecommendations() {
         setIsGenerating(false);
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", text: "Here are 3 outfit options from your wardrobe. Swipe through them and let me know what you think, or tell me what to change." },
+          { role: "assistant", text: "Here are 3 outfit options from your wardrobe. Swipe through them and let me know what you think, or tell me what to change.", cta: { label: "View Outfits", action: "navigate_outfits" } },
         ]);
       }, 2000);
     } else {
@@ -1035,6 +1075,9 @@ export default function OutfitRecommendations() {
           setInputValue={setInputValue}
           onSend={handleSend}
           onChipTap={handleChipTap}
+          onCtaAction={(action) => {
+            if (action === "navigate_outfits") setView("outfit");
+          }}
         />
       )}
 
