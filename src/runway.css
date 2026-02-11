@@ -1,0 +1,171 @@
+/* ===== Reset ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #fafaf8;
+  overflow: hidden;
+}
+
+/* ===== Viewport Height Fix ===== */
+:root {
+  --app-height: 100dvh;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@supports not (height: 100dvh) {
+  :root {
+    --app-height: 100vh;
+  }
+}
+
+/* ===== CSS Custom Properties (Base: small phones, 320px+) ===== */
+:root {
+  /* Container */
+  --container-max-width: 100%;
+  --container-padding-x: 16px;
+
+  /* Spacing */
+  --space-top-bar: 48px;
+  --space-section-gap: 10px;
+  --space-card-padding: 9px 12px 10px;
+  --space-reasoning-margin-top: 12px;
+  --space-reasoning-padding: 10px 12px;
+  --space-chat-padding-x: 16px;
+  --space-chat-input-pb: 28px;
+  --space-lightbox-padding: 20px;
+  --space-header-mb: 12px;
+  --space-dots-mb: 14px;
+
+  /* Typography */
+  --font-title: clamp(1.5rem, 5vw + 0.25rem, 2rem);
+  --font-body: clamp(0.8125rem, 1vw + 0.5rem, 0.9375rem);
+  --font-item-name: clamp(0.8125rem, 1vw + 0.5rem, 1rem);
+  --font-label-sm: clamp(0.5625rem, 0.5vw + 0.375rem, 0.6875rem);
+  --font-label-md: clamp(0.6875rem, 0.5vw + 0.5rem, 0.8125rem);
+  --font-caption: clamp(0.625rem, 0.5vw + 0.4375rem, 0.75rem);
+  --font-lightbox-title: clamp(1.125rem, 2vw + 0.5rem, 1.5rem);
+  --font-lightbox-emoji: clamp(3.5rem, 8vw + 1rem, 5rem);
+  --font-chat: clamp(0.8125rem, 1vw + 0.5rem, 1rem);
+  --font-tab: clamp(0.6875rem, 0.5vw + 0.5rem, 0.875rem);
+  --font-icon: clamp(1rem, 1vw + 0.5rem, 1.25rem);
+  --font-reasoning: clamp(0.75rem, 0.5vw + 0.5rem, 0.875rem);
+
+  /* Component dimensions */
+  --card-image-height: clamp(120px, 25vw + 40px, 180px);
+  --card-emoji-size: clamp(2.25rem, 5vw + 0.5rem, 2.75rem);
+  --input-height: clamp(40px, 5vw + 20px, 48px);
+  --tab-height: clamp(28px, 3vw + 16px, 36px);
+  --tab-padding-x: clamp(10px, 2vw + 4px, 16px);
+  --lightbox-max-width: clamp(300px, 60vw, 480px);
+  --lightbox-close-size: 40px;
+  --dot-size: 7px;
+  --dot-active-width: 20px;
+  --card-border-radius: 16px;
+  --border-radius-pill: 22px;
+
+  /* Item card grid */
+  --card-grid-columns: 1;
+  --card-grid-gap: 10px;
+}
+
+/* ===== Large Phones (480px+) ===== */
+@media (min-width: 480px) {
+  :root {
+    --container-padding-x: 20px;
+    --space-top-bar: 52px;
+    --space-card-padding: 9px 14px 10px;
+    --space-reasoning-padding: 10px 14px;
+    --space-chat-padding-x: 20px;
+    --space-lightbox-padding: 24px;
+    --card-grid-gap: 12px;
+  }
+}
+
+/* ===== Tablets (768px+) ===== */
+@media (min-width: 768px) {
+  :root {
+    --container-max-width: 720px;
+    --container-padding-x: 24px;
+    --card-grid-columns: 2;
+    --card-grid-gap: 14px;
+    --space-top-bar: 40px;
+    --space-chat-input-pb: 20px;
+  }
+}
+
+/* ===== Desktop (1024px+) ===== */
+@media (min-width: 1024px) {
+  :root {
+    --container-max-width: 860px;
+    --container-padding-x: 32px;
+    --card-grid-columns: 3;
+    --card-grid-gap: 16px;
+    --space-top-bar: 32px;
+  }
+}
+
+/* ===== Item Card Grid ===== */
+.item-card-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--card-grid-columns), 1fr);
+  gap: var(--card-grid-gap);
+}
+
+/* ===== Swipe Container ===== */
+.swipe-container {
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-y;
+}
+
+/* ===== Scroll Panels ===== */
+.outfit-scroll-panel {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.outfit-scroll-panel::-webkit-scrollbar {
+  display: none;
+}
+
+.chat-messages {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+/* ===== Chat Input Focus ===== */
+.chat-input:focus {
+  outline: none;
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+/* ===== Keyframe Animations ===== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

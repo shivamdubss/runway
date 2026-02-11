@@ -60,16 +60,16 @@ function Lightbox({ item, onClose }) {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: 24,
+        padding: "var(--space-lightbox-padding)",
         animation: "fadeIn 0.2s ease",
       }}
     >
-      <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } @keyframes scaleIn { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }`}</style>
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
+          position: "relative",
           width: "100%",
-          maxWidth: 360,
+          maxWidth: "var(--lightbox-max-width)",
           borderRadius: 24,
           overflow: "hidden",
           background: "#fff",
@@ -77,6 +77,28 @@ function Lightbox({ item, onClose }) {
           animation: "scaleIn 0.25s ease",
         }}
       >
+        <button
+          onClick={onClose}
+          style={{
+            position: "absolute",
+            top: 12,
+            right: 12,
+            zIndex: 1,
+            width: "var(--lightbox-close-size)",
+            height: "var(--lightbox-close-size)",
+            borderRadius: "calc(var(--lightbox-close-size) / 2)",
+            border: "none",
+            background: "rgba(0,0,0,0.4)",
+            color: "#fff",
+            fontSize: "var(--font-icon)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          ✕
+        </button>
         <div style={{
           width: "100%",
           aspectRatio: "3 / 4",
@@ -84,13 +106,13 @@ function Lightbox({ item, onClose }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 72,
+          fontSize: "var(--font-lightbox-emoji)",
         }}>
           <span>{item.emoji}</span>
         </div>
-        <div style={{ padding: "16px 20px 20px" }}>
+        <div style={{ padding: "16px var(--container-padding-x) var(--container-padding-x)" }}>
           <div style={{
-            fontSize: 11,
+            fontSize: "var(--font-caption)",
             fontWeight: 600,
             textTransform: "uppercase",
             letterSpacing: "0.08em",
@@ -101,7 +123,7 @@ function Lightbox({ item, onClose }) {
             {item.label}
           </div>
           <div style={{
-            fontSize: 20,
+            fontSize: "var(--font-lightbox-title)",
             fontWeight: 600,
             color: "#1A1A1A",
             fontFamily: "'DM Sans', sans-serif",
@@ -111,25 +133,6 @@ function Lightbox({ item, onClose }) {
           </div>
         </div>
       </div>
-      <button
-        onClick={onClose}
-        style={{
-          marginTop: 20,
-          width: 40,
-          height: 40,
-          borderRadius: 20,
-          border: "none",
-          background: "rgba(255,255,255,0.15)",
-          color: "#fff",
-          fontSize: 18,
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        ✕
-      </button>
     </div>
   );
 }
@@ -139,7 +142,7 @@ function ItemCard({ item, onClick }) {
     <div
       onClick={onClick}
       style={{
-        borderRadius: 16,
+        borderRadius: "var(--card-border-radius)",
         overflow: "hidden",
         background: "#fff",
         border: "1px solid rgba(0,0,0,0.06)",
@@ -151,28 +154,28 @@ function ItemCard({ item, onClick }) {
       onPointerUp={(e) => e.currentTarget.style.transform = "scale(1)"}
       onPointerLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
     >
-      {/* Image area - consistent neutral bg */}
+      {/* Image area */}
       <div style={{
         width: "100%",
-        height: 150,
+        height: "var(--card-image-height)",
         background: "#F3F2F0",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize: 44,
+        fontSize: "var(--card-emoji-size)",
       }}>
         <span>{item.emoji}</span>
       </div>
 
       {/* Text strip */}
       <div style={{
-        padding: "9px 14px 10px",
+        padding: "var(--space-card-padding)",
         display: "flex",
         alignItems: "baseline",
         gap: 8,
       }}>
         <span style={{
-          fontSize: 10,
+          fontSize: "var(--font-label-sm)",
           fontWeight: 600,
           textTransform: "uppercase",
           letterSpacing: "0.07em",
@@ -183,7 +186,7 @@ function ItemCard({ item, onClick }) {
           {item.label}
         </span>
         <span style={{
-          fontSize: 14,
+          fontSize: "var(--font-item-name)",
           fontWeight: 600,
           color: "#222",
           fontFamily: "'DM Sans', sans-serif",
@@ -206,10 +209,10 @@ function OutfitView({ outfit, onItemClick }) {
     <div style={{
       width: "100%",
       flexShrink: 0,
-      padding: "0 20px",
+      padding: `0 var(--container-padding-x)`,
       boxSizing: "border-box",
     }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="item-card-grid">
         {outfit.items.map((item, i) => (
           <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />
         ))}
@@ -218,8 +221,8 @@ function OutfitView({ outfit, onItemClick }) {
       <div
         onClick={() => setReasoningExpanded(!reasoningExpanded)}
         style={{
-          marginTop: 14,
-          padding: "10px 14px",
+          marginTop: "var(--space-reasoning-margin-top)",
+          padding: "var(--space-reasoning-padding)",
           background: reasoningExpanded ? "rgba(0,0,0,0.02)" : "transparent",
           borderRadius: 12,
           border: "1px solid rgba(0,0,0,0.06)",
@@ -234,7 +237,7 @@ function OutfitView({ outfit, onItemClick }) {
           justifyContent: "space-between",
         }}>
           <span style={{
-            fontSize: 12,
+            fontSize: "var(--font-label-md)",
             fontWeight: 600,
             color: "#aaa",
             fontFamily: "'DM Sans', sans-serif",
@@ -242,7 +245,7 @@ function OutfitView({ outfit, onItemClick }) {
             Why this works
           </span>
           <span style={{
-            fontSize: 13,
+            fontSize: "var(--font-reasoning)",
             color: "#ccc",
             transform: reasoningExpanded ? "rotate(180deg)" : "rotate(0deg)",
             transition: "transform 0.25s ease",
@@ -253,7 +256,7 @@ function OutfitView({ outfit, onItemClick }) {
         </div>
         {reasoningExpanded && (
           <p style={{
-            fontSize: 13,
+            fontSize: "var(--font-reasoning)",
             lineHeight: 1.55,
             color: "#777",
             fontFamily: "'DM Sans', sans-serif",
@@ -282,14 +285,16 @@ function ChatView({ messages, inputValue, setInputValue, onSend }) {
       flexDirection: "column",
       minHeight: 0,
     }}>
-      <div style={{
-        flex: 1,
-        overflowY: "auto",
-        display: "flex",
-        flexDirection: "column",
-        gap: 12,
-        padding: "8px 20px",
-      }}>
+      <div
+        className="chat-messages"
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+          padding: "8px var(--space-chat-padding-x)",
+        }}
+      >
         {messages.map((msg, i) => (
           <div
             key={i}
@@ -299,11 +304,11 @@ function ChatView({ messages, inputValue, setInputValue, onSend }) {
             }}
           >
             <div style={{
-              padding: "10px 14px",
+              padding: "var(--space-reasoning-padding)",
               borderRadius: msg.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
               background: msg.role === "user" ? "#1A1A1A" : "#fff",
               color: msg.role === "user" ? "#fff" : "#333",
-              fontSize: 14,
+              fontSize: "var(--font-chat)",
               lineHeight: 1.5,
               fontFamily: "'DM Sans', sans-serif",
               border: msg.role === "user" ? "none" : "1px solid rgba(0,0,0,0.06)",
@@ -318,7 +323,7 @@ function ChatView({ messages, inputValue, setInputValue, onSend }) {
 
       <div style={{
         flexShrink: 0,
-        padding: "8px 20px 28px",
+        padding: "8px var(--space-chat-padding-x) calc(var(--space-chat-input-pb) + var(--safe-bottom))",
         background: "#FAFAF8",
       }}>
         <div style={{
@@ -328,29 +333,29 @@ function ChatView({ messages, inputValue, setInputValue, onSend }) {
         }}>
           <input
             type="text"
+            className="chat-input"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") onSend(); }}
             placeholder="Type a message..."
             style={{
               flex: 1,
-              height: 44,
-              borderRadius: 22,
+              height: "var(--input-height)",
+              borderRadius: "calc(var(--input-height) / 2)",
               border: "1px solid rgba(0,0,0,0.09)",
               background: "#fff",
               color: "#333",
-              fontSize: 14,
-              padding: "0 18px",
-              outline: "none",
+              fontSize: "var(--font-chat)",
+              padding: "0 var(--container-padding-x)",
               fontFamily: "'DM Sans', sans-serif",
             }}
           />
           <button
             onClick={onSend}
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
+              width: "var(--input-height)",
+              height: "var(--input-height)",
+              borderRadius: "calc(var(--input-height) / 2)",
               border: "none",
               background: inputValue.trim() ? "#1A1A1A" : "#EEEDEB",
               color: inputValue.trim() ? "#fff" : "#ccc",
@@ -358,7 +363,7 @@ function ChatView({ messages, inputValue, setInputValue, onSend }) {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 18,
+              fontSize: "var(--font-icon)",
               transition: "all 0.2s ease",
               flexShrink: 0,
             }}
@@ -422,9 +427,9 @@ export default function OutfitRecommendations() {
   return (
     <div style={{
       width: "100%",
-      maxWidth: 420,
+      maxWidth: "var(--container-max-width)",
       margin: "0 auto",
-      height: "100vh",
+      height: "var(--app-height)",
       background: "#FAFAF8",
       display: "flex",
       flexDirection: "column",
@@ -438,17 +443,17 @@ export default function OutfitRecommendations() {
 
       {/* Top bar */}
       <div style={{
-        padding: "52px 20px 0",
+        padding: `calc(var(--space-top-bar) + var(--safe-top)) var(--container-padding-x) 0`,
         flexShrink: 0,
       }}>
         <div style={{
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "space-between",
-          marginBottom: 12,
+          marginBottom: "var(--space-header-mb)",
         }}>
           <h1 style={{
-            fontSize: 28,
+            fontSize: "var(--font-title)",
             fontWeight: 400,
             color: "#1A1A1A",
             margin: 0,
@@ -469,13 +474,13 @@ export default function OutfitRecommendations() {
             <button
               onClick={() => setView("outfit")}
               style={{
-                height: 30,
-                padding: "0 14px",
-                borderRadius: 15,
+                height: "var(--tab-height)",
+                padding: `0 var(--tab-padding-x)`,
+                borderRadius: "calc(var(--tab-height) / 2)",
                 border: "none",
                 background: view === "outfit" ? "#fff" : "transparent",
                 color: view === "outfit" ? "#1A1A1A" : "#999",
-                fontSize: 12,
+                fontSize: "var(--font-tab)",
                 fontWeight: 600,
                 fontFamily: "'DM Sans', sans-serif",
                 cursor: "pointer",
@@ -488,13 +493,13 @@ export default function OutfitRecommendations() {
             <button
               onClick={() => setView("chat")}
               style={{
-                height: 30,
-                padding: "0 14px",
-                borderRadius: 15,
+                height: "var(--tab-height)",
+                padding: `0 var(--tab-padding-x)`,
+                borderRadius: "calc(var(--tab-height) / 2)",
                 border: "none",
                 background: view === "chat" ? "#fff" : "transparent",
                 color: view === "chat" ? "#1A1A1A" : "#999",
-                fontSize: 12,
+                fontSize: "var(--font-tab)",
                 fontWeight: 600,
                 fontFamily: "'DM Sans', sans-serif",
                 cursor: "pointer",
@@ -512,16 +517,16 @@ export default function OutfitRecommendations() {
             display: "flex",
             alignItems: "center",
             gap: 7,
-            marginBottom: 14,
+            marginBottom: "var(--space-dots-mb)",
           }}>
             {OUTFITS.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setCurrent(i)}
                 style={{
-                  width: current === i ? 20 : 7,
-                  height: 7,
-                  borderRadius: 4,
+                  width: current === i ? "var(--dot-active-width)" : "var(--dot-size)",
+                  height: "var(--dot-size)",
+                  borderRadius: "calc(var(--dot-size) / 2)",
                   background: current === i ? "#1A1A1A" : "rgba(0,0,0,0.1)",
                   border: "none",
                   padding: 0,
@@ -530,7 +535,7 @@ export default function OutfitRecommendations() {
                 }}
               />
             ))}
-            <span style={{ fontSize: 11, color: "#C0C0C0", marginLeft: 4 }}>
+            <span style={{ fontSize: "var(--font-caption)", color: "#C0C0C0", marginLeft: 4 }}>
               {current + 1} of {OUTFITS.length}
             </span>
           </div>
@@ -540,6 +545,7 @@ export default function OutfitRecommendations() {
       {/* Main content */}
       {view === "outfit" ? (
         <div
+          className="swipe-container"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
@@ -555,14 +561,15 @@ export default function OutfitRecommendations() {
             transform: `translateX(calc(-${current * 100}% + ${isDragging ? touchDelta : 0}px))`,
             transition: isDragging ? "none" : "transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)",
             height: "100%",
+            willChange: "transform",
           }}>
             {OUTFITS.map((outfit) => (
               <div
                 key={outfit.id}
+                className="outfit-scroll-panel"
                 style={{
                   width: "100%",
                   flexShrink: 0,
-                  overflowY: "auto",
                   height: "100%",
                 }}
               >
@@ -582,7 +589,6 @@ export default function OutfitRecommendations() {
           onSend={handleSend}
         />
       )}
-
 
     </div>
   );
