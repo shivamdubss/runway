@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { sendChatMessage } from "./lib/api";
 
 const QUICK_CHIPS = [
   { label: "Dinner party", icon: "🍽️" },
@@ -2243,11 +2244,23 @@ export default function OutfitRecommendations() {
     setAddItemModalOpen(false);
   }, []);
 
-  const handleSendMessage = useCallback((text) => {
+  const allWardrobeItems = useMemo(() => {
+    const items = [];
+    for (const [category, categoryItems] of Object.entries(WARDROBE_ITEMS)) {
+      for (const item of categoryItems) {
+        items.push({ ...item, category });
+      }
+    }
+    for (const item of userItems) {
+      items.push(item);
+    }
+    return items;
+  }, [userItems]);
+
+  const handleSendMessage = useCallback(async (text) => {
     const messageText = text || inputValue.trim();
     if ((!messageText && !pendingImage) || isGenerating) return;
 
-    const isFirstMessage = messages.length === 0;
     const sessionId = chatSessionRef.current;
 
     const newMessage = { role: "user", text: messageText || "" };
@@ -2258,38 +2271,54 @@ export default function OutfitRecommendations() {
 
     setMessages((prev) => [...prev, newMessage]);
     setInputValue("");
+    setIsGenerating(true);
 
-    if (isFirstMessage) {
-      setIsGenerating(true);
+    // Build conversation history for the API
+    const conversationHistory = [...messages, { role: "user", text: messageText }]
+      .filter(msg => msg.text)
+      .map(msg => ({ role: msg.role, content: msg.text }));
 
-      setTimeout(() => {
-        if (chatSessionRef.current !== sessionId) return;
+    try {
+      const result = await sendChatMessage({
+        messages: conversationHistory,
+        wardrobeItems: allWardrobeItems,
+        profile,
+      });
+
+      if (chatSessionRef.current !== sessionId) return;
+
+      if (result.message) {
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", text: "Love it! Let me pull some looks together for you..." },
+          { role: "assistant", text: result.message },
         ]);
-      }, 600);
+      }
 
-      setTimeout(() => {
-        if (chatSessionRef.current !== sessionId) return;
-        setOutfits(SAMPLE_OUTFITS);
+      if (result.outfits && result.outfits.length > 0) {
+        setOutfits(result.outfits);
         setCurrent(0);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            text: `Here are ${result.outfits.length} outfit options from your wardrobe. Swipe through them and let me know what you think, or tell me what to change.`,
+            cta: { label: "View Outfits", action: "navigate_outfits" },
+          },
+        ]);
+      }
+    } catch (error) {
+      if (chatSessionRef.current !== sessionId) return;
+      console.error("Chat error:", error);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: `Sorry, I ran into an issue: ${error.message}. Please try again.` },
+      ]);
+    } finally {
+      if (chatSessionRef.current === sessionId) {
         setIsGenerating(false);
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", text: "Here are 3 outfit options from your wardrobe. Swipe through them and let me know what you think, or tell me what to change.", cta: { label: "View Outfits", action: "navigate_outfits" } },
-        ]);
-      }, 2000);
-    } else {
-      setTimeout(() => {
-        if (chatSessionRef.current !== sessionId) return;
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", text: "Got it! I'll rework the recommendations. Give me a moment..." },
-        ]);
-      }, 500);
+      }
     }
-  }, [inputValue, isGenerating, messages.length, pendingImage]);
+  }, [inputValue, isGenerating, messages, pendingImage, allWardrobeItems, profile]);
 
   const handleSend = () => handleSendMessage(inputValue.trim());
   const handleChipTap = (label) => handleSendMessage(label);
