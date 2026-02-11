@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { sendChatMessage } from "./lib/api";
+import * as db from "./lib/db";
 
 const QUICK_CHIPS = [
   { label: "Dinner party", icon: "🍽️" },
@@ -17,121 +18,26 @@ const CATEGORY_TO_LABEL = {
   Accessories: "Accessories",
 };
 
-const WARDROBE_ITEMS = {
-  Tops: [
-    { label: "Top", name: "Cream Silk Camisole", color: "#F5EDE3", accent: "#E8D5C0", emoji: "🤍" },
-    { label: "Top", name: "White Fitted Turtleneck", color: "#F8F6F2", accent: "#EBE7E0", emoji: "🤍" },
-    { label: "Top", name: "Black Wrap Bodysuit", color: "#1A1A1A", accent: "#2A2A2A", emoji: "🖤" },
-    { label: "Top", name: "Navy Breton Stripe Tee", color: "#2C3E6B", accent: "#1E2D52", emoji: "👕" },
-    { label: "Top", name: "Ivory Linen Button-Down", color: "#F0E8D8", accent: "#E3D9C5", emoji: "👔" },
-    { label: "Top", name: "Olive Ribbed Tank", color: "#6B7B5E", accent: "#5A6A4E", emoji: "🫒" },
-    { label: "Top", name: "Dusty Rose Blouse", color: "#D4A0A0", accent: "#C48E8E", emoji: "🌸" },
-    { label: "Top", name: "Charcoal Cashmere Sweater", color: "#4A4A4A", accent: "#3A3A3A", emoji: "🧶" },
-  ],
-  Layers: [
-    { label: "Layer", name: "Camel Wool Coat", color: "#C4A574", accent: "#B08D5B", emoji: "🧥" },
-    { label: "Layer", name: "Black Leather Jacket", color: "#1A1A1A", accent: "#2A2A2A", emoji: "🧥" },
-    { label: "Layer", name: "Navy Blazer", color: "#2C3E6B", accent: "#1E2D52", emoji: "🧥" },
-    { label: "Layer", name: "Cream Chunky Cardigan", color: "#F0E8D8", accent: "#E3D9C5", emoji: "🧶" },
-    { label: "Layer", name: "Classic Denim Jacket", color: "#7B9CC0", accent: "#6A8AB0", emoji: "🧥" },
-    { label: "Layer", name: "Taupe Trench Coat", color: "#B0A090", accent: "#9E8E7E", emoji: "🧥" },
-  ],
-  Bottoms: [
-    { label: "Bottom", name: "Wide-Leg Black Trousers", color: "#2A2A2A", accent: "#1A1A1A", emoji: "👖" },
-    { label: "Bottom", name: "Midi Satin Skirt (Sage)", color: "#A8B5A0", accent: "#96A68D", emoji: "👗" },
-    { label: "Bottom", name: "Leather Look Midi Skirt", color: "#3A2A2A", accent: "#2A1A1A", emoji: "👗" },
-    { label: "Bottom", name: "Medium Wash Straight Jeans", color: "#7B9CC0", accent: "#6A8AB0", emoji: "👖" },
-    { label: "Bottom", name: "Cream Tailored Shorts", color: "#F0E8D8", accent: "#E3D9C5", emoji: "🩳" },
-    { label: "Bottom", name: "Navy Pleated Midi Skirt", color: "#2C3E6B", accent: "#1E2D52", emoji: "👗" },
-    { label: "Bottom", name: "Olive Cargo Pants", color: "#6B7B5E", accent: "#5A6A4E", emoji: "👖" },
-  ],
-  Shoes: [
-    { label: "Shoes", name: "Pointed Nude Heels", color: "#D4B896", accent: "#C4A882", emoji: "👠" },
-    { label: "Shoes", name: "Strappy Block Heels", color: "#2A2A2A", accent: "#1A1A1A", emoji: "👡" },
-    { label: "Shoes", name: "Black Ankle Boots", color: "#1A1A1A", accent: "#2A2A2A", emoji: "👢" },
-    { label: "Shoes", name: "White Leather Sneakers", color: "#F8F6F2", accent: "#EBE7E0", emoji: "👟" },
-    { label: "Shoes", name: "Tan Suede Loafers", color: "#C4A574", accent: "#B08D5B", emoji: "👞" },
-    { label: "Shoes", name: "Gold Strappy Sandals", color: "#D4A843", accent: "#C49832", emoji: "👡" },
-  ],
-  Accessories: [
-    { label: "Accessories", name: "Gold Hoops + Chain Bag", color: "#D4A843", accent: "#C49832", emoji: "👜" },
-    { label: "Accessories", name: "Pearl Studs + Clutch", color: "#F0EBE3", accent: "#E0D8CC", emoji: "👛" },
-    { label: "Accessories", name: "Statement Earrings + Red Lip", color: "#C85A5A", accent: "#B84A4A", emoji: "💄" },
-    { label: "Accessories", name: "Silk Scarf (Navy)", color: "#2C3E6B", accent: "#1E2D52", emoji: "🧣" },
-    { label: "Accessories", name: "Tan Leather Belt", color: "#C4A574", accent: "#B08D5B", emoji: "🪢" },
-    { label: "Accessories", name: "Black Structured Tote", color: "#1A1A1A", accent: "#2A2A2A", emoji: "👜" },
-    { label: "Accessories", name: "Layered Gold Necklaces", color: "#D4A843", accent: "#C49832", emoji: "✨" },
-  ],
-};
+const CATEGORIES = ["Tops", "Layers", "Bottoms", "Shoes", "Accessories"];
 
-const SAMPLE_OUTFITS = [
-  {
-    id: 1,
-    vibe: "Effortless Chic",
-    items: [
-      { label: "Top", name: "Cream Silk Camisole", color: "#F5EDE3", accent: "#E8D5C0", emoji: "🤍" },
-      { label: "Layer", name: "Camel Wool Coat", color: "#C4A574", accent: "#B08D5B", emoji: "🧥" },
-      { label: "Bottom", name: "Wide-Leg Black Trousers", color: "#2A2A2A", accent: "#1A1A1A", emoji: "👖" },
-      { label: "Shoes", name: "Pointed Nude Heels", color: "#D4B896", accent: "#C4A882", emoji: "👠" },
-      { label: "Accessories", name: "Gold Hoops + Chain Bag", color: "#D4A843", accent: "#C49832", emoji: "👜" },
-    ],
-    reasoning:
-      "The silk cami with wide-leg trousers creates a sleek line that the camel coat wraps up beautifully. Nude heels elongate without competing, and the gold accessories tie the warm tones together.",
-  },
-  {
-    id: 2,
-    vibe: "Soft & Elevated",
-    items: [
-      { label: "Top", name: "White Fitted Turtleneck", color: "#F8F6F2", accent: "#EBE7E0", emoji: "🤍" },
-      { label: "Bottom", name: "Midi Satin Skirt (Sage)", color: "#A8B5A0", accent: "#96A68D", emoji: "👗" },
-      { label: "Shoes", name: "Strappy Block Heels", color: "#2A2A2A", accent: "#1A1A1A", emoji: "👡" },
-      { label: "Accessories", name: "Pearl Studs + Clutch", color: "#F0EBE3", accent: "#E0D8CC", emoji: "👛" },
-    ],
-    reasoning:
-      "The turtleneck tucked into the satin midi gives a polished, feminine shape. Sage and white feel fresh for evening, and the black heels anchor it. Pearls keep the accessories understated.",
-  },
-  {
-    id: 3,
-    vibe: "Bold Night Out",
-    items: [
-      { label: "Top", name: "Black Wrap Bodysuit", color: "#1A1A1A", accent: "#2A2A2A", emoji: "🖤" },
-      { label: "Bottom", name: "Leather Look Midi Skirt", color: "#3A2A2A", accent: "#2A1A1A", emoji: "👗" },
-      { label: "Shoes", name: "Black Ankle Boots", color: "#1A1A1A", accent: "#2A2A2A", emoji: "👢" },
-      { label: "Accessories", name: "Statement Earrings + Red Lip", color: "#C85A5A", accent: "#B84A4A", emoji: "💄" },
-    ],
-    reasoning:
-      "All-black base lets the texture contrast do the work: matte bodysuit against the leather skirt. Ankle boots keep it edgy. The statement earrings and a red lip are the only color you need.",
-  },
-];
-
-const CHAT_HISTORY = [
-  { id: "chat-1", title: "Dinner party outfit", subtitle: "Semi-casual, evening vibe", timestamp: "Just now", starred: true },
-  { id: "chat-2", title: "Beach vacation looks", subtitle: "Resort wear for Tulum trip", timestamp: "Yesterday", starred: true },
-  { id: "chat-3", title: "Job interview outfit", subtitle: "Business casual, creative field", timestamp: "2 days ago", starred: false },
-  { id: "chat-4", title: "Date night options", subtitle: "Romantic dinner downtown", timestamp: "Last week", starred: false },
-  { id: "chat-5", title: "Wedding guest dress", subtitle: "Outdoor spring wedding", timestamp: "Last week", starred: false },
-  { id: "chat-6", title: "Casual Friday at work", subtitle: "Relaxed but polished", timestamp: "2 weeks ago", starred: false },
-];
+function formatRelativeTime(dateString) {
+  if (!dateString) return "";
+  const now = new Date();
+  const date = new Date(dateString);
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 14) return "Last week";
+  return `${Math.floor(diffDays / 7)} weeks ago`;
+}
 
 const PROFILE_STORAGE_KEY = "runway_user_profile";
-
-const DEFAULT_PROFILE = {
-  version: "1.0",
-  lastUpdated: null,
-  body: {
-    height: { value: null, unit: "cm" },
-    bodyType: null,
-    sizePreference: null,
-  },
-  style: {
-    genderPreference: null,
-    preferredStyles: [],
-    colorPreferences: [],
-  },
-  lifestyle: {
-    primaryOccasions: [],
-  },
-};
 
 const SAMPLE_PROFILE = {
   version: "1.0",
@@ -151,7 +57,7 @@ const SAMPLE_PROFILE = {
   },
 };
 
-function Lightbox({ item, onClose }) {
+function Lightbox({ item, onClose, onDelete }) {
   return (
     <div
       onClick={onClose}
@@ -250,6 +156,25 @@ function Lightbox({ item, onClose }) {
           }}>
             {item.name}
           </div>
+          {item.id && onDelete && (
+            <button
+              onClick={() => { onDelete(item.id); onClose(); }}
+              style={{
+                width: "100%",
+                padding: "12px 0",
+                marginTop: 12,
+                border: "none",
+                background: "transparent",
+                color: "#C85A5A",
+                fontSize: "var(--font-caption)",
+                fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              Remove from Wardrobe
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -536,7 +461,7 @@ function AddItemModal({ onClose, onAdd }) {
             flexWrap: "wrap",
             marginBottom: 16,
           }}>
-            {Object.keys(WARDROBE_ITEMS).map((cat) => {
+            {CATEGORIES.map((cat) => {
               const isActive = category === cat;
               return (
                 <button
@@ -737,26 +662,13 @@ function OutfitEmptyState({ onSwitchToChat }) {
   );
 }
 
-function WardrobeView({ onItemClick, userItems, onAddItemClick }) {
+function WardrobeView({ wardrobeItems, onItemClick, onAddItemClick }) {
   const [activeFilter, setActiveFilter] = useState("All");
 
-  const mergedItems = useMemo(() => {
-    const merged = {};
-    for (const [cat, items] of Object.entries(WARDROBE_ITEMS)) {
-      merged[cat] = [...items];
-    }
-    for (const item of userItems) {
-      if (merged[item.category]) {
-        merged[item.category] = [...merged[item.category], item];
-      }
-    }
-    return merged;
-  }, [userItems]);
-
-  const categories = ["All", ...Object.keys(mergedItems)];
+  const categories = ["All", ...Object.keys(wardrobeItems)];
   const filteredEntries = activeFilter === "All"
-    ? Object.entries(mergedItems)
-    : [[activeFilter, mergedItems[activeFilter]]];
+    ? Object.entries(wardrobeItems)
+    : [[activeFilter, wardrobeItems[activeFilter] || []]];
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -1180,9 +1092,10 @@ function ChatView({ messages, inputValue, setInputValue, onSend, onChipTap, onCt
   );
 }
 
-function ChatHistoryItem({ chat }) {
+function ChatHistoryItem({ chat, onSelect, onToggleStar, onDelete }) {
   return (
     <div
+      onClick={() => onSelect(chat.id)}
       style={{
         padding: "10px 16px",
         cursor: "pointer",
@@ -1193,14 +1106,38 @@ function ChatHistoryItem({ chat }) {
       onPointerLeave={(e) => e.currentTarget.style.background = "transparent"}
     >
       <div style={{
-        fontSize: "var(--font-body)",
-        fontWeight: 600,
-        color: "#1A1A1A",
-        fontFamily: "'DM Sans', sans-serif",
-        lineHeight: 1.3,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
         marginBottom: 2,
       }}>
-        {chat.title}
+        <div style={{
+          fontSize: "var(--font-body)",
+          fontWeight: 600,
+          color: "#1A1A1A",
+          fontFamily: "'DM Sans', sans-serif",
+          lineHeight: 1.3,
+          flex: 1,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}>
+          {chat.title}
+        </div>
+        <div style={{ display: "flex", gap: 2, flexShrink: 0, marginLeft: 8 }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleStar(chat.id, chat.starred); }}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: 4, color: chat.starred ? "#D4A843" : "#ccc" }}
+          >
+            {chat.starred ? "\u2605" : "\u2606"}
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(chat.id); }}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, padding: 4, color: "#ccc" }}
+          >
+            \u2715
+          </button>
+        </div>
       </div>
       <div style={{
         display: "flex",
@@ -1225,7 +1162,7 @@ function ChatHistoryItem({ chat }) {
           fontFamily: "'DM Sans', sans-serif",
           flexShrink: 0,
         }}>
-          {chat.timestamp}
+          {formatRelativeTime(chat.updated_at || chat.created_at)}
         </span>
       </div>
     </div>
@@ -1972,9 +1909,9 @@ function ProfileView({ profile, onSave }) {
   );
 }
 
-function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile }) {
-  const starredChats = CHAT_HISTORY.filter((c) => c.starred);
-  const recentChats = CHAT_HISTORY.filter((c) => !c.starred);
+function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, chatHistory, onSelectChat, onToggleStar, onDeleteChat }) {
+  const starredChats = chatHistory.filter((c) => c.starred);
+  const recentChats = chatHistory.filter((c) => !c.starred);
 
   return (
     <>
@@ -2096,7 +2033,7 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile }
                 Starred
               </div>
               {starredChats.map((chat) => (
-                <ChatHistoryItem key={chat.id} chat={chat} />
+                <ChatHistoryItem key={chat.id} chat={chat} onSelect={onSelectChat} onToggleStar={onToggleStar} onDelete={onDeleteChat} />
               ))}
             </div>
           )}
@@ -2115,7 +2052,7 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile }
                 Recents
               </div>
               {recentChats.map((chat) => (
-                <ChatHistoryItem key={chat.id} chat={chat} />
+                <ChatHistoryItem key={chat.id} chat={chat} onSelect={onSelectChat} onToggleStar={onToggleStar} onDelete={onDeleteChat} />
               ))}
             </div>
           )}
@@ -2169,8 +2106,11 @@ export default function OutfitRecommendations() {
   const [isDragging, setIsDragging] = useState(false);
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
   const [pendingImage, setPendingImage] = useState(null);
-  const [userItems, setUserItems] = useState([]);
   const [addItemModalOpen, setAddItemModalOpen] = useState(false);
+  const [wardrobeItems, setWardrobeItems] = useState({});
+  const [wardrobeFlat, setWardrobeFlat] = useState([]);
+  const [chatHistory, setChatHistory] = useState([]);
+  const [activeChatId, setActiveChatId] = useState(null);
   const [profile, setProfile] = useState(() => {
     try {
       const saved = localStorage.getItem(PROFILE_STORAGE_KEY);
@@ -2210,6 +2150,24 @@ export default function OutfitRecommendations() {
     }
   }, [profile]);
 
+  useEffect(() => {
+    async function loadInitialData() {
+      try {
+        const [grouped, flat, chats] = await Promise.all([
+          db.fetchWardrobeItems(),
+          db.fetchWardrobeItemsFlat(),
+          db.fetchChats(),
+        ]);
+        setWardrobeItems(grouped);
+        setWardrobeFlat(flat);
+        setChatHistory(chats);
+      } catch (err) {
+        console.error("Failed to load initial data:", err);
+      }
+    }
+    loadInitialData();
+  }, []);
+
   const handleTouchStart = (e) => {
     setTouchStart(e.touches[0].clientX);
     setIsDragging(true);
@@ -2239,29 +2197,44 @@ export default function OutfitRecommendations() {
     setPendingImage(null);
   }, [pendingImage]);
 
-  const handleAddItem = useCallback((newItem) => {
-    setUserItems(prev => [...prev, newItem]);
-    setAddItemModalOpen(false);
+  const handleAddItem = useCallback(async (newItem) => {
+    try {
+      await db.addWardrobeItem(newItem);
+      const [grouped, flat] = await Promise.all([
+        db.fetchWardrobeItems(),
+        db.fetchWardrobeItemsFlat(),
+      ]);
+      setWardrobeItems(grouped);
+      setWardrobeFlat(flat);
+      setAddItemModalOpen(false);
+    } catch (err) {
+      console.error("Failed to add wardrobe item:", err);
+    }
   }, []);
 
-  const allWardrobeItems = useMemo(() => {
-    const items = [];
-    for (const [category, categoryItems] of Object.entries(WARDROBE_ITEMS)) {
-      for (const item of categoryItems) {
-        items.push({ ...item, category });
-      }
-    }
-    for (const item of userItems) {
-      items.push(item);
-    }
-    return items;
-  }, [userItems]);
+  const allWardrobeItems = wardrobeFlat;
 
   const handleSendMessage = useCallback(async (text) => {
     const messageText = text || inputValue.trim();
     if ((!messageText && !pendingImage) || isGenerating) return;
 
     const sessionId = chatSessionRef.current;
+    let chatId = activeChatId;
+
+    // Create chat on first message
+    if (!chatId) {
+      try {
+        const chat = await db.createChat({
+          title: messageText.slice(0, 60),
+          subtitle: "",
+        });
+        chatId = chat.id;
+        setActiveChatId(chatId);
+        setChatHistory(prev => [chat, ...prev]);
+      } catch (err) {
+        console.error("Failed to create chat:", err);
+      }
+    }
 
     const newMessage = { role: "user", text: messageText || "" };
     if (pendingImage) {
@@ -2272,6 +2245,13 @@ export default function OutfitRecommendations() {
     setMessages((prev) => [...prev, newMessage]);
     setInputValue("");
     setIsGenerating(true);
+
+    // Save user message to DB
+    if (chatId) {
+      db.saveMessage({ chatId, role: "user", content: messageText }).catch(err =>
+        console.error("Failed to save user message:", err)
+      );
+    }
 
     // Build conversation history for the API
     const conversationHistory = [...messages, { role: "user", text: messageText }]
@@ -2292,19 +2272,40 @@ export default function OutfitRecommendations() {
           ...prev,
           { role: "assistant", text: result.message },
         ]);
+        if (chatId) {
+          db.saveMessage({ chatId, role: "assistant", content: result.message }).catch(err =>
+            console.error("Failed to save assistant message:", err)
+          );
+        }
       }
 
       if (result.outfits && result.outfits.length > 0) {
         setOutfits(result.outfits);
         setCurrent(0);
+        const ctaText = `Here are ${result.outfits.length} outfit options from your wardrobe. Swipe through them and let me know what you think, or tell me what to change.`;
         setMessages((prev) => [
           ...prev,
           {
             role: "assistant",
-            text: `Here are ${result.outfits.length} outfit options from your wardrobe. Swipe through them and let me know what you think, or tell me what to change.`,
+            text: ctaText,
             cta: { label: "View Outfits", action: "navigate_outfits" },
           },
         ]);
+
+        if (chatId) {
+          db.saveMessage({ chatId, role: "assistant", content: ctaText }).catch(err =>
+            console.error("Failed to save CTA message:", err)
+          );
+          db.saveOutfits({ chatId, outfits: result.outfits, wardrobeItems: wardrobeFlat }).catch(err =>
+            console.error("Failed to save outfits:", err)
+          );
+          const subtitle = result.outfits.map(o => o.vibe).join(", ");
+          db.updateChat(chatId, { subtitle }).then(() => {
+            setChatHistory(prev => prev.map(c =>
+              c.id === chatId ? { ...c, subtitle } : c
+            ));
+          }).catch(err => console.error("Failed to update chat subtitle:", err));
+        }
       }
     } catch (error) {
       if (chatSessionRef.current !== sessionId) return;
@@ -2318,13 +2319,14 @@ export default function OutfitRecommendations() {
         setIsGenerating(false);
       }
     }
-  }, [inputValue, isGenerating, messages, pendingImage, allWardrobeItems, profile]);
+  }, [inputValue, isGenerating, messages, pendingImage, allWardrobeItems, wardrobeFlat, profile, activeChatId]);
 
   const handleSend = () => handleSendMessage(inputValue.trim());
   const handleChipTap = (label) => handleSendMessage(label);
 
   const handleNewChat = () => {
     chatSessionRef.current += 1;
+    setActiveChatId(null);
     if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
     setPendingImage(null);
     messages.forEach(msg => { if (msg.image) URL.revokeObjectURL(msg.image); });
@@ -2337,6 +2339,73 @@ export default function OutfitRecommendations() {
     setView("chat");
     setSidePanelOpen(false);
   };
+
+  const handleSelectChat = useCallback(async (chatId) => {
+    try {
+      chatSessionRef.current += 1;
+      setActiveChatId(chatId);
+      const [dbMessages, chatOutfits] = await Promise.all([
+        db.fetchMessages(chatId),
+        db.fetchOutfitsForChat(chatId),
+      ]);
+      setMessages(dbMessages.map(m => ({
+        role: m.role,
+        text: m.content,
+        image: m.image_url || null,
+      })));
+      setOutfits(chatOutfits);
+      setCurrent(0);
+      setView("chat");
+      setSidePanelOpen(false);
+      setInputValue("");
+      setIsGenerating(false);
+    } catch (err) {
+      console.error("Failed to load chat:", err);
+    }
+  }, []);
+
+  const handleToggleStar = useCallback(async (chatId, currentStarred) => {
+    try {
+      await db.toggleChatStarred(chatId, currentStarred);
+      setChatHistory(prev => prev.map(c =>
+        c.id === chatId ? { ...c, starred: !currentStarred } : c
+      ));
+    } catch (err) {
+      console.error("Failed to toggle star:", err);
+    }
+  }, []);
+
+  const handleDeleteChat = useCallback(async (chatId) => {
+    try {
+      await db.deleteChat(chatId);
+      setChatHistory(prev => prev.filter(c => c.id !== chatId));
+      if (chatId === activeChatId) {
+        chatSessionRef.current += 1;
+        setActiveChatId(null);
+        setMessages([]);
+        setOutfits([]);
+        setCurrent(0);
+        setView("chat");
+      }
+    } catch (err) {
+      console.error("Failed to delete chat:", err);
+    }
+  }, [activeChatId]);
+
+  const handleDeleteWardrobeItem = useCallback(async (itemId) => {
+    try {
+      await db.deleteWardrobeItem(itemId);
+      const [grouped, flat] = await Promise.all([
+        db.fetchWardrobeItems(),
+        db.fetchWardrobeItemsFlat(),
+      ]);
+      setWardrobeItems(grouped);
+      setWardrobeFlat(flat);
+      setLightboxItem(null);
+    } catch (err) {
+      console.error("Failed to delete wardrobe item:", err);
+    }
+  }, []);
 
   const isSelected = outfits.length > 0 && selected === outfits[current]?.id;
 
@@ -2354,7 +2423,7 @@ export default function OutfitRecommendations() {
       position: "relative",
     }}>
       {lightboxItem && (
-        <Lightbox item={lightboxItem} onClose={() => setLightboxItem(null)} />
+        <Lightbox item={lightboxItem} onClose={() => setLightboxItem(null)} onDelete={handleDeleteWardrobeItem} />
       )}
       {addItemModalOpen && (
         <AddItemModal
@@ -2369,6 +2438,10 @@ export default function OutfitRecommendations() {
         onNewChat={handleNewChat}
         onOpenWardrobe={() => { setView("wardrobe"); setSidePanelOpen(false); }}
         onOpenProfile={() => { setView("profile"); setSidePanelOpen(false); }}
+        chatHistory={chatHistory}
+        onSelectChat={handleSelectChat}
+        onToggleStar={handleToggleStar}
+        onDeleteChat={handleDeleteChat}
       />
 
       {/* Top bar */}
@@ -2501,8 +2574,8 @@ export default function OutfitRecommendations() {
       {/* Main content */}
       {view === "wardrobe" ? (
         <WardrobeView
+          wardrobeItems={wardrobeItems}
           onItemClick={(item) => setLightboxItem(item)}
-          userItems={userItems}
           onAddItemClick={() => setAddItemModalOpen(true)}
         />
       ) : view === "outfit" ? (

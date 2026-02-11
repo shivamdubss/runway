@@ -1,0 +1,209 @@
+import { supabase } from './supabase';
+
+// ── Shape mappers ──────────────────────────────────────────
+
+function toFrontendItem(row) {
+  return {
+    id: row.id,
+    label: row.label,
+    name: row.name,
+    color: row.color,
+    accent: row.accent_color,
+    emoji: row.emoji,
+    image: row.image_url || null,
+    category: row.category,
+  };
+}
+
+function toDbItem(item) {
+  return {
+    category: item.category,
+    label: item.label,
+    name: item.name,
+    color: item.color,
+    accent_color: item.accent || item.accent_color || '#E8E8E8',
+    emoji: item.emoji,
+    image_url: item.image || item.image_url || null,
+    user_id: null,
+  };
+}
+
+// ── Wardrobe ───────────────────────────────────────────────
+
+export async function fetchWardrobeItems() {
+  const { data, error } = await supabase
+    .from('wardrobe_items')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+
+  const grouped = {};
+  for (const row of data) {
+    if (!grouped[row.category]) grouped[row.category] = [];
+    grouped[row.category].push(toFrontendItem(row));
+  }
+  return grouped;
+}
+
+export async function fetchWardrobeItemsFlat() {
+  const { data, error } = await supabase
+    .from('wardrobe_items')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data.map(toFrontendItem);
+}
+
+export async function addWardrobeItem(item) {
+  const { data, error } = await supabase
+    .from('wardrobe_items')
+    .insert(toDbItem(item))
+    .select()
+    .single();
+  if (error) throw error;
+  return toFrontendItem(data);
+}
+
+export async function deleteWardrobeItem(id) {
+  const { error } = await supabase
+    .from('wardrobe_items')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}
+
+// ── Chats ──────────────────────────────────────────────────
+
+export async function fetchChats() {
+  const { data, error } = await supabase
+    .from('chats')
+    .select('*')
+    .order('updated_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function createChat({ title, subtitle }) {
+  const { data, error } = await supabase
+    .from('chats')
+    .insert({ title, subtitle: subtitle || '', starred: false, user_id: null })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateChat(id, updates) {
+  const { data, error } = await supabase
+    .from('chats')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function toggleChatStarred(id, currentStarred) {
+  return updateChat(id, { starred: !currentStarred });
+}
+
+export async function deleteChat(id) {
+  const { error } = await supabase
+    .from('chats')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}
+
+// ── Messages ───────────────────────────────────────────────
+
+export async function fetchMessages(chatId) {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('chat_id', chatId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+export async function saveMessage({ chatId, role, content, imageUrl }) {
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({
+      chat_id: chatId,
+      role,
+      content,
+      image_url: imageUrl || null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// ── Outfits ────────────────────────────────────────────────
+
+export async function saveOutfits({ chatId, outfits, wardrobeItems }) {
+  const nameToId = new Map();
+  for (const item of wardrobeItems) {
+    nameToId.set(item.name.toLowerCase(), item.id);
+  }
+
+  const savedIds = [];
+  for (const outfit of outfits) {
+    const { data: outfitRow, error: outfitErr } = await supabase
+      .from('outfits')
+      .insert({ chat_id: chatId, vibe: outfit.vibe, reasoning: outfit.reasoning || '', user_id: null })
+      .select()
+      .single();
+    if (outfitErr) throw outfitErr;
+
+    const junctionRows = (outfit.items || [])
+      .map((item, index) => {
+        const wardrobeItemId = item.id || nameToId.get(item.name.toLowerCase());
+        if (!wardrobeItemId) return null;
+        return { outfit_id: outfitRow.id, wardrobe_item_id: wardrobeItemId, position: index };
+      })
+      .filter(Boolean);
+
+    if (junctionRows.length > 0) {
+      const { error: junctionErr } = await supabase
+        .from('outfit_items')
+        .insert(junctionRows);
+      if (junctionErr) throw junctionErr;
+    }
+
+    savedIds.push(outfitRow.id);
+  }
+  return savedIds;
+}
+
+export async function fetchOutfitsForChat(chatId) {
+  const { data: outfitRows, error: outfitErr } = await supabase
+    .from('outfits')
+    .select('*')
+    .eq('chat_id', chatId)
+    .order('created_at', { ascending: true });
+  if (outfitErr) throw outfitErr;
+  if (!outfitRows || !outfitRows.length) return [];
+
+  const results = [];
+  for (const outfit of outfitRows) {
+    const { data: junctionRows, error: jErr } = await supabase
+      .from('outfit_items')
+      .select('position, wardrobe_items(*)')
+      .eq('outfit_id', outfit.id)
+      .order('position', { ascending: true });
+    if (jErr) throw jErr;
+
+    results.push({
+      id: outfit.id,
+      vibe: outfit.vibe,
+      reasoning: outfit.reasoning,
+      items: (junctionRows || []).map(jr => toFrontendItem(jr.wardrobe_items)),
+    });
+  }
+  return results;
+}

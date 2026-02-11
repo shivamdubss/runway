@@ -28,13 +28,24 @@ export function parseOutfitResponse(rawResponse, wardrobeItems) {
     nameLookup.set(item.name.toLowerCase(), item);
   }
 
+  // Resolve an item name, with fallback to strip trailing emojis/non-ASCII
+  function resolveItemName(name) {
+    if (typeof name !== 'string') return undefined;
+    const key = name.toLowerCase().trim();
+    if (nameLookup.has(key)) return nameLookup.get(key);
+    // Strip emoji and other non-ASCII characters then retry
+    const stripped = key.replace(/[^\x20-\x7E]/g, '').trim();
+    if (stripped && nameLookup.has(stripped)) return nameLookup.get(stripped);
+    return undefined;
+  }
+
   // Resolve item names to full objects
   const outfits = (parsed.outfits || []).map((outfit, index) => ({
     id: index + 1,
     vibe: outfit.vibe || `Look ${index + 1}`,
     reasoning: outfit.reasoning || '',
     items: (outfit.items || [])
-      .map(name => nameLookup.get(name.toLowerCase()))
+      .map(name => resolveItemName(name))
       .filter(Boolean),
   }));
 

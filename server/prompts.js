@@ -108,7 +108,7 @@ export function buildSystemPrompt({ wardrobeItems, profile }) {
   for (const [category, items] of Object.entries(byCategory)) {
     wardrobeLines.push(`\n### ${category}`);
     for (const item of items) {
-      wardrobeLines.push(`- ${item.name} ${item.emoji}`);
+      wardrobeLines.push(`- ${item.name}`);
     }
   }
   sections.push(wardrobeLines.join('\n'));
