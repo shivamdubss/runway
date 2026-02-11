@@ -8,6 +8,53 @@ const QUICK_CHIPS = [
   { label: "Wedding guest", icon: "💐" },
 ];
 
+const WARDROBE_ITEMS = {
+  Tops: [
+    { label: "Top", name: "Cream Silk Camisole", color: "#F5EDE3", accent: "#E8D5C0", emoji: "🤍" },
+    { label: "Top", name: "White Fitted Turtleneck", color: "#F8F6F2", accent: "#EBE7E0", emoji: "🤍" },
+    { label: "Top", name: "Black Wrap Bodysuit", color: "#1A1A1A", accent: "#2A2A2A", emoji: "🖤" },
+    { label: "Top", name: "Navy Breton Stripe Tee", color: "#2C3E6B", accent: "#1E2D52", emoji: "👕" },
+    { label: "Top", name: "Ivory Linen Button-Down", color: "#F0E8D8", accent: "#E3D9C5", emoji: "👔" },
+    { label: "Top", name: "Olive Ribbed Tank", color: "#6B7B5E", accent: "#5A6A4E", emoji: "🫒" },
+    { label: "Top", name: "Dusty Rose Blouse", color: "#D4A0A0", accent: "#C48E8E", emoji: "🌸" },
+    { label: "Top", name: "Charcoal Cashmere Sweater", color: "#4A4A4A", accent: "#3A3A3A", emoji: "🧶" },
+  ],
+  Layers: [
+    { label: "Layer", name: "Camel Wool Coat", color: "#C4A574", accent: "#B08D5B", emoji: "🧥" },
+    { label: "Layer", name: "Black Leather Jacket", color: "#1A1A1A", accent: "#2A2A2A", emoji: "🧥" },
+    { label: "Layer", name: "Navy Blazer", color: "#2C3E6B", accent: "#1E2D52", emoji: "🧥" },
+    { label: "Layer", name: "Cream Chunky Cardigan", color: "#F0E8D8", accent: "#E3D9C5", emoji: "🧶" },
+    { label: "Layer", name: "Classic Denim Jacket", color: "#7B9CC0", accent: "#6A8AB0", emoji: "🧥" },
+    { label: "Layer", name: "Taupe Trench Coat", color: "#B0A090", accent: "#9E8E7E", emoji: "🧥" },
+  ],
+  Bottoms: [
+    { label: "Bottom", name: "Wide-Leg Black Trousers", color: "#2A2A2A", accent: "#1A1A1A", emoji: "👖" },
+    { label: "Bottom", name: "Midi Satin Skirt (Sage)", color: "#A8B5A0", accent: "#96A68D", emoji: "👗" },
+    { label: "Bottom", name: "Leather Look Midi Skirt", color: "#3A2A2A", accent: "#2A1A1A", emoji: "👗" },
+    { label: "Bottom", name: "Medium Wash Straight Jeans", color: "#7B9CC0", accent: "#6A8AB0", emoji: "👖" },
+    { label: "Bottom", name: "Cream Tailored Shorts", color: "#F0E8D8", accent: "#E3D9C5", emoji: "🩳" },
+    { label: "Bottom", name: "Navy Pleated Midi Skirt", color: "#2C3E6B", accent: "#1E2D52", emoji: "👗" },
+    { label: "Bottom", name: "Olive Cargo Pants", color: "#6B7B5E", accent: "#5A6A4E", emoji: "👖" },
+  ],
+  Shoes: [
+    { label: "Shoes", name: "Pointed Nude Heels", color: "#D4B896", accent: "#C4A882", emoji: "👠" },
+    { label: "Shoes", name: "Strappy Block Heels", color: "#2A2A2A", accent: "#1A1A1A", emoji: "👡" },
+    { label: "Shoes", name: "Black Ankle Boots", color: "#1A1A1A", accent: "#2A2A2A", emoji: "👢" },
+    { label: "Shoes", name: "White Leather Sneakers", color: "#F8F6F2", accent: "#EBE7E0", emoji: "👟" },
+    { label: "Shoes", name: "Tan Suede Loafers", color: "#C4A574", accent: "#B08D5B", emoji: "👞" },
+    { label: "Shoes", name: "Gold Strappy Sandals", color: "#D4A843", accent: "#C49832", emoji: "👡" },
+  ],
+  Accessories: [
+    { label: "Accessories", name: "Gold Hoops + Chain Bag", color: "#D4A843", accent: "#C49832", emoji: "👜" },
+    { label: "Accessories", name: "Pearl Studs + Clutch", color: "#F0EBE3", accent: "#E0D8CC", emoji: "👛" },
+    { label: "Accessories", name: "Statement Earrings + Red Lip", color: "#C85A5A", accent: "#B84A4A", emoji: "💄" },
+    { label: "Accessories", name: "Silk Scarf (Navy)", color: "#2C3E6B", accent: "#1E2D52", emoji: "🧣" },
+    { label: "Accessories", name: "Tan Leather Belt", color: "#C4A574", accent: "#B08D5B", emoji: "🪢" },
+    { label: "Accessories", name: "Black Structured Tote", color: "#1A1A1A", accent: "#2A2A2A", emoji: "👜" },
+    { label: "Accessories", name: "Layered Gold Necklaces", color: "#D4A843", accent: "#C49832", emoji: "✨" },
+  ],
+};
+
 const SAMPLE_OUTFITS = [
   {
     id: 1,
@@ -343,6 +390,93 @@ function OutfitEmptyState({ onSwitchToChat }) {
   );
 }
 
+function WardrobeView({ onItemClick }) {
+  const [activeFilter, setActiveFilter] = useState("All");
+  const categories = ["All", ...Object.keys(WARDROBE_ITEMS)];
+  const filteredEntries = activeFilter === "All"
+    ? Object.entries(WARDROBE_ITEMS)
+    : [[activeFilter, WARDROBE_ITEMS[activeFilter]]];
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      {/* Filter pills */}
+      <div
+        className="wardrobe-filter-row"
+        style={{
+          display: "flex",
+          gap: 8,
+          padding: `8px var(--container-padding-x) 12px`,
+          overflowX: "auto",
+          flexShrink: 0,
+        }}
+      >
+        {categories.map((cat) => {
+          const isActive = activeFilter === cat;
+          return (
+            <button
+              key={cat}
+              onClick={() => setActiveFilter(cat)}
+              style={{
+                height: 32,
+                padding: "0 14px",
+                borderRadius: 16,
+                border: isActive ? "none" : "1px solid rgba(0,0,0,0.08)",
+                background: isActive ? "#1A1A1A" : "#fff",
+                color: isActive ? "#fff" : "#555",
+                fontSize: "var(--font-body)",
+                fontWeight: 500,
+                fontFamily: "'DM Sans', sans-serif",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}
+            >
+              {cat}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Items grid */}
+      <div
+        className="outfit-scroll-panel"
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: `0 var(--container-padding-x) calc(24px + var(--safe-bottom))`,
+        }}
+      >
+        {filteredEntries.map(([category, items]) => (
+          <div key={category} style={{ marginBottom: 24 }}>
+            {activeFilter === "All" && (
+              <div style={{
+                fontSize: "var(--font-label-sm)",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                color: "#aaa",
+                fontFamily: "'DM Sans', sans-serif",
+                padding: "12px 0 8px",
+              }}>
+                {category}
+                <span style={{ fontWeight: 400, marginLeft: 6, color: "#ccc" }}>
+                  {items.length}
+                </span>
+              </div>
+            )}
+            <div className="item-card-grid">
+              {items.map((item, i) => (
+                <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ChatView({ messages, inputValue, setInputValue, onSend, onChipTap, onCtaAction }) {
   const messagesEndRef = useRef(null);
 
@@ -619,7 +753,7 @@ function ChatHistoryItem({ chat }) {
   );
 }
 
-function SidePanel({ isOpen, onClose, onNewChat }) {
+function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe }) {
   const starredChats = CHAT_HISTORY.filter((c) => c.starred);
   const recentChats = CHAT_HISTORY.filter((c) => !c.starred);
 
@@ -699,6 +833,7 @@ function SidePanel({ isOpen, onClose, onNewChat }) {
         {/* Full Wardrobe CTA */}
         <div style={{ padding: "10px 16px 8px" }}>
           <button
+            onClick={onOpenWardrobe}
             style={{
               width: "100%",
               height: 48,
@@ -898,7 +1033,7 @@ export default function OutfitRecommendations() {
         <Lightbox item={lightboxItem} onClose={() => setLightboxItem(null)} />
       )}
 
-      <SidePanel isOpen={sidePanelOpen} onClose={() => setSidePanelOpen(false)} onNewChat={handleNewChat} />
+      <SidePanel isOpen={sidePanelOpen} onClose={() => setSidePanelOpen(false)} onNewChat={handleNewChat} onOpenWardrobe={() => { setView("wardrobe"); setSidePanelOpen(false); }} />
 
       {/* Top bar */}
       <div style={{
@@ -944,7 +1079,7 @@ export default function OutfitRecommendations() {
             lineHeight: 1.1,
             flex: 1,
           }}>
-            {view === "outfit" ? (outfits.length > 0 ? outfits[current].vibe : "Outfits") : "Chat"}
+            {view === "wardrobe" ? "My Wardrobe" : view === "outfit" ? (outfits.length > 0 ? outfits[current].vibe : "Outfits") : "Chat"}
           </h1>
 
           <div style={{
@@ -1026,7 +1161,9 @@ export default function OutfitRecommendations() {
       </div>
 
       {/* Main content */}
-      {view === "outfit" ? (
+      {view === "wardrobe" ? (
+        <WardrobeView onItemClick={(item) => setLightboxItem(item)} />
+      ) : view === "outfit" ? (
         outfits.length > 0 ? (
           <div
             className="swipe-container"

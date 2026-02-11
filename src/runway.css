@@ -214,6 +214,15 @@ body {
   display: none;
 }
 
+/* ===== Wardrobe Filter Row ===== */
+.wardrobe-filter-row {
+  scrollbar-width: none;
+}
+
+.wardrobe-filter-row::-webkit-scrollbar {
+  display: none;
+}
+
 /* ===== Main Content Push ===== */
 .app-container {
   transition: transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
