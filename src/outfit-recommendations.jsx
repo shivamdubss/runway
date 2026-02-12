@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { sendChatMessage } from "./lib/api";
+import { uploadImage } from "./lib/upload";
 import * as db from "./lib/db";
 
 const QUICK_CHIPS = [
@@ -19,6 +20,13 @@ const CATEGORY_TO_LABEL = {
 };
 
 const CATEGORIES = ["Tops", "Layers", "Bottoms", "Shoes", "Accessories"];
+
+function getImageFileFromDrop(e) {
+  e.preventDefault();
+  const file = e.dataTransfer.files?.[0];
+  if (file && file.type.startsWith("image/")) return file;
+  return null;
+}
 
 function formatRelativeTime(dateString) {
   if (!dateString) return "";
@@ -320,6 +328,9 @@ function AddItemModal({ onClose, onAdd }) {
   const [itemName, setItemName] = useState("");
   const [category, setCategory] = useState("Tops");
   const [imagePreview, setImagePreview] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef(null);
 
   return (
@@ -386,6 +397,7 @@ function AddItemModal({ onClose, onAdd }) {
             if (file) {
               if (imagePreview) URL.revokeObjectURL(imagePreview);
               setImagePreview(URL.createObjectURL(file));
+              setSelectedFile(file);
             }
             e.target.value = "";
           }}
@@ -393,10 +405,21 @@ function AddItemModal({ onClose, onAdd }) {
 
         <div
           onClick={() => fileInputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+          onDragLeave={() => setIsDragOver(false)}
+          onDrop={(e) => {
+            setIsDragOver(false);
+            const file = getImageFileFromDrop(e);
+            if (file) {
+              if (imagePreview) URL.revokeObjectURL(imagePreview);
+              setImagePreview(URL.createObjectURL(file));
+              setSelectedFile(file);
+            }
+          }}
           style={{
             width: "100%",
             aspectRatio: "4 / 3",
-            background: "#F3F2F0",
+            background: isDragOver ? "#E8E6E2" : "#F3F2F0",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -405,6 +428,8 @@ function AddItemModal({ onClose, onAdd }) {
             gap: 8,
             position: "relative",
             overflow: "hidden",
+            border: isDragOver ? "2px dashed #999" : "2px dashed transparent",
+            transition: "background 0.15s ease, border-color 0.15s ease",
           }}
         >
           {imagePreview ? (
@@ -427,7 +452,7 @@ function AddItemModal({ onClose, onAdd }) {
                 fontFamily: "'DM Sans', sans-serif",
                 fontWeight: 500,
               }}>
-                Tap to add photo
+                Tap or drop photo
               </span>
             </>
           )}
@@ -489,30 +514,45 @@ function AddItemModal({ onClose, onAdd }) {
           </div>
 
           <button
-            onClick={() => {
-              if (!itemName.trim()) return;
+            onClick={async () => {
+              if (!itemName.trim() || isUploading) return;
+
+              let imageUrl = null;
+              if (selectedFile) {
+                try {
+                  setIsUploading(true);
+                  imageUrl = await uploadImage(selectedFile);
+                } catch (err) {
+                  console.error("Image upload failed:", err);
+                  setIsUploading(false);
+                  return;
+                } finally {
+                  setIsUploading(false);
+                }
+              }
+
               onAdd({
                 label: CATEGORY_TO_LABEL[category] || category,
                 name: itemName.trim(),
                 color: "#E8E8E8",
                 accent: "#D8D8D8",
                 emoji: "📷",
-                image: imagePreview || null,
+                image: imageUrl,
                 category: category,
               });
             }}
-            disabled={!itemName.trim()}
+            disabled={!itemName.trim() || isUploading}
             style={{
               width: "100%",
               height: 48,
               borderRadius: 14,
               border: "none",
-              background: itemName.trim() ? "#1A1A1A" : "#EEEDEB",
-              color: itemName.trim() ? "#fff" : "#ccc",
+              background: (itemName.trim() && !isUploading) ? "#1A1A1A" : "#EEEDEB",
+              color: (itemName.trim() && !isUploading) ? "#fff" : "#ccc",
               fontSize: "var(--font-body)",
               fontWeight: 600,
               fontFamily: "'DM Sans', sans-serif",
-              cursor: itemName.trim() ? "pointer" : "default",
+              cursor: (itemName.trim() && !isUploading) ? "pointer" : "default",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -520,12 +560,12 @@ function AddItemModal({ onClose, onAdd }) {
               transition: "all 0.15s ease",
             }}
             onPointerDown={(e) => {
-              if (itemName.trim()) e.currentTarget.style.transform = "scale(0.97)";
+              if (itemName.trim() && !isUploading) e.currentTarget.style.transform = "scale(0.97)";
             }}
             onPointerUp={(e) => e.currentTarget.style.transform = "scale(1)"}
             onPointerLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
           >
-            Add to Wardrobe
+            {isUploading ? "Uploading..." : "Add to Wardrobe"}
           </button>
         </div>
       </div>
@@ -757,18 +797,64 @@ function ChatView({ messages, inputValue, setInputValue, onSend, onChipTap, onCt
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const canSend = inputValue.trim() || pendingImage;
+  const [isDragOver, setIsDragOver] = useState(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   return (
-    <div style={{
-      flex: 1,
-      display: "flex",
-      flexDirection: "column",
-      minHeight: 0,
-    }}>
+    <div
+      onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setIsDragOver(false);
+      }}
+      onDrop={(e) => {
+        setIsDragOver(false);
+        const file = getImageFileFromDrop(e);
+        if (file) onImageSelect(file);
+      }}
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+        position: "relative",
+      }}
+    >
+      {isDragOver && (
+        <div style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 10,
+          background: "rgba(255,255,255,0.85)",
+          backdropFilter: "blur(4px)",
+          WebkitBackdropFilter: "blur(4px)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          border: "2px dashed #999",
+          borderRadius: 16,
+          margin: 8,
+          pointerEvents: "none",
+        }}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+          <span style={{
+            fontSize: "var(--font-body)",
+            color: "#999",
+            fontFamily: "'DM Sans', sans-serif",
+            fontWeight: 500,
+          }}>
+            Drop image here
+          </span>
+        </div>
+      )}
       <div
         className="chat-messages"
         style={{
@@ -2237,8 +2323,10 @@ export default function OutfitRecommendations() {
     }
 
     const newMessage = { role: "user", text: messageText || "" };
+    let capturedFile = null;
     if (pendingImage) {
       newMessage.image = pendingImage.previewUrl;
+      capturedFile = pendingImage.file;
       setPendingImage(null);
     }
 
@@ -2246,9 +2334,28 @@ export default function OutfitRecommendations() {
     setInputValue("");
     setIsGenerating(true);
 
-    // Save user message to DB
+    // Upload image if attached, then save to DB with permanent URL
+    let imageUrl = null;
+    if (capturedFile) {
+      try {
+        imageUrl = await uploadImage(capturedFile);
+        setMessages(prev => {
+          const copy = [...prev];
+          for (let i = copy.length - 1; i >= 0; i--) {
+            if (copy[i].role === 'user' && copy[i].image?.startsWith('blob:')) {
+              copy[i] = { ...copy[i], image: imageUrl };
+              break;
+            }
+          }
+          return copy;
+        });
+      } catch (err) {
+        console.error("Image upload failed:", err);
+      }
+    }
+
     if (chatId) {
-      db.saveMessage({ chatId, role: "user", content: messageText }).catch(err =>
+      db.saveMessage({ chatId, role: "user", content: messageText, imageUrl }).catch(err =>
         console.error("Failed to save user message:", err)
       );
     }
@@ -2329,7 +2436,7 @@ export default function OutfitRecommendations() {
     setActiveChatId(null);
     if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
     setPendingImage(null);
-    messages.forEach(msg => { if (msg.image) URL.revokeObjectURL(msg.image); });
+    messages.forEach(msg => { if (msg.image?.startsWith('blob:')) URL.revokeObjectURL(msg.image); });
     setMessages([]);
     setOutfits([]);
     setCurrent(0);

@@ -2,7 +2,9 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 import express from 'express';
+import multer from 'multer';
 import { handleChat } from './api/chat.js';
+import { handleUpload } from './api/upload.js';
 
 /**
  * Vite plugin that adds API routes to the dev server.
@@ -12,9 +14,14 @@ export function apiPlugin() {
   return {
     name: 'runway-api',
     configureServer(server) {
+      const uploadMiddleware = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 10 * 1024 * 1024 },
+      });
       const app = express();
       app.use(express.json({ limit: '1mb' }));
       app.post('/api/chat', handleChat);
+      app.post('/api/upload', uploadMiddleware.single('image'), handleUpload);
       server.middlewares.use(app);
     },
   };
