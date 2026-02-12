@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { sendChatMessage, sendChatMessageStreaming } from "./lib/api";
+import { sendChatMessageStreaming } from "./lib/api";
 import { uploadImage } from "./lib/upload";
 import { analyzeImage } from "./lib/analyze";
 import * as db from "./lib/db";
@@ -912,10 +912,22 @@ function TypingIndicator() {
   );
 }
 
-function ChatView({ messages, inputValue, setInputValue, onSend, onChipTap, onCtaAction, pendingImage, onImageSelect, onImageRemove, isWaitingForFirstToken }) {
+function ChatView({
+  messages,
+  inputValue,
+  setInputValue,
+  onSend,
+  onChipTap,
+  onCtaAction,
+  pendingImage,
+  onImageSelect,
+  onImageRemove,
+  isWaitingForFirstToken,
+  isGenerating,
+}) {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
-  const canSend = inputValue.trim() || pendingImage;
+  const canSend = !isGenerating && (inputValue.trim() || pendingImage);
   const [isDragOver, setIsDragOver] = useState(false);
 
   useEffect(() => {
@@ -1140,6 +1152,7 @@ function ChatView({ messages, inputValue, setInputValue, onSend, onChipTap, onCt
             </div>
           ))
         )}
+        {isWaitingForFirstToken && <TypingIndicator />}
         <div ref={messagesEndRef} />
       </div>
 
@@ -1204,6 +1217,7 @@ function ChatView({ messages, inputValue, setInputValue, onSend, onChipTap, onCt
           type="file"
           accept="image/*"
           style={{ display: "none" }}
+          disabled={isGenerating}
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) onImageSelect(file);
@@ -1217,14 +1231,15 @@ function ChatView({ messages, inputValue, setInputValue, onSend, onChipTap, onCt
         }}>
           <button
             onClick={() => fileInputRef.current?.click()}
+            disabled={isGenerating}
             style={{
               width: "var(--input-height)",
               height: "var(--input-height)",
               borderRadius: "calc(var(--input-height) / 2)",
               border: "1px solid rgba(0,0,0,0.09)",
-              background: "#fff",
-              color: "#888",
-              cursor: "pointer",
+              background: isGenerating ? "#F5F4F2" : "#fff",
+              color: isGenerating ? "#c5c5c5" : "#888",
+              cursor: isGenerating ? "default" : "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -1233,14 +1248,17 @@ function ChatView({ messages, inputValue, setInputValue, onSend, onChipTap, onCt
               padding: 0,
             }}
             onPointerDown={(e) => {
+              if (isGenerating) return;
               e.currentTarget.style.transform = "scale(0.93)";
               e.currentTarget.style.background = "#F3F2F0";
             }}
             onPointerUp={(e) => {
+              if (isGenerating) return;
               e.currentTarget.style.transform = "scale(1)";
               e.currentTarget.style.background = "#fff";
             }}
             onPointerLeave={(e) => {
+              if (isGenerating) return;
               e.currentTarget.style.transform = "scale(1)";
               e.currentTarget.style.background = "#fff";
             }}
@@ -1256,6 +1274,7 @@ function ChatView({ messages, inputValue, setInputValue, onSend, onChipTap, onCt
             type="text"
             className="chat-input"
             value={inputValue}
+            disabled={isGenerating}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") onSend(); }}
             placeholder="Type a message..."
@@ -1273,6 +1292,7 @@ function ChatView({ messages, inputValue, setInputValue, onSend, onChipTap, onCt
           />
           <button
             onClick={onSend}
+            disabled={!canSend}
             style={{
               width: "var(--input-height)",
               height: "var(--input-height)",
@@ -2305,6 +2325,7 @@ export default function OutfitRecommendations() {
   const [messages, setMessages] = useState([]);
   const [outfits, setOutfits] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isWaitingForFirstToken, setIsWaitingForFirstToken] = useState(false);
   const [lightboxItem, setLightboxItem] = useState(null);
   const [touchStart, setTouchStart] = useState(null);
   const [touchDelta, setTouchDelta] = useState(0);
@@ -2328,6 +2349,7 @@ export default function OutfitRecommendations() {
     return SAMPLE_PROFILE;
   });
   const chatSessionRef = useRef(0);
+  const streamAbortRef = useRef(null);
 
   useEffect(() => {
     const link = document.createElement("link");
@@ -2371,6 +2393,22 @@ export default function OutfitRecommendations() {
       }
     }
     loadInitialData();
+  }, []);
+
+  const cancelActiveStream = useCallback(() => {
+    if (streamAbortRef.current) {
+      streamAbortRef.current();
+      streamAbortRef.current = null;
+    }
+    setIsWaitingForFirstToken(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (streamAbortRef.current) {
+        streamAbortRef.current();
+      }
+    };
   }, []);
 
   const handleTouchStart = (e) => {
@@ -2422,6 +2460,7 @@ export default function OutfitRecommendations() {
   const handleSendMessage = useCallback(async (text) => {
     const messageText = text || inputValue.trim();
     if ((!messageText && !pendingImage) || isGenerating) return;
+    cancelActiveStream();
 
     const sessionId = chatSessionRef.current;
     let chatId = activeChatId;
@@ -2452,6 +2491,7 @@ export default function OutfitRecommendations() {
     setMessages((prev) => [...prev, newMessage]);
     setInputValue("");
     setIsGenerating(true);
+    setIsWaitingForFirstToken(true);
 
     // Upload image if attached, then save to DB with permanent URL
     let imageUrl = null;
@@ -2484,22 +2524,68 @@ export default function OutfitRecommendations() {
       .filter(msg => msg.text)
       .map(msg => ({ role: msg.role, content: msg.text }));
 
+    const assistantMessageId = `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    let streamedMessage = "";
+    let hasStreamedToken = false;
+
     try {
-      const result = await sendChatMessage({
-        messages: conversationHistory,
-        wardrobeItems: allWardrobeItems,
-        profile,
+      const result = await new Promise((resolve, reject) => {
+        streamAbortRef.current = sendChatMessageStreaming({
+          messages: conversationHistory,
+          wardrobeItems: allWardrobeItems,
+          profile,
+          onToken: (token) => {
+            if (chatSessionRef.current !== sessionId || !token) return;
+
+            streamedMessage += token;
+            setIsWaitingForFirstToken(false);
+
+            if (!hasStreamedToken) {
+              hasStreamedToken = true;
+              setMessages((prev) => [
+                ...prev,
+                { id: assistantMessageId, role: "assistant", text: token },
+              ]);
+              return;
+            }
+
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMessageId
+                  ? { ...msg, text: `${msg.text || ""}${token}` }
+                  : msg
+              )
+            );
+          },
+          onComplete: (payload) => resolve(payload),
+          onError: (error) => reject(error),
+        });
       });
 
       if (chatSessionRef.current !== sessionId) return;
+      streamAbortRef.current = null;
+      setIsWaitingForFirstToken(false);
 
-      if (result.message) {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", text: result.message },
-        ]);
+      const finalAssistantMessage = result.message || streamedMessage.trim();
+
+      if (finalAssistantMessage) {
+        if (hasStreamedToken) {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId
+                ? { ...msg, text: finalAssistantMessage }
+                : msg
+            )
+          );
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            { id: assistantMessageId, role: "assistant", text: finalAssistantMessage },
+          ]);
+        }
+
         if (chatId) {
-          db.saveMessage({ chatId, role: "assistant", content: result.message }).catch(err =>
+          db.saveMessage({ chatId, role: "assistant", content: finalAssistantMessage }).catch(err =>
             console.error("Failed to save assistant message:", err)
           );
         }
@@ -2536,22 +2622,37 @@ export default function OutfitRecommendations() {
     } catch (error) {
       if (chatSessionRef.current !== sessionId) return;
       console.error("Chat error:", error);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", text: `Sorry, I ran into an issue: ${error.message}. Please try again.` },
-      ]);
+      setIsWaitingForFirstToken(false);
+
+      if (hasStreamedToken && streamedMessage.trim()) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessageId
+              ? { ...msg, text: streamedMessage.trim() }
+              : msg
+          )
+        );
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", text: `Sorry, I ran into an issue: ${error.message}. Please try again.` },
+        ]);
+      }
     } finally {
       if (chatSessionRef.current === sessionId) {
+        streamAbortRef.current = null;
         setIsGenerating(false);
+        setIsWaitingForFirstToken(false);
       }
     }
-  }, [inputValue, isGenerating, messages, pendingImage, allWardrobeItems, wardrobeFlat, profile, activeChatId]);
+  }, [inputValue, isGenerating, messages, pendingImage, allWardrobeItems, wardrobeFlat, profile, activeChatId, cancelActiveStream]);
 
   const handleSend = () => handleSendMessage(inputValue.trim());
   const handleChipTap = (label) => handleSendMessage(label);
 
   const handleNewChat = () => {
     chatSessionRef.current += 1;
+    cancelActiveStream();
     setActiveChatId(null);
     if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
     setPendingImage(null);
@@ -2562,6 +2663,7 @@ export default function OutfitRecommendations() {
     setSelected(null);
     setInputValue("");
     setIsGenerating(false);
+    setIsWaitingForFirstToken(false);
     setView("chat");
     setSidePanelOpen(false);
   };
@@ -2569,6 +2671,7 @@ export default function OutfitRecommendations() {
   const handleSelectChat = useCallback(async (chatId) => {
     try {
       chatSessionRef.current += 1;
+      cancelActiveStream();
       setActiveChatId(chatId);
       const [dbMessages, chatOutfits] = await Promise.all([
         db.fetchMessages(chatId),
@@ -2585,10 +2688,11 @@ export default function OutfitRecommendations() {
       setSidePanelOpen(false);
       setInputValue("");
       setIsGenerating(false);
+      setIsWaitingForFirstToken(false);
     } catch (err) {
       console.error("Failed to load chat:", err);
     }
-  }, []);
+  }, [cancelActiveStream]);
 
   const handleToggleStar = useCallback(async (chatId, currentStarred) => {
     try {
@@ -2607,16 +2711,19 @@ export default function OutfitRecommendations() {
       setChatHistory(prev => prev.filter(c => c.id !== chatId));
       if (chatId === activeChatId) {
         chatSessionRef.current += 1;
+        cancelActiveStream();
         setActiveChatId(null);
         setMessages([]);
         setOutfits([]);
         setCurrent(0);
         setView("chat");
+        setIsGenerating(false);
+        setIsWaitingForFirstToken(false);
       }
     } catch (err) {
       console.error("Failed to delete chat:", err);
     }
-  }, [activeChatId]);
+  }, [activeChatId, cancelActiveStream]);
 
   const handleDeleteWardrobeItem = useCallback(async (itemId) => {
     try {
@@ -2864,6 +2971,8 @@ export default function OutfitRecommendations() {
           pendingImage={pendingImage}
           onImageSelect={handleImageSelect}
           onImageRemove={handleImageRemove}
+          isWaitingForFirstToken={isWaitingForFirstToken}
+          isGenerating={isGenerating}
         />
       )}
 

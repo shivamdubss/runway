@@ -30,8 +30,8 @@ app.post('/api/analyze-image', handleAnalyzeImage);
 // Serve static Vite build output
 app.use(express.static(join(__dirname, '..', 'dist')));
 
-// SPA fallback
-app.get('*', (req, res) => {
+// SPA fallback (Express 5 requires named wildcard)
+app.get('/{*splat}', (req, res) => {
   res.sendFile(join(__dirname, '..', 'dist', 'index.html'));
 });
 

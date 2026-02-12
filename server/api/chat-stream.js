@@ -2,6 +2,58 @@ import { getOpenAIClient } from '../openai.js';
 import { buildSystemPrompt } from '../prompts.js';
 import { parseOutfitResponse } from '../parse-outfits.js';
 
+function extractMessageTextFromJsonBuffer(jsonBuffer) {
+  const keyMatch = /"message"\s*:\s*"/.exec(jsonBuffer);
+  if (!keyMatch) return null;
+
+  let i = keyMatch.index + keyMatch[0].length;
+  let value = '';
+  let isEscaping = false;
+
+  while (i < jsonBuffer.length) {
+    const ch = jsonBuffer[i];
+
+    if (isEscaping) {
+      if (ch === 'n') value += '\n';
+      else if (ch === 'r') value += '\r';
+      else if (ch === 't') value += '\t';
+      else if (ch === 'b') value += '\b';
+      else if (ch === 'f') value += '\f';
+      else if (ch === '"' || ch === '\\' || ch === '/') value += ch;
+      else if (ch === 'u') {
+        const hex = jsonBuffer.slice(i + 1, i + 5);
+        if (/^[0-9A-Fa-f]{4}$/.test(hex)) {
+          value += String.fromCharCode(parseInt(hex, 16));
+          i += 4;
+        } else {
+          return value;
+        }
+      } else {
+        value += ch;
+      }
+      isEscaping = false;
+      i += 1;
+      continue;
+    }
+
+    if (ch === '\\') {
+      isEscaping = true;
+      i += 1;
+      continue;
+    }
+
+    if (ch === '"') {
+      return value;
+    }
+
+    value += ch;
+    i += 1;
+  }
+
+  // Partial JSON so far: return whatever is decoded.
+  return value;
+}
+
 /**
  * POST /api/chat/stream
  *
@@ -60,17 +112,25 @@ export async function handleChatStream(req, res) {
       messages: apiMessages,
       temperature: 0.7,
       max_completion_tokens: 2000,
+      response_format: { type: 'json_object' },
       stream: true, // Enable streaming
     });
 
     let fullContent = '';
+    let streamedMessage = '';
 
     // Stream tokens as they arrive
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta?.content || '';
       if (delta) {
         fullContent += delta;
-        sendEvent('token', { content: delta });
+
+        const extractedMessage = extractMessageTextFromJsonBuffer(fullContent);
+        if (typeof extractedMessage === 'string' && extractedMessage.length > streamedMessage.length) {
+          const newText = extractedMessage.slice(streamedMessage.length);
+          streamedMessage = extractedMessage;
+          sendEvent('token', { content: newText });
+        }
       }
     }
 

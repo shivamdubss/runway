@@ -4,6 +4,7 @@ dotenv.config({ path: '.env.local' });
 import express from 'express';
 import multer from 'multer';
 import { handleChat } from './api/chat.js';
+import { handleChatStream } from './api/chat-stream.js';
 import { handleUpload } from './api/upload.js';
 import { handleAnalyzeImage } from './api/analyze-image.js';
 
@@ -22,6 +23,7 @@ export function apiPlugin() {
       const app = express();
       app.use(express.json({ limit: '1mb' }));
       app.post('/api/chat', handleChat);
+      app.post('/api/chat/stream', handleChatStream);
       app.post('/api/upload', uploadMiddleware.single('image'), handleUpload);
       app.post('/api/analyze-image', handleAnalyzeImage);
       server.middlewares.use(app);

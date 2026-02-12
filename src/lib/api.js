@@ -43,13 +43,29 @@ export function sendChatMessageStreaming({
   onError,
 }) {
   const controller = new AbortController();
-  const STREAM_TIMEOUT = 30000; // 30 seconds
+  const STREAM_TIMEOUT_MS = 30000;
+  let timeoutId = null;
+  let hasFinished = false;
 
-  const timeoutId = setTimeout(() => {
-    controller.abort();
-    onError(new Error('Stream timeout - no response received'));
-  }, STREAM_TIMEOUT);
+  const resetTimeout = () => {
+    if (timeoutId) clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      if (hasFinished) return;
+      hasFinished = true;
+      controller.abort();
+      onError(new Error('Stream timeout - no response received'));
+    }, STREAM_TIMEOUT_MS);
+  };
 
+  const finishStream = () => {
+    hasFinished = true;
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  };
+
+  resetTimeout();
   fetch('/api/chat/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -61,45 +77,80 @@ export function sendChatMessageStreaming({
         throw new Error(`HTTP ${response.status}`);
       }
 
+      if (!response.body) {
+        throw new Error('Streaming not supported in this browser');
+      }
+
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
 
+      const handleEvent = (eventPayload) => {
+        let event;
+        try {
+          event = JSON.parse(eventPayload);
+        } catch (e) {
+          console.warn('Failed to parse SSE event:', eventPayload, e);
+          return;
+        }
+
+        if (event.type === 'token') {
+          onToken(event.content || '');
+          resetTimeout();
+          return;
+        }
+
+        if (event.type === 'complete') {
+          finishStream();
+          onComplete({
+            message: event.message || '',
+            outfits: event.outfits || [],
+          });
+          return;
+        }
+
+        if (event.type === 'error') {
+          finishStream();
+          onError(new Error(event.error || 'Streaming request failed'));
+        }
+      };
+
+      const processBuffer = () => {
+        const normalized = buffer.replace(/\r\n/g, '\n');
+        const events = normalized.split('\n\n');
+        buffer = events.pop() || '';
+
+        for (const rawEvent of events) {
+          if (hasFinished) return;
+
+          const dataLines = rawEvent
+            .split('\n')
+            .filter(line => line.startsWith('data: '))
+            .map(line => line.slice(6));
+
+          if (dataLines.length > 0) {
+            handleEvent(dataLines.join('\n'));
+          }
+        }
+      };
+
       function processText({ done, value }) {
+        if (hasFinished) {
+          return;
+        }
+
         if (done) {
-          clearTimeout(timeoutId);
+          processBuffer();
+          if (!hasFinished) {
+            finishStream();
+            onError(new Error('Stream ended before completion'));
+          }
+          finishStream();
           return;
         }
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const event = JSON.parse(line.slice(6));
-
-              if (event.type === 'token') {
-                clearTimeout(timeoutId); // Reset timeout on each token
-                onToken(event.content);
-              } else if (event.type === 'complete') {
-                clearTimeout(timeoutId);
-                onComplete({
-                  message: event.message,
-                  outfits: event.outfits,
-                });
-                return; // Stream finished
-              } else if (event.type === 'error') {
-                clearTimeout(timeoutId);
-                onError(new Error(event.error));
-                return;
-              }
-            } catch (e) {
-              console.warn('Failed to parse SSE event:', line, e);
-            }
-          }
-        }
+        processBuffer();
 
         return reader.read().then(processText);
       }
@@ -107,15 +158,16 @@ export function sendChatMessageStreaming({
       return reader.read().then(processText);
     })
     .catch(error => {
-      clearTimeout(timeoutId);
-      if (error.name !== 'AbortError') {
+      const wasFinished = hasFinished;
+      finishStream();
+      if (error.name !== 'AbortError' && !wasFinished) {
         onError(error);
       }
     });
 
   // Return abort function
   return () => {
-    clearTimeout(timeoutId);
+    finishStream();
     controller.abort();
   };
 }
