@@ -359,22 +359,42 @@ function AddItemModal({ onClose, onAdd }) {
   const [aiAccent, setAiAccent] = useState(null);
   const [aiEmoji, setAiEmoji] = useState(null);
   const [analysisError, setAnalysisError] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
   const fileInputRef = useRef(null);
 
   const handleFileSelected = async (file) => {
     if (!file) return;
 
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
-    setImagePreview(URL.createObjectURL(file));
-    setSelectedFile(file);
+    // Clear any previous errors
     setAnalysisError(null);
+    setUploadError(null);
 
+    // Set up preview
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreview(previewUrl);
+    setSelectedFile(file);
+
+    // Step 1: Upload the image
+    let imageUrl;
     try {
       setIsUploading(true);
-      const imageUrl = await uploadImage(file);
+      imageUrl = await uploadImage(file);
       setUploadedUrl(imageUrl);
+    } catch (err) {
+      console.error("Image upload failed:", err);
+      setUploadError("Failed to upload image. Please try again.");
+      // Clean up preview and reset state on upload failure
+      URL.revokeObjectURL(previewUrl);
+      setImagePreview(null);
+      setSelectedFile(null);
+      return;
+    } finally {
       setIsUploading(false);
+    }
 
+    // Step 2: Analyze the uploaded image
+    try {
       setIsAnalyzing(true);
       const result = await analyzeImage(imageUrl);
 
@@ -387,7 +407,6 @@ function AddItemModal({ onClose, onAdd }) {
       console.error("Image analysis failed:", err);
       setAnalysisError("Could not analyze image. You can still add the item manually.");
     } finally {
-      setIsUploading(false);
       setIsAnalyzing(false);
     }
   };
@@ -528,6 +547,16 @@ function AddItemModal({ onClose, onAdd }) {
         </div>
 
         <div style={{ padding: "16px var(--container-padding-x) var(--container-padding-x)" }}>
+          {uploadError && (
+            <div style={{
+              padding: "8px 0",
+              fontSize: "var(--font-body)",
+              color: "#c0392b",
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              {uploadError}
+            </div>
+          )}
           {analysisError && (
             <div style={{
               padding: "8px 0",
@@ -603,6 +632,7 @@ function AddItemModal({ onClose, onAdd }) {
                   imageUrl = await uploadImage(selectedFile);
                 } catch (err) {
                   console.error("Image upload failed:", err);
+                  setUploadError("Failed to upload image. Please try again.");
                   setIsUploading(false);
                   return;
                 } finally {
