@@ -1318,8 +1318,8 @@ function ChatView({
 }
 
 function ChatHistoryItem({ chat, onSelect, onToggleStar, onDelete }) {
-  const [menuOpen, setMenuOpen] = React.useState(false);
-  const menuButtonRef = React.useRef(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef(null);
 
   return (
     <div
@@ -1424,9 +1424,9 @@ function ChatHistoryItem({ chat, onSelect, onToggleStar, onDelete }) {
 }
 
 function KebabMenu({ isOpen, onClose, options, anchorRef }) {
-  const [menuPosition, setMenuPosition] = React.useState({ top: 0, left: 0 });
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isOpen || !anchorRef.current) return;
 
     const rect = anchorRef.current.getBoundingClientRect();
