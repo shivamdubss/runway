@@ -1318,6 +1318,9 @@ function ChatView({
 }
 
 function ChatHistoryItem({ chat, onSelect, onToggleStar, onDelete }) {
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const menuButtonRef = React.useRef(null);
+
   return (
     <div
       onClick={() => onSelect(chat.id)}
@@ -1325,6 +1328,7 @@ function ChatHistoryItem({ chat, onSelect, onToggleStar, onDelete }) {
         padding: "10px 16px",
         cursor: "pointer",
         transition: "background 0.15s ease",
+        position: "relative",
       }}
       onPointerDown={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.04)"}
       onPointerUp={(e) => e.currentTarget.style.background = "transparent"}
@@ -1351,16 +1355,21 @@ function ChatHistoryItem({ chat, onSelect, onToggleStar, onDelete }) {
         </div>
         <div style={{ display: "flex", gap: 2, flexShrink: 0, marginLeft: 8 }}>
           <button
-            onClick={(e) => { e.stopPropagation(); onToggleStar(chat.id, chat.starred); }}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: 4, color: chat.starred ? "#D4A843" : "#ccc" }}
+            ref={menuButtonRef}
+            onClick={(e) => { e.stopPropagation(); setMenuOpen(true); }}
+            aria-label="Chat options"
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: 16,
+              padding: "4px 8px",
+              color: "#999",
+              display: "flex",
+              alignItems: "center",
+            }}
           >
-            {chat.starred ? "\u2605" : "\u2606"}
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(chat.id); }}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, padding: 4, color: "#ccc" }}
-          >
-            \u2715
+            ⋯
           </button>
         </div>
       </div>
@@ -1390,7 +1399,119 @@ function ChatHistoryItem({ chat, onSelect, onToggleStar, onDelete }) {
           {formatRelativeTime(chat.updated_at || chat.created_at)}
         </span>
       </div>
+      {menuOpen && (
+        <KebabMenu
+          isOpen={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          anchorRef={menuButtonRef}
+          options={[
+            {
+              label: chat.starred ? "Unstar" : "Star",
+              icon: chat.starred ? "★" : "☆",
+              onClick: () => onToggleStar(chat.id, chat.starred)
+            },
+            {
+              label: "Delete",
+              icon: "🗑",
+              onClick: () => onDelete(chat.id),
+              destructive: true
+            }
+          ]}
+        />
+      )}
     </div>
+  );
+}
+
+function KebabMenu({ isOpen, onClose, options, anchorRef }) {
+  const [menuPosition, setMenuPosition] = React.useState({ top: 0, left: 0 });
+
+  React.useEffect(() => {
+    if (!isOpen || !anchorRef.current) return;
+
+    const rect = anchorRef.current.getBoundingClientRect();
+    const menuWidth = 160;
+    const menuHeight = options.length * 44 + 8; // 44px per item + padding
+
+    // Position to the right of the button, or left if not enough space
+    let left = rect.right + 8;
+    if (left + menuWidth > window.innerWidth) {
+      left = rect.left - menuWidth - 8;
+    }
+
+    // Position aligned with button top, adjust if overflows bottom
+    let top = rect.top;
+    if (top + menuHeight > window.innerHeight) {
+      top = window.innerHeight - menuHeight - 8;
+    }
+
+    setMenuPosition({ top, left });
+  }, [isOpen, anchorRef, options.length]);
+
+  if (!isOpen) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 299,
+        }}
+      />
+      {/* Menu */}
+      <div
+        style={{
+          position: "fixed",
+          top: menuPosition.top,
+          left: menuPosition.left,
+          background: "white",
+          borderRadius: 8,
+          boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
+          padding: "4px 0",
+          zIndex: 300,
+          minWidth: 160,
+        }}
+      >
+        {options.map((option, index) => (
+          <button
+            key={index}
+            onClick={(e) => {
+              e.stopPropagation();
+              option.onClick();
+              onClose();
+            }}
+            disabled={option.disabled}
+            style={{
+              width: "100%",
+              padding: "12px 16px",
+              border: "none",
+              background: "transparent",
+              cursor: option.disabled ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              fontSize: "var(--font-body)",
+              fontFamily: "'DM Sans', sans-serif",
+              color: option.destructive ? "#D32F2F" : option.disabled ? "#ccc" : "#1A1A1A",
+              textAlign: "left",
+              transition: "background 0.15s ease",
+              opacity: option.disabled ? 0.5 : 1,
+            }}
+            onPointerEnter={(e) => !option.disabled && (e.currentTarget.style.background = "rgba(0,0,0,0.04)")}
+            onPointerLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >
+            <span style={{ fontSize: 16 }}>{option.icon}</span>
+            <span>{option.label}</span>
+          </button>
+        ))}
+      </div>
+    </>
   );
 }
 
