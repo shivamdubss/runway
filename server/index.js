@@ -6,7 +6,9 @@ import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { handleChat } from './api/chat.js';
+import { handleChatStream } from './api/chat-stream.js';
 import { handleUpload } from './api/upload.js';
+import { handleAnalyzeImage } from './api/analyze-image.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -21,7 +23,9 @@ app.use(express.json({ limit: '1mb' }));
 
 // API routes
 app.post('/api/chat', handleChat);
+app.post('/api/chat/stream', handleChatStream);
 app.post('/api/upload', upload.single('image'), handleUpload);
+app.post('/api/analyze-image', handleAnalyzeImage);
 
 // Serve static Vite build output
 app.use(express.static(join(__dirname, '..', 'dist')));

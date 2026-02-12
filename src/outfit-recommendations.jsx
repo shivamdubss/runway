@@ -1,7 +1,29 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { sendChatMessage } from "./lib/api";
+import { sendChatMessage, sendChatMessageStreaming } from "./lib/api";
 import { uploadImage } from "./lib/upload";
+import { analyzeImage } from "./lib/analyze";
 import * as db from "./lib/db";
+
+// Inject CSS animations for streaming states
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes typingDot {
+    0%, 60%, 100% {
+      opacity: 0.3;
+      transform: scale(0.8);
+    }
+    30% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes blink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+  }
+`;
+document.head.appendChild(style);
 
 const QUICK_CHIPS = [
   { label: "Dinner party", icon: "🍽️" },
@@ -331,7 +353,44 @@ function AddItemModal({ onClose, onAdd }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [uploadedUrl, setUploadedUrl] = useState(null);
+  const [aiColor, setAiColor] = useState(null);
+  const [aiAccent, setAiAccent] = useState(null);
+  const [aiEmoji, setAiEmoji] = useState(null);
+  const [analysisError, setAnalysisError] = useState(null);
   const fileInputRef = useRef(null);
+
+  const handleFileSelected = async (file) => {
+    if (!file) return;
+
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setImagePreview(URL.createObjectURL(file));
+    setSelectedFile(file);
+    setAnalysisError(null);
+
+    try {
+      setIsUploading(true);
+      const imageUrl = await uploadImage(file);
+      setUploadedUrl(imageUrl);
+      setIsUploading(false);
+
+      setIsAnalyzing(true);
+      const result = await analyzeImage(imageUrl);
+
+      setItemName((prev) => (prev.trim() ? prev : result.name));
+      setCategory(result.category);
+      setAiColor(result.color);
+      setAiAccent(result.accent_color);
+      setAiEmoji(result.emoji);
+    } catch (err) {
+      console.error("Image analysis failed:", err);
+      setAnalysisError("Could not analyze image. You can still add the item manually.");
+    } finally {
+      setIsUploading(false);
+      setIsAnalyzing(false);
+    }
+  };
 
   return (
     <div
@@ -394,11 +453,7 @@ function AddItemModal({ onClose, onAdd }) {
           style={{ display: "none" }}
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) {
-              if (imagePreview) URL.revokeObjectURL(imagePreview);
-              setImagePreview(URL.createObjectURL(file));
-              setSelectedFile(file);
-            }
+            if (file) handleFileSelected(file);
             e.target.value = "";
           }}
         />
@@ -410,11 +465,7 @@ function AddItemModal({ onClose, onAdd }) {
           onDrop={(e) => {
             setIsDragOver(false);
             const file = getImageFileFromDrop(e);
-            if (file) {
-              if (imagePreview) URL.revokeObjectURL(imagePreview);
-              setImagePreview(URL.createObjectURL(file));
-              setSelectedFile(file);
-            }
+            if (file) handleFileSelected(file);
           }}
           style={{
             width: "100%",
@@ -433,13 +484,31 @@ function AddItemModal({ onClose, onAdd }) {
           }}
         >
           {imagePreview ? (
-            <img src={imagePreview} alt="Preview" style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              position: "absolute",
-              inset: 0,
-            }} />
+            <>
+              <img src={imagePreview} alt="Preview" style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                position: "absolute",
+                inset: 0,
+              }} />
+              {(isUploading || isAnalyzing) && (
+                <div style={{
+                  position: "absolute",
+                  inset: 0,
+                  background: "rgba(0,0,0,0.4)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#fff",
+                  fontSize: "var(--font-body)",
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontWeight: 500,
+                }}>
+                  {isUploading ? "Uploading..." : "Analyzing..."}
+                </div>
+              )}
+            </>
           ) : (
             <>
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -459,6 +528,16 @@ function AddItemModal({ onClose, onAdd }) {
         </div>
 
         <div style={{ padding: "16px var(--container-padding-x) var(--container-padding-x)" }}>
+          {analysisError && (
+            <div style={{
+              padding: "8px 0",
+              fontSize: "var(--font-body)",
+              color: "#c0392b",
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              {analysisError}
+            </div>
+          )}
           <input
             type="text"
             value={itemName}
@@ -515,10 +594,10 @@ function AddItemModal({ onClose, onAdd }) {
 
           <button
             onClick={async () => {
-              if (!itemName.trim() || isUploading) return;
+              if (!itemName.trim() || isUploading || isAnalyzing) return;
 
-              let imageUrl = null;
-              if (selectedFile) {
+              let imageUrl = uploadedUrl;
+              if (!imageUrl && selectedFile) {
                 try {
                   setIsUploading(true);
                   imageUrl = await uploadImage(selectedFile);
@@ -534,25 +613,25 @@ function AddItemModal({ onClose, onAdd }) {
               onAdd({
                 label: CATEGORY_TO_LABEL[category] || category,
                 name: itemName.trim(),
-                color: "#E8E8E8",
-                accent: "#D8D8D8",
-                emoji: "📷",
+                color: aiColor || "#E8E8E8",
+                accent: aiAccent || "#D8D8D8",
+                emoji: aiEmoji || "📷",
                 image: imageUrl,
                 category: category,
               });
             }}
-            disabled={!itemName.trim() || isUploading}
+            disabled={!itemName.trim() || isUploading || isAnalyzing}
             style={{
               width: "100%",
               height: 48,
               borderRadius: 14,
               border: "none",
-              background: (itemName.trim() && !isUploading) ? "#1A1A1A" : "#EEEDEB",
-              color: (itemName.trim() && !isUploading) ? "#fff" : "#ccc",
+              background: (itemName.trim() && !isUploading && !isAnalyzing) ? "#1A1A1A" : "#EEEDEB",
+              color: (itemName.trim() && !isUploading && !isAnalyzing) ? "#fff" : "#ccc",
               fontSize: "var(--font-body)",
               fontWeight: 600,
               fontFamily: "'DM Sans', sans-serif",
-              cursor: (itemName.trim() && !isUploading) ? "pointer" : "default",
+              cursor: (itemName.trim() && !isUploading && !isAnalyzing) ? "pointer" : "default",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -560,12 +639,12 @@ function AddItemModal({ onClose, onAdd }) {
               transition: "all 0.15s ease",
             }}
             onPointerDown={(e) => {
-              if (itemName.trim() && !isUploading) e.currentTarget.style.transform = "scale(0.97)";
+              if (itemName.trim() && !isUploading && !isAnalyzing) e.currentTarget.style.transform = "scale(0.97)";
             }}
             onPointerUp={(e) => e.currentTarget.style.transform = "scale(1)"}
             onPointerLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
           >
-            {isUploading ? "Uploading..." : "Add to Wardrobe"}
+            {isUploading ? "Uploading..." : isAnalyzing ? "Analyzing..." : "Add to Wardrobe"}
           </button>
         </div>
       </div>
@@ -793,7 +872,47 @@ function WardrobeView({ wardrobeItems, onItemClick, onAddItemClick }) {
   );
 }
 
-function ChatView({ messages, inputValue, setInputValue, onSend, onChipTap, onCtaAction, pendingImage, onImageSelect, onImageRemove }) {
+function TypingIndicator() {
+  return (
+    <div style={{
+      alignSelf: 'flex-start',
+      maxWidth: '82%',
+    }}>
+      <div style={{
+        padding: 'var(--space-reasoning-padding)',
+        borderRadius: '16px 16px 16px 4px',
+        background: '#fff',
+        border: '1px solid rgba(0,0,0,0.06)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        minHeight: 48,
+      }}>
+        <div style={{
+          display: 'flex',
+          gap: 4,
+        }}>
+          {[0, 1, 2].map(i => (
+            <div
+              key={i}
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: '#999',
+                animation: `typingDot 1.4s infinite ease-in-out`,
+                animationDelay: `${i * 0.2}s`,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChatView({ messages, inputValue, setInputValue, onSend, onChipTap, onCtaAction, pendingImage, onImageSelect, onImageRemove, isWaitingForFirstToken }) {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const canSend = inputValue.trim() || pendingImage;

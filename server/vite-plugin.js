@@ -5,6 +5,7 @@ import express from 'express';
 import multer from 'multer';
 import { handleChat } from './api/chat.js';
 import { handleUpload } from './api/upload.js';
+import { handleAnalyzeImage } from './api/analyze-image.js';
 
 /**
  * Vite plugin that adds API routes to the dev server.
@@ -22,6 +23,7 @@ export function apiPlugin() {
       app.use(express.json({ limit: '1mb' }));
       app.post('/api/chat', handleChat);
       app.post('/api/upload', uploadMiddleware.single('image'), handleUpload);
+      app.post('/api/analyze-image', handleAnalyzeImage);
       server.middlewares.use(app);
     },
   };
