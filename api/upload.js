@@ -92,7 +92,7 @@ export default async function handler(req, res) {
 
     const blob = await put(filename, file.buffer, {
       access: 'public',
-      token: process.env.BLOB_READ_WRITE_TOKEN,
+      token: process.env.runway_READ_WRITE_TOKEN,
       contentType: file.mimetype,
     });
 
