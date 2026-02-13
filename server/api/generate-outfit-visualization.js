@@ -1,22 +1,19 @@
 import { put } from '@vercel/blob';
 import { randomUUID } from 'crypto';
-import { getOpenAIClient } from './_lib/openai.js';
 
 /**
  * Build prompt for outfit visualization
- * Preserves face, hair, skin tone, body shape, pose, camera angle, background
- * Only changes clothing items
  */
 function buildVisualizationPrompt(outfit, userProfile) {
   const items = outfit.items.map(item =>
     `${item.name} (${item.category}, color: ${item.color})`
   ).join(', ');
 
-  const genderContext = userProfile?.style?.genderPreference
+  const genderContext = userProfile && userProfile.style && userProfile.style.genderPreference
     ? `Gender presentation: ${userProfile.style.genderPreference}`
     : '';
 
-  const bodyContext = userProfile?.body?.bodyType
+  const bodyContext = userProfile && userProfile.body && userProfile.body.bodyType
     ? `Body type: ${userProfile.body.bodyType}`
     : '';
 
@@ -43,15 +40,35 @@ Return a photorealistic image with ONLY the clothing changed.
 }
 
 /**
- * Generate outfit visualization using OpenAI GPT Image 1.5
+ * POST /api/generate-outfit-visualization
+ *
+ * Body: { referencePhotoUrl, outfit, userProfile }
+ * Response: { success, imageUrl, generatedAt }
  */
-async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProfile }) {
-  const openai = getOpenAIClient();
-  const prompt = buildVisualizationPrompt(outfit, userProfile);
-
-  console.log('[generateOutfitVisualization] Generating with prompt:', prompt);
-
+export async function handleGenerateOutfitVisualization(req, res) {
   try {
+    const { referencePhotoUrl, outfit, userProfile } = req.body;
+
+    if (!referencePhotoUrl) {
+      return res.status(400).json({
+        success: false,
+        error: 'missing_reference_photo',
+        message: 'referencePhotoUrl is required'
+      });
+    }
+
+    if (!outfit || !outfit.items || !Array.isArray(outfit.items) || outfit.items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'invalid_outfit',
+        message: 'outfit with items array is required'
+      });
+    }
+
+    const prompt = buildVisualizationPrompt(outfit, userProfile);
+
+    console.log('[generateOutfitVisualization] Generating visualization...');
+
     // Call OpenAI Image Edit API with GPT Image 1.5
     // Use fetch directly — the SDK's images.edit sends multipart/form-data
     // which doesn't support the newer images[] JSON format
@@ -80,7 +97,7 @@ async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProf
 
     const response = await apiResponse.json();
 
-    if (!response?.data?.[0]?.b64_json) {
+    if (!response.data || !response.data[0] || !response.data[0].b64_json) {
       throw new Error('Invalid response from OpenAI API');
     }
 
@@ -98,94 +115,18 @@ async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProf
       }
     );
 
-    console.log('[generateOutfitVisualization] Successfully generated and uploaded:', blob.url);
+    console.log('[generateOutfitVisualization] Successfully generated:', blob.url);
 
-    return blob.url;
-  } catch (error) {
-    console.error('[generateOutfitVisualization] Error:', error);
-    console.error('[generateOutfitVisualization] Error details:', {
-      message: error.message,
-      status: error.status,
-      code: error.code,
-      type: error.type
-    });
-
-    // Re-throw with more context
-    if (error.status === 429 || error.code === 'rate_limit_exceeded') {
-      const rateLimitError = new Error('Rate limit exceeded');
-      rateLimitError.status = 429;
-      rateLimitError.code = 'rate_limit';
-      throw rateLimitError;
-    }
-
-    if (error.status === 401 || error.code === 'invalid_api_key') {
-      const authError = new Error('Invalid OpenAI API key');
-      authError.status = 401;
-      authError.code = 'invalid_api_key';
-      throw authError;
-    }
-
-    // Add more context to the error
-    const enhancedError = new Error(error.message || 'Failed to generate visualization');
-    enhancedError.status = error.status;
-    enhancedError.code = error.code;
-    throw enhancedError;
-  }
-}
-
-/**
- * API handler for outfit visualization generation
- */
-export default async function handler(req, res) {
-  // Only allow POST requests
-  if (req.method !== 'POST') {
-    return res.status(405).json({
-      success: false,
-      error: 'method_not_allowed',
-      message: 'Method not allowed'
-    });
-  }
-
-  try {
-    const { referencePhotoUrl, outfit, userProfile } = req.body;
-
-    // Validation
-    if (!referencePhotoUrl) {
-      return res.status(400).json({
-        success: false,
-        error: 'missing_reference_photo',
-        message: 'referencePhotoUrl is required'
-      });
-    }
-
-    if (!outfit || !outfit.items || !Array.isArray(outfit.items) || outfit.items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'invalid_outfit',
-        message: 'outfit with items array is required'
-      });
-    }
-
-    // Generate visualization
-    const imageUrl = await generateOutfitVisualization({
-      referencePhotoUrl,
-      outfit,
-      userProfile
-    });
-
-    // Return success response
-    return res.status(200).json({
+    return res.json({
       success: true,
-      imageUrl,
+      imageUrl: blob.url,
       generatedAt: new Date().toISOString(),
       cached: false
     });
   } catch (error) {
     console.error('[/api/generate-outfit-visualization] Error:', error);
-    console.error('[/api/generate-outfit-visualization] Stack:', error.stack);
 
-    // Handle specific error types
-    if (error.status === 429 || error.code === 'rate_limit') {
+    if (error.status === 429 || error.code === 'rate_limit_exceeded') {
       return res.status(429).json({
         success: false,
         error: 'rate_limit',
@@ -202,7 +143,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // Always surface the real error message so we can debug
     return res.status(500).json({
       success: false,
       error: 'api_error',
