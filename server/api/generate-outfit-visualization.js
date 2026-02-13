@@ -5,38 +5,31 @@ import { randomUUID } from 'crypto';
  * Build prompt for outfit visualization
  */
 function buildVisualizationPrompt(outfit, userProfile) {
-  const items = outfit.items.map(item =>
-    `${item.name} (${item.category}, color: ${item.color})`
-  ).join(', ');
+  const items = outfit.items.map(item => {
+    const parts = [item.name];
+    if (item.color) parts.push(`in ${item.color}`);
+    if (item.category) parts.push(`(${item.category.toLowerCase()})`);
+    return parts.join(' ');
+  }).join('; ');
 
-  const genderContext = userProfile && userProfile.style && userProfile.style.genderPreference
-    ? `Gender presentation: ${userProfile.style.genderPreference}`
+  const contextParts = [];
+  if (userProfile && userProfile.style && userProfile.style.genderPreference) {
+    contextParts.push(`Gender presentation: ${userProfile.style.genderPreference}.`);
+  }
+  if (userProfile && userProfile.body && userProfile.body.bodyType) {
+    contextParts.push(`Body type: ${userProfile.body.bodyType}.`);
+  }
+
+  const contextBlock = contextParts.length > 0
+    ? `\nSubject context: ${contextParts.join(' ')}`
     : '';
 
-  const bodyContext = userProfile && userProfile.body && userProfile.body.bodyType
-    ? `Body type: ${userProfile.body.bodyType}`
-    : '';
+  return `Virtual try-on edit. Keep the subject's face, facial structure, skin, hair, expression, body pose, proportions, and the entire background pixel-identical to the input photo. Do not alter lighting, camera angle, or depth of field.
 
-  return `
-CRITICAL INSTRUCTION: Preserve the person's face, facial features, hair, hairstyle, skin tone, body proportions, pose, camera angle, and background EXACTLY as shown in the original image. DO NOT change or alter these elements in any way.
+Replace ONLY the clothing with: ${items}.
+Style direction: ${outfit.vibe || 'casual'}, photorealistic editorial look.${contextBlock}
 
-ONLY CHANGE: Replace the clothing items with the following outfit:
-${items}
-
-Additional context:
-${genderContext}
-${bodyContext}
-Style vibe: ${outfit.vibe || 'casual'}
-
-Ensure the new clothes:
-1. Fit naturally on the body with realistic draping and proportions
-2. Match the specified colors accurately
-3. Maintain appropriate sizing for the body type
-4. Look photorealistic with proper lighting matching the original image
-5. Preserve all original image details except the clothing
-
-Return a photorealistic image with ONLY the clothing changed.
-`.trim();
+The replacement garments must drape naturally on the existing body with physically correct wrinkles, shadows, and fabric weight. Match the scene lighting on the new clothing surfaces exactly.`.trim();
 }
 
 /**
@@ -83,7 +76,9 @@ export async function handleGenerateOutfitVisualization(req, res) {
         images: [{ image_url: referencePhotoUrl }],
         prompt: prompt,
         n: 1,
-        size: "1024x1024"
+        size: "1024x1024",
+        quality: "high",
+        input_fidelity: "high"
       })
     });
 

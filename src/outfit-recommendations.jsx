@@ -395,41 +395,6 @@ function OutfitVisualizationModal({ imageUrl, outfit, isLoading, error, onClose,
               }}>
                 {outfit.vibe}
               </h3>
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-                gap: 12,
-                marginBottom: 20,
-              }}>
-                {outfit.items.map((item, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      padding: 12,
-                      background: "#FAFAFA",
-                      borderRadius: 8,
-                      border: "1px solid #E5E5E5",
-                    }}
-                  >
-                    <div style={{
-                      fontSize: 24,
-                      marginBottom: 4,
-                      textAlign: "center",
-                    }}>
-                      {item.emoji || "👕"}
-                    </div>
-                    <div style={{
-                      fontSize: 11,
-                      color: "#666",
-                      textAlign: "center",
-                      fontFamily: "'DM Sans', sans-serif",
-                      fontWeight: 500,
-                    }}>
-                      {item.name}
-                    </div>
-                  </div>
-                ))}
-              </div>
               <div style={{ display: "flex", gap: 12 }}>
                 <button
                   onClick={onRegenerate}
@@ -1015,28 +980,27 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, isGenerating, onVi
         disabled={!hasReferencePhoto || isGenerating}
         style={{
           width: "100%",
-          padding: "14px 20px",
-          marginTop: 20,
-          background: hasReferencePhoto
-            ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-            : "#E8E8E8",
-          color: hasReferencePhoto ? "#fff" : "#999",
-          border: "none",
+          padding: "12px 20px",
+          marginTop: 16,
+          background: "transparent",
+          color: hasReferencePhoto ? "#666" : "#bbb",
+          border: hasReferencePhoto ? "1px solid #E0E0E0" : "1px solid #EBEBEB",
           borderRadius: 12,
           fontSize: "var(--font-body)",
           fontFamily: "'DM Sans', sans-serif",
-          fontWeight: 600,
+          fontWeight: 500,
           cursor: hasReferencePhoto && !isGenerating ? "pointer" : "not-allowed",
           transition: "all 0.2s ease",
-          opacity: isGenerating ? 0.7 : 1,
+          opacity: isGenerating ? 0.6 : 1,
+          letterSpacing: "0.01em",
         }}
       >
         {isGenerating ? (
-          <span>⏳ Generating...</span>
+          <span>Generating...</span>
         ) : hasReferencePhoto ? (
-          <span>✨ See This On You</span>
+          <span>See this on you 😎</span>
         ) : (
-          <span>📸 Add Photo in Profile to Visualize</span>
+          <span>Add photo in profile to visualize</span>
         )}
       </button>
     </div>
