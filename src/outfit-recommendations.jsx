@@ -2990,6 +2990,8 @@ export default function OutfitRecommendations() {
   const [touchStart, setTouchStart] = useState(null);
   const [touchDelta, setTouchDelta] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [scrollLock, setScrollLock] = useState(null); // 'horizontal' | 'vertical' | null
+  const [touchStartY, setTouchStartY] = useState(null);
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
   const [pendingImage, setPendingImage] = useState(null);
   const [addItemModalOpen, setAddItemModalOpen] = useState(false);
@@ -3078,22 +3080,53 @@ export default function OutfitRecommendations() {
     };
   }, []);
 
+  const DIRECTION_THRESHOLD = 10; // pixels to determine direction
+
   const handleTouchStart = (e) => {
     setTouchStart(e.touches[0].clientX);
-    setIsDragging(true);
+    setTouchStartY(e.touches[0].clientY);
+    setScrollLock(null);
+    setIsDragging(false);
   };
+
   const handleTouchMove = (e) => {
-    if (touchStart === null) return;
-    setTouchDelta(e.touches[0].clientX - touchStart);
+    if (touchStart === null || touchStartY === null) return;
+
+    const deltaX = e.touches[0].clientX - touchStart;
+    const deltaY = e.touches[0].clientY - touchStartY;
+
+    // Determine scroll direction if not locked
+    if (scrollLock === null) {
+      if (Math.abs(deltaX) > DIRECTION_THRESHOLD || Math.abs(deltaY) > DIRECTION_THRESHOLD) {
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+          setScrollLock('horizontal');
+          setIsDragging(true);
+        } else {
+          setScrollLock('vertical');
+        }
+      }
+      return;
+    }
+
+    // Only process horizontal swipes
+    if (scrollLock === 'horizontal') {
+      e.preventDefault(); // Prevent vertical scroll
+      setTouchDelta(deltaX);
+    }
+    // If vertical, let native scroll handle it
   };
+
   const handleTouchEnd = () => {
-    if (Math.abs(touchDelta) > 60) {
+    if (scrollLock === 'horizontal' && Math.abs(touchDelta) > 60) {
       if (touchDelta < 0 && current < outfits.length - 1) setCurrent(current + 1);
       else if (touchDelta > 0 && current > 0) setCurrent(current - 1);
     }
+
     setTouchStart(null);
+    setTouchStartY(null);
     setTouchDelta(0);
     setIsDragging(false);
+    setScrollLock(null);
   };
 
   const handleImageSelect = useCallback((file) => {
@@ -3688,7 +3721,10 @@ export default function OutfitRecommendations() {
       ) : view === "outfit" ? (
         outfits.length > 0 ? (
           <div
-            className="swipe-container"
+            className={`swipe-container ${
+              scrollLock === 'horizontal' ? 'swipe-container--locked-horizontal' :
+              scrollLock === 'vertical' ? 'swipe-container--locked-vertical' : ''
+            }`}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
