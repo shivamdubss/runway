@@ -60,7 +60,6 @@ async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProf
         prompt: prompt,
         n: 1,
         size: "1024x1024",
-        quality: "high",
         input_fidelity: "high"
       })
     });
