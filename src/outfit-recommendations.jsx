@@ -2558,8 +2558,13 @@ function ReferencePhotoCard({ profile, onSave }) {
   const [uploadError, setUploadError] = useState(null);
   const fileInputRef = useRef(null);
 
+  // Safety check
+  if (!profile) {
+    return null;
+  }
+
   const handleFileSelect = async (e) => {
-    const file = e.target.files?.[0];
+    const file = e.target.files && e.target.files[0];
     if (!file) return;
 
     // Validate file type
@@ -2659,7 +2664,7 @@ function ReferencePhotoCard({ profile, onSave }) {
           />
           <div style={{ display: "flex", gap: 8 }}>
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => fileInputRef.current && fileInputRef.current.click()}
               disabled={isUploading}
               style={{
                 padding: "8px 16px",
@@ -2706,7 +2711,7 @@ function ReferencePhotoCard({ profile, onSave }) {
             style={{ display: "none" }}
           />
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => fileInputRef.current && fileInputRef.current.click()}
             disabled={isUploading}
             style={{
               width: "100%",
@@ -2784,7 +2789,7 @@ function ProfileView({ profile, onSave }) {
       <ReferencePhotoCard profile={profile} onSave={onSave} />
       <BodyFitCard profile={profile} onSave={onSave} />
       <StylePreferencesCard profile={profile} onSave={onSave} />
-      <LifestyleCard profile={profile} onSave={onSave} />
+      <StyleContextCard profile={profile} onSave={onSave} />
     </div>
   );
 }
@@ -2996,7 +3001,12 @@ export default function OutfitRecommendations() {
     try {
       const saved = localStorage.getItem(PROFILE_STORAGE_KEY);
       if (saved) {
-        return JSON.parse(saved);
+        const loadedProfile = JSON.parse(saved);
+        // Ensure referencePhoto field exists for backward compatibility
+        if (!('referencePhoto' in loadedProfile)) {
+          loadedProfile.referencePhoto = null;
+        }
+        return loadedProfile;
       }
     } catch (error) {
       console.error("Error loading profile from localStorage:", error);

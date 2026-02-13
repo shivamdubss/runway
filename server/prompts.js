@@ -178,8 +178,8 @@ function buildProfileSection(profile) {
     }
   }
 
-  if (profile.lifestyle?.primaryOccasions?.length > 0) {
-    parts.push(`- Primary occasions: ${profile.lifestyle.primaryOccasions.join(', ')}`);
+  if (profile.styleContext?.notes?.trim()) {
+    parts.push(`- Additional context: ${profile.styleContext.notes.trim()}`);
     hasContent = true;
   }
 
