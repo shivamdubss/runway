@@ -3,6 +3,7 @@ import { sendChatMessageStreaming } from "./lib/api";
 import { uploadImage } from "./lib/upload";
 import { analyzeImage } from "./lib/analyze";
 import * as db from "./lib/db";
+import { generateVisualization, getCachedVisualization, setCachedVisualization, clearVisualizationCache } from "./lib/visualization";
 
 // Inject CSS animations for streaming states
 const style = document.createElement('style');
@@ -82,9 +83,10 @@ const SAMPLE_PROFILE = {
     preferredStyles: ["minimalist", "classic", "professional"],
     colorPreferences: ["neutrals", "monochrome"],
   },
-  lifestyle: {
-    primaryOccasions: ["work", "weekend", "social"],
+  styleContext: {
+    notes: "",
   },
+  referencePhoto: null, // { url, uploadedAt }
 };
 
 function Lightbox({ item, onClose, onDelete }) {
@@ -206,6 +208,267 @@ function Lightbox({ item, onClose, onDelete }) {
             </button>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function OutfitVisualizationModal({ imageUrl, outfit, isLoading, error, onClose, onRegenerate }) {
+  const [loadingMessage, setLoadingMessage] = useState("Analyzing outfit...");
+
+  useEffect(() => {
+    if (!isLoading) return;
+
+    const messages = [
+      "Analyzing outfit...",
+      "Preparing your photo...",
+      "Generating visualization...",
+      "Almost there..."
+    ];
+
+    let index = 0;
+    const interval = setInterval(() => {
+      index = (index + 1) % messages.length;
+      setLoadingMessage(messages[index]);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [isLoading]);
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 100,
+        background: "rgba(0,0,0,0.75)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+        animation: "fadeIn 0.2s ease",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: "relative",
+          width: "100%",
+          maxWidth: 600,
+          borderRadius: 24,
+          overflow: "hidden",
+          background: "#fff",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.3)",
+          animation: "scaleIn 0.25s ease",
+        }}
+      >
+        <button
+          onClick={onClose}
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            zIndex: 10,
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            border: "none",
+            background: "rgba(0,0,0,0.5)",
+            color: "#fff",
+            fontSize: 20,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "all 0.2s ease",
+          }}
+        >
+          ✕
+        </button>
+
+        {isLoading ? (
+          <div style={{
+            padding: 60,
+            textAlign: "center",
+          }}>
+            <div className="shimmer-effect" style={{
+              width: "100%",
+              height: 400,
+              borderRadius: 12,
+              marginBottom: 20,
+              background: "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
+              backgroundSize: "200% 100%",
+              animation: "shimmer 1.5s infinite",
+            }} />
+            <p style={{
+              fontSize: 16,
+              color: "#666",
+              fontFamily: "'DM Sans', sans-serif",
+              fontWeight: 500,
+            }}>
+              {loadingMessage}
+            </p>
+          </div>
+        ) : error ? (
+          <div style={{
+            padding: 40,
+            textAlign: "center",
+          }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>😞</div>
+            <h3 style={{
+              fontSize: 18,
+              fontWeight: 600,
+              color: "#1A1A1A",
+              marginBottom: 12,
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              Failed to Generate Visualization
+            </h3>
+            <p style={{
+              fontSize: 14,
+              color: "#666",
+              marginBottom: 24,
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              {error}
+            </p>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <button
+                onClick={onRegenerate}
+                style={{
+                  padding: "12px 24px",
+                  borderRadius: 12,
+                  border: "none",
+                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                Try Again
+              </button>
+              <button
+                onClick={onClose}
+                style={{
+                  padding: "12px 24px",
+                  borderRadius: 12,
+                  border: "1px solid #E5E5E5",
+                  background: "#fff",
+                  color: "#666",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        ) : imageUrl ? (
+          <div>
+            <img
+              src={imageUrl}
+              alt="Outfit visualization"
+              style={{
+                width: "100%",
+                display: "block",
+                borderRadius: "24px 24px 0 0",
+              }}
+            />
+            <div style={{
+              padding: 24,
+              borderTop: "1px solid #E5E5E5",
+            }}>
+              <h3 style={{
+                fontSize: 18,
+                fontWeight: 600,
+                color: "#1A1A1A",
+                marginBottom: 16,
+                fontFamily: "'DM Sans', sans-serif",
+              }}>
+                {outfit.vibe}
+              </h3>
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                gap: 12,
+                marginBottom: 20,
+              }}>
+                {outfit.items.map((item, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      padding: 12,
+                      background: "#FAFAFA",
+                      borderRadius: 8,
+                      border: "1px solid #E5E5E5",
+                    }}
+                  >
+                    <div style={{
+                      fontSize: 24,
+                      marginBottom: 4,
+                      textAlign: "center",
+                    }}>
+                      {item.emoji || "👕"}
+                    </div>
+                    <div style={{
+                      fontSize: 11,
+                      color: "#666",
+                      textAlign: "center",
+                      fontFamily: "'DM Sans', sans-serif",
+                      fontWeight: 500,
+                    }}>
+                      {item.name}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 12 }}>
+                <button
+                  onClick={onRegenerate}
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    borderRadius: 12,
+                    border: "1px solid #E5E5E5",
+                    background: "#fff",
+                    color: "#666",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                >
+                  🔄 Regenerate
+                </button>
+                <button
+                  onClick={onClose}
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    borderRadius: 12,
+                    border: "none",
+                    background: "#1A1A1A",
+                    color: "#fff",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -682,7 +945,7 @@ function AddItemModal({ onClose, onAdd }) {
   );
 }
 
-function OutfitView({ outfit, onItemClick }) {
+function OutfitView({ outfit, onItemClick, hasReferencePhoto, isGenerating, onVisualizeClick }) {
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
 
   return (
@@ -746,6 +1009,36 @@ function OutfitView({ outfit, onItemClick }) {
           <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />
         ))}
       </div>
+
+      <button
+        onClick={() => onVisualizeClick(outfit)}
+        disabled={!hasReferencePhoto || isGenerating}
+        style={{
+          width: "100%",
+          padding: "14px 20px",
+          marginTop: 20,
+          background: hasReferencePhoto
+            ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+            : "#E8E8E8",
+          color: hasReferencePhoto ? "#fff" : "#999",
+          border: "none",
+          borderRadius: 12,
+          fontSize: "var(--font-body)",
+          fontFamily: "'DM Sans', sans-serif",
+          fontWeight: 600,
+          cursor: hasReferencePhoto && !isGenerating ? "pointer" : "not-allowed",
+          transition: "all 0.2s ease",
+          opacity: isGenerating ? 0.7 : 1,
+        }}
+      >
+        {isGenerating ? (
+          <span>⏳ Generating...</span>
+        ) : hasReferencePhoto ? (
+          <span>✨ See This On You</span>
+        ) : (
+          <span>📸 Add Photo in Profile to Visualize</span>
+        )}
+      </button>
     </div>
   );
 }
@@ -2099,25 +2392,17 @@ function StylePreferencesCard({ profile, onSave }) {
   );
 }
 
-function LifestyleCard({ profile, onSave }) {
+function StyleContextCard({ profile, onSave }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState(profile.lifestyle);
-
-  const occasionOptions = [
-    { value: "work", label: "Work/Office" },
-    { value: "weekend", label: "Casual/Weekend" },
-    { value: "social", label: "Evening/Social" },
-    { value: "formal", label: "Formal Events" },
-    { value: "active", label: "Active/Sport" },
-  ];
+  const [draft, setDraft] = useState(profile.styleContext || { notes: "" });
 
   const handleSave = () => {
-    onSave({ ...profile, lifestyle: draft, lastUpdated: new Date().toISOString() });
+    onSave({ ...profile, styleContext: draft, lastUpdated: new Date().toISOString() });
     setIsEditing(false);
   };
 
   const handleCancel = () => {
-    setDraft(profile.lifestyle);
+    setDraft(profile.styleContext || { notes: "" });
     setIsEditing(false);
   };
 
@@ -2137,15 +2422,40 @@ function LifestyleCard({ profile, onSave }) {
           marginBottom: 16,
           fontFamily: "'DM Sans', sans-serif",
         }}>
-          📅 Lifestyle
+          ✨ Style Context
         </h3>
 
-        <MultiSelectPills
-          label="Primary Occasions"
-          options={occasionOptions}
-          selected={draft.primaryOccasions}
-          onChange={(occasions) => setDraft({ ...draft, primaryOccasions: occasions })}
-        />
+        <div style={{ marginBottom: 16 }}>
+          <label style={{
+            display: "block",
+            fontSize: "var(--font-caption)",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            color: "#999",
+            marginBottom: 8,
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+            Additional Context
+          </label>
+          <textarea
+            value={draft.notes}
+            onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+            placeholder="Add any additional context about your style, occasions, preferences..."
+            style={{
+              width: "100%",
+              padding: "12px 16px",
+              borderRadius: 8,
+              border: "2px solid #E5E5E5",
+              fontSize: "var(--font-body)",
+              fontFamily: "'DM Sans', sans-serif",
+              outline: "none",
+              minHeight: 120,
+              resize: "vertical",
+              lineHeight: 1.6,
+            }}
+          />
+        </div>
 
         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
           <button
@@ -2207,7 +2517,7 @@ function LifestyleCard({ profile, onSave }) {
           color: "#1A1A1A",
           fontFamily: "'DM Sans', sans-serif",
         }}>
-          📅 Lifestyle
+          ✨ Style Context
         </h3>
         <button
           onClick={() => setIsEditing(true)}
@@ -2231,13 +2541,207 @@ function LifestyleCard({ profile, onSave }) {
         color: "#666",
         lineHeight: 1.6,
         fontFamily: "'DM Sans', sans-serif",
+        whiteSpace: "pre-wrap",
       }}>
-        {profile.lifestyle.primaryOccasions.length > 0 ? (
-          <div><strong>Primary Occasions:</strong> {profile.lifestyle.primaryOccasions.join(", ")}</div>
+        {draft.notes?.trim() ? (
+          <div>{draft.notes}</div>
         ) : (
-          <div style={{ color: "#999" }}>Primary Occasions: Not set</div>
+          <div style={{ color: "#999" }}>Not set</div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ReferencePhotoCard({ profile, onSave }) {
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+    if (!validTypes.includes(file.type)) {
+      setUploadError('Please upload a JPEG, PNG, WebP, or HEIC image');
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('Image must be smaller than 10MB');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError(null);
+
+    try {
+      const url = await uploadImage(file);
+
+      const updatedProfile = {
+        ...profile,
+        referencePhoto: {
+          url,
+          uploadedAt: new Date().toISOString()
+        }
+      };
+
+      onSave(updatedProfile);
+
+      // Clear visualization cache when photo changes
+      clearVisualizationCache();
+    } catch (error) {
+      console.error('Failed to upload reference photo:', error);
+      setUploadError('Failed to upload photo. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleRemove = () => {
+    const updatedProfile = {
+      ...profile,
+      referencePhoto: null
+    };
+    onSave(updatedProfile);
+    clearVisualizationCache();
+  };
+
+  return (
+    <div style={{
+      background: "#fff",
+      borderRadius: 16,
+      padding: 20,
+      marginBottom: 16,
+      border: "1px solid #E5E5E5",
+    }}>
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 12,
+      }}>
+        <h3 style={{
+          fontSize: "var(--font-body)",
+          fontWeight: 600,
+          color: "#1A1A1A",
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+          📸 Reference Photo
+        </h3>
+      </div>
+
+      <p style={{
+        fontSize: "var(--font-caption)",
+        color: "#666",
+        marginBottom: 16,
+        lineHeight: 1.5,
+        fontFamily: "'DM Sans', sans-serif",
+      }}>
+        Upload a full-body photo to see outfit recommendations visualized on you
+      </p>
+
+      {profile.referencePhoto ? (
+        <div>
+          <img
+            src={profile.referencePhoto.url}
+            alt="Reference photo"
+            style={{
+              width: "100%",
+              maxWidth: 300,
+              borderRadius: 12,
+              marginBottom: 12,
+              display: "block"
+            }}
+          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 8,
+                border: "1px solid #E5E5E5",
+                background: "#fff",
+                color: "#666",
+                fontSize: "var(--font-caption)",
+                fontWeight: 600,
+                cursor: isUploading ? "not-allowed" : "pointer",
+                fontFamily: "'DM Sans', sans-serif",
+                opacity: isUploading ? 0.5 : 1
+              }}
+            >
+              {isUploading ? "Uploading..." : "Replace Photo"}
+            </button>
+            <button
+              onClick={handleRemove}
+              disabled={isUploading}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 8,
+                border: "1px solid #FFE5E5",
+                background: "#fff",
+                color: "#D32F2F",
+                fontSize: "var(--font-caption)",
+                fontWeight: 600,
+                cursor: isUploading ? "not-allowed" : "pointer",
+                fontFamily: "'DM Sans', sans-serif",
+                opacity: isUploading ? 0.5 : 1
+              }}
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+            onChange={handleFileSelect}
+            style={{ display: "none" }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            style={{
+              width: "100%",
+              padding: "40px 20px",
+              borderRadius: 12,
+              border: "2px dashed #E5E5E5",
+              background: "#FAFAFA",
+              color: "#666",
+              fontSize: "var(--font-body)",
+              fontWeight: 600,
+              cursor: isUploading ? "not-allowed" : "pointer",
+              fontFamily: "'DM Sans', sans-serif",
+              transition: "all 0.2s ease",
+              opacity: isUploading ? 0.5 : 1
+            }}
+          >
+            {isUploading ? "Uploading..." : "+ Upload Reference Photo"}
+          </button>
+        </div>
+      )}
+
+      {uploadError && (
+        <div style={{
+          marginTop: 12,
+          padding: 12,
+          background: "#FFEBEE",
+          border: "1px solid #FFCDD2",
+          borderRadius: 8,
+          color: "#D32F2F",
+          fontSize: "var(--font-caption)",
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+          {uploadError}
+        </div>
+      )}
     </div>
   );
 }
@@ -2277,6 +2781,7 @@ function ProfileView({ profile, onSave }) {
         </div>
       )}
 
+      <ReferencePhotoCard profile={profile} onSave={onSave} />
       <BodyFitCard profile={profile} onSave={onSave} />
       <StylePreferencesCard profile={profile} onSave={onSave} />
       <LifestyleCard profile={profile} onSave={onSave} />
@@ -2498,6 +3003,8 @@ export default function OutfitRecommendations() {
     }
     return SAMPLE_PROFILE;
   });
+  const [visualizationModal, setVisualizationModal] = useState(null);
+  const [isGeneratingVisualization, setIsGeneratingVisualization] = useState(false);
   const chatSessionRef = useRef(0);
   const streamAbortRef = useRef(null);
 
@@ -2604,6 +3111,106 @@ export default function OutfitRecommendations() {
       console.error("Failed to add wardrobe item:", err);
     }
   }, []);
+
+  const handleVisualizeOutfit = useCallback(async (outfit) => {
+    if (!profile.referencePhoto) {
+      console.log('No reference photo available');
+      return;
+    }
+
+    // Check cache first
+    const cachedImage = getCachedVisualization(outfit.id, profile.referencePhoto.url);
+    if (cachedImage) {
+      setVisualizationModal({
+        imageUrl: cachedImage,
+        outfit,
+        isLoading: false,
+        error: null
+      });
+      return;
+    }
+
+    // Show loading modal
+    setVisualizationModal({
+      imageUrl: null,
+      outfit,
+      isLoading: true,
+      error: null
+    });
+    setIsGeneratingVisualization(true);
+
+    try {
+      const result = await generateVisualization({
+        referencePhotoUrl: profile.referencePhoto.url,
+        outfit,
+        userProfile: profile
+      });
+
+      // Cache the result
+      setCachedVisualization(outfit.id, profile.referencePhoto.url, result.imageUrl);
+
+      // Update modal with result
+      setVisualizationModal({
+        imageUrl: result.imageUrl,
+        outfit,
+        isLoading: false,
+        error: null
+      });
+    } catch (error) {
+      console.error('Failed to generate visualization:', error);
+      setVisualizationModal({
+        imageUrl: null,
+        outfit,
+        isLoading: false,
+        error: error.message || 'Failed to generate visualization'
+      });
+    } finally {
+      setIsGeneratingVisualization(false);
+    }
+  }, [profile]);
+
+  const handleRegenerateVisualization = useCallback(async () => {
+    if (!visualizationModal?.outfit) return;
+
+    // Clear cache for this outfit
+    const outfit = visualizationModal.outfit;
+
+    // Show loading state
+    setVisualizationModal({
+      ...visualizationModal,
+      isLoading: true,
+      error: null
+    });
+    setIsGeneratingVisualization(true);
+
+    try {
+      const result = await generateVisualization({
+        referencePhotoUrl: profile.referencePhoto.url,
+        outfit,
+        userProfile: profile
+      });
+
+      // Update cache
+      setCachedVisualization(outfit.id, profile.referencePhoto.url, result.imageUrl);
+
+      // Update modal
+      setVisualizationModal({
+        imageUrl: result.imageUrl,
+        outfit,
+        isLoading: false,
+        error: null
+      });
+    } catch (error) {
+      console.error('Failed to regenerate visualization:', error);
+      setVisualizationModal({
+        ...visualizationModal,
+        isLoading: false,
+        error: error.message || 'Failed to regenerate visualization'
+      });
+    } finally {
+      setIsGeneratingVisualization(false);
+    }
+  }, [visualizationModal, profile]);
 
   const allWardrobeItems = wardrobeFlat;
 
@@ -2914,6 +3521,13 @@ export default function OutfitRecommendations() {
           onAdd={handleAddItem}
         />
       )}
+      {visualizationModal && (
+        <OutfitVisualizationModal
+          {...visualizationModal}
+          onClose={() => setVisualizationModal(null)}
+          onRegenerate={handleRegenerateVisualization}
+        />
+      )}
 
       <SidePanel
         isOpen={sidePanelOpen}
@@ -3095,6 +3709,9 @@ export default function OutfitRecommendations() {
                   <OutfitView
                     outfit={outfit}
                     onItemClick={(item) => setLightboxItem(item)}
+                    hasReferencePhoto={!!profile.referencePhoto}
+                    isGenerating={isGeneratingVisualization}
+                    onVisualizeClick={handleVisualizeOutfit}
                   />
                 </div>
               ))}
