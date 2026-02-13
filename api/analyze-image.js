@@ -1,4 +1,5 @@
 import { getOpenAIClient } from './_lib/openai.js';
+import { verifyAuth } from './_lib/auth.js';
 
 const ANALYZE_IMAGE_PROMPT = `You are a clothing identification assistant. Analyze the clothing item in the image and return a JSON object with these exact fields:
 
@@ -32,6 +33,9 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  const user = await verifyAuth(req, res);
+  if (!user) return;
 
   try {
     const { imageUrl } = req.body;

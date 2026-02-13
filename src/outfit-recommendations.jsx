@@ -4,6 +4,7 @@ import { uploadImage } from "./lib/upload";
 import { analyzeImage } from "./lib/analyze";
 import * as db from "./lib/db";
 import { generateVisualization, getCachedVisualization, setCachedVisualization, clearVisualizationCache } from "./lib/visualization";
+import { useAuth } from "./lib/auth";
 
 // Inject CSS animations for streaming states
 const style = document.createElement('style');
@@ -292,13 +293,13 @@ function OutfitVisualizationModal({ imageUrl, outfit, isLoading, error, onClose,
 
         {isLoading ? (
           <div style={{
-            padding: 60,
+            padding: "20px 20px 40px 20px",
             textAlign: "center",
           }}>
             <div className="shimmer-effect" style={{
               width: "100%",
               height: 400,
-              borderRadius: 12,
+              borderRadius: 16,
               marginBottom: 20,
               background: "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
               backgroundSize: "200% 100%",
@@ -373,18 +374,24 @@ function OutfitVisualizationModal({ imageUrl, outfit, isLoading, error, onClose,
           </div>
         ) : imageUrl ? (
           <div>
-            <img
-              src={imageUrl}
-              alt="Outfit visualization"
-              style={{
-                width: "100%",
-                display: "block",
-                borderRadius: "24px 24px 0 0",
-              }}
-            />
             <div style={{
-              padding: 24,
-              borderTop: "1px solid #E5E5E5",
+              padding: "20px 20px 0 20px",
+            }}>
+              <img
+                src={imageUrl}
+                alt="Outfit visualization"
+                style={{
+                  width: "100%",
+                  maxHeight: 520,
+                  objectFit: "contain",
+                  display: "block",
+                  borderRadius: 16,
+                  background: "#F3F2F0",
+                }}
+              />
+            </div>
+            <div style={{
+              padding: "20px 24px 24px",
             }}>
               <h3 style={{
                 fontSize: 18,
@@ -910,7 +917,7 @@ function AddItemModal({ onClose, onAdd }) {
   );
 }
 
-function OutfitView({ outfit, onItemClick, hasReferencePhoto, isGenerating, onVisualizeClick }) {
+function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisualizeClick, onViewVisualization }) {
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
 
   return (
@@ -976,27 +983,43 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, isGenerating, onVi
       </div>
 
       <button
-        onClick={() => onVisualizeClick(outfit)}
-        disabled={!hasReferencePhoto || isGenerating}
+        onClick={() => {
+          if (vizStatus === 'ready') {
+            onViewVisualization(outfit.id);
+          } else if (vizStatus !== 'generating') {
+            onVisualizeClick(outfit);
+          }
+        }}
+        disabled={!hasReferencePhoto || vizStatus === 'generating'}
         style={{
           width: "100%",
           padding: "12px 20px",
           marginTop: 16,
-          background: "transparent",
-          color: hasReferencePhoto ? "#666" : "#bbb",
-          border: hasReferencePhoto ? "1px solid #E0E0E0" : "1px solid #EBEBEB",
+          background: vizStatus === 'ready'
+            ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+            : "transparent",
+          color: vizStatus === 'ready'
+            ? "#fff"
+            : hasReferencePhoto ? "#666" : "#bbb",
+          border: vizStatus === 'ready'
+            ? "none"
+            : hasReferencePhoto ? "1px solid #E0E0E0" : "1px solid #EBEBEB",
           borderRadius: 12,
           fontSize: "var(--font-body)",
           fontFamily: "'DM Sans', sans-serif",
-          fontWeight: 500,
-          cursor: hasReferencePhoto && !isGenerating ? "pointer" : "not-allowed",
+          fontWeight: vizStatus === 'ready' ? 600 : 500,
+          cursor: hasReferencePhoto && vizStatus !== 'generating' ? "pointer" : "not-allowed",
           transition: "all 0.2s ease",
-          opacity: isGenerating ? 0.6 : 1,
+          opacity: vizStatus === 'generating' ? 0.6 : 1,
           letterSpacing: "0.01em",
         }}
       >
-        {isGenerating ? (
+        {vizStatus === 'generating' ? (
           <span>Generating...</span>
+        ) : vizStatus === 'ready' ? (
+          <span>View visualization</span>
+        ) : vizStatus === 'error' ? (
+          <span>Retry visualization</span>
         ) : hasReferencePhoto ? (
           <span>See this on you 😎</span>
         ) : (
@@ -2758,7 +2781,7 @@ function ProfileView({ profile, onSave }) {
   );
 }
 
-function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, chatHistory, onSelectChat, onToggleStar, onDeleteChat }) {
+function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, chatHistory, onSelectChat, onToggleStar, onDeleteChat, onSignOut }) {
   const starredChats = chatHistory.filter((c) => c.starred);
   const recentChats = chatHistory.filter((c) => !c.starred);
 
@@ -2935,6 +2958,34 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, 
               My Profile
             </button>
           </div>
+
+          {/* Sign Out */}
+          <div style={{ padding: "0 16px 16px" }}>
+            <button
+              onClick={onSignOut}
+              style={{
+                width: "100%",
+                height: 40,
+                borderRadius: 12,
+                border: "none",
+                background: "transparent",
+                color: "#999",
+                fontSize: "var(--font-body)",
+                fontWeight: 500,
+                fontFamily: "'DM Sans', sans-serif",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                transition: "color 0.15s ease",
+              }}
+              onPointerEnter={(e) => e.currentTarget.style.color = "#666"}
+              onPointerLeave={(e) => e.currentTarget.style.color = "#999"}
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
       </div>
     </>
@@ -2942,6 +2993,7 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, 
 }
 
 export default function OutfitRecommendations() {
+  const { signOut } = useAuth();
   const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState(null);
   const [view, setView] = useState("chat");
@@ -2963,24 +3015,10 @@ export default function OutfitRecommendations() {
   const [wardrobeFlat, setWardrobeFlat] = useState([]);
   const [chatHistory, setChatHistory] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
-  const [profile, setProfile] = useState(() => {
-    try {
-      const saved = localStorage.getItem(PROFILE_STORAGE_KEY);
-      if (saved) {
-        const loadedProfile = JSON.parse(saved);
-        // Ensure referencePhoto field exists for backward compatibility
-        if (!('referencePhoto' in loadedProfile)) {
-          loadedProfile.referencePhoto = null;
-        }
-        return loadedProfile;
-      }
-    } catch (error) {
-      console.error("Error loading profile from localStorage:", error);
-    }
-    return SAMPLE_PROFILE;
-  });
-  const [visualizationModal, setVisualizationModal] = useState(null);
-  const [isGeneratingVisualization, setIsGeneratingVisualization] = useState(false);
+  const [profile, setProfile] = useState(SAMPLE_PROFILE);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [vizGenerations, setVizGenerations] = useState({});
+  const [vizModalOutfitId, setVizModalOutfitId] = useState(null);
   const chatSessionRef = useRef(0);
   const streamAbortRef = useRef(null);
 
@@ -3002,27 +3040,63 @@ export default function OutfitRecommendations() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, [sidePanelOpen]);
 
+  // Clean up vizGenerations when outfits change (new recommendations)
   useEffect(() => {
-    try {
-      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
-    } catch (error) {
-      console.error("Error saving profile to localStorage:", error);
-    }
-  }, [profile]);
+    const outfitIds = new Set(outfits.map(o => o.id));
+    setVizGenerations(prev => {
+      const cleaned = {};
+      for (const [id, entry] of Object.entries(prev)) {
+        if (outfitIds.has(id) || entry.status === 'generating') {
+          cleaned[id] = entry;
+        }
+      }
+      if (Object.keys(cleaned).length < Object.keys(prev).length) {
+        return cleaned;
+      }
+      return prev;
+    });
+  }, [outfits]);
+
+  useEffect(() => {
+    if (!profileLoaded) return;
+    db.saveProfile(profile).catch(err =>
+      console.error("Failed to save profile:", err)
+    );
+  }, [profile, profileLoaded]);
 
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const [grouped, flat, chats] = await Promise.all([
+        const [grouped, flat, chats, dbProfile] = await Promise.all([
           db.fetchWardrobeItems(),
           db.fetchWardrobeItemsFlat(),
           db.fetchChats(),
+          db.fetchProfile(),
         ]);
         setWardrobeItems(grouped);
         setWardrobeFlat(flat);
         setChatHistory(chats);
+
+        if (dbProfile && Object.keys(dbProfile).length > 0) {
+          setProfile(prev => ({ ...prev, ...dbProfile }));
+        } else {
+          // One-time migration from localStorage
+          try {
+            const localProfile = localStorage.getItem(PROFILE_STORAGE_KEY);
+            if (localProfile) {
+              const parsed = JSON.parse(localProfile);
+              await db.saveProfile(parsed);
+              setProfile(prev => ({ ...prev, ...parsed }));
+              localStorage.removeItem(PROFILE_STORAGE_KEY);
+            }
+          } catch (migrationErr) {
+            console.error("Failed to migrate localStorage profile:", migrationErr);
+          }
+        }
+        setProfileLoaded(true);
       } catch (err) {
         console.error("Failed to load initial data:", err);
+        setProfileLoaded(true);
       }
     }
     loadInitialData();
@@ -3128,23 +3202,28 @@ export default function OutfitRecommendations() {
     // Check cache first
     const cachedImage = getCachedVisualization(outfit.id, profile.referencePhoto.url);
     if (cachedImage) {
-      setVisualizationModal({
-        imageUrl: cachedImage,
-        outfit,
-        isLoading: false,
-        error: null
-      });
+      setVizGenerations(prev => ({
+        ...prev,
+        [outfit.id]: { status: 'ready', imageUrl: cachedImage, error: null, outfit }
+      }));
+      setVizModalOutfitId(outfit.id);
       return;
     }
 
-    // Show loading modal
-    setVisualizationModal({
-      imageUrl: null,
-      outfit,
-      isLoading: true,
-      error: null
-    });
-    setIsGeneratingVisualization(true);
+    // Already generating — do nothing
+    if (vizGenerations[outfit.id]?.status === 'generating') return;
+
+    // Already ready — open modal
+    if (vizGenerations[outfit.id]?.status === 'ready') {
+      setVizModalOutfitId(outfit.id);
+      return;
+    }
+
+    // Start background generation
+    setVizGenerations(prev => ({
+      ...prev,
+      [outfit.id]: { status: 'generating', imageUrl: null, error: null, outfit }
+    }));
 
     try {
       const result = await generateVisualization({
@@ -3153,42 +3232,35 @@ export default function OutfitRecommendations() {
         userProfile: profile
       });
 
-      // Cache the result
       setCachedVisualization(outfit.id, profile.referencePhoto.url, result.imageUrl);
 
-      // Update modal with result
-      setVisualizationModal({
-        imageUrl: result.imageUrl,
-        outfit,
-        isLoading: false,
-        error: null
-      });
+      setVizGenerations(prev => ({
+        ...prev,
+        [outfit.id]: { status: 'ready', imageUrl: result.imageUrl, error: null, outfit }
+      }));
     } catch (error) {
       console.error('Failed to generate visualization:', error);
-      setVisualizationModal({
-        imageUrl: null,
-        outfit,
-        isLoading: false,
-        error: error.message || 'Failed to generate visualization'
-      });
-    } finally {
-      setIsGeneratingVisualization(false);
+      setVizGenerations(prev => ({
+        ...prev,
+        [outfit.id]: {
+          status: 'error',
+          imageUrl: null,
+          error: error.message || 'Failed to generate visualization',
+          outfit
+        }
+      }));
     }
-  }, [profile]);
+  }, [profile, vizGenerations]);
 
-  const handleRegenerateVisualization = useCallback(async () => {
-    if (!visualizationModal?.outfit) return;
+  const handleRegenerateVisualization = useCallback(async (outfitId) => {
+    const genEntry = vizGenerations[outfitId];
+    if (!genEntry?.outfit) return;
+    const outfit = genEntry.outfit;
 
-    // Clear cache for this outfit
-    const outfit = visualizationModal.outfit;
-
-    // Show loading state
-    setVisualizationModal({
-      ...visualizationModal,
-      isLoading: true,
-      error: null
-    });
-    setIsGeneratingVisualization(true);
+    setVizGenerations(prev => ({
+      ...prev,
+      [outfitId]: { status: 'generating', imageUrl: null, error: null, outfit }
+    }));
 
     try {
       const result = await generateVisualization({
@@ -3197,27 +3269,25 @@ export default function OutfitRecommendations() {
         userProfile: profile
       });
 
-      // Update cache
       setCachedVisualization(outfit.id, profile.referencePhoto.url, result.imageUrl);
 
-      // Update modal
-      setVisualizationModal({
-        imageUrl: result.imageUrl,
-        outfit,
-        isLoading: false,
-        error: null
-      });
+      setVizGenerations(prev => ({
+        ...prev,
+        [outfitId]: { status: 'ready', imageUrl: result.imageUrl, error: null, outfit }
+      }));
     } catch (error) {
       console.error('Failed to regenerate visualization:', error);
-      setVisualizationModal({
-        ...visualizationModal,
-        isLoading: false,
-        error: error.message || 'Failed to regenerate visualization'
-      });
-    } finally {
-      setIsGeneratingVisualization(false);
+      setVizGenerations(prev => ({
+        ...prev,
+        [outfitId]: {
+          status: 'error',
+          imageUrl: null,
+          error: error.message || 'Failed to regenerate visualization',
+          outfit
+        }
+      }));
     }
-  }, [visualizationModal, profile]);
+  }, [vizGenerations, profile]);
 
   const allWardrobeItems = wardrobeFlat;
 
@@ -3528,11 +3598,14 @@ export default function OutfitRecommendations() {
           onAdd={handleAddItem}
         />
       )}
-      {visualizationModal && (
+      {vizModalOutfitId && vizGenerations[vizModalOutfitId] && (
         <OutfitVisualizationModal
-          {...visualizationModal}
-          onClose={() => setVisualizationModal(null)}
-          onRegenerate={handleRegenerateVisualization}
+          imageUrl={vizGenerations[vizModalOutfitId].imageUrl}
+          outfit={vizGenerations[vizModalOutfitId].outfit}
+          isLoading={vizGenerations[vizModalOutfitId].status === 'generating'}
+          error={vizGenerations[vizModalOutfitId].status === 'error' ? vizGenerations[vizModalOutfitId].error : null}
+          onClose={() => setVizModalOutfitId(null)}
+          onRegenerate={() => handleRegenerateVisualization(vizModalOutfitId)}
         />
       )}
 
@@ -3546,6 +3619,7 @@ export default function OutfitRecommendations() {
         onSelectChat={handleSelectChat}
         onToggleStar={handleToggleStar}
         onDeleteChat={handleDeleteChat}
+        onSignOut={signOut}
       />
 
       {/* Top bar */}
@@ -3720,8 +3794,9 @@ export default function OutfitRecommendations() {
                     outfit={outfit}
                     onItemClick={(item) => setLightboxItem(item)}
                     hasReferencePhoto={!!profile.referencePhoto}
-                    isGenerating={isGeneratingVisualization}
+                    vizStatus={vizGenerations[outfit.id]?.status}
                     onVisualizeClick={handleVisualizeOutfit}
+                    onViewVisualization={(outfitId) => setVizModalOutfitId(outfitId)}
                   />
                 </div>
               ))}

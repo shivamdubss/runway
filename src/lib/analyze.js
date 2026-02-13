@@ -1,7 +1,16 @@
+import { supabase } from './supabase';
+
 export async function analyzeImage(imageUrl) {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (session?.access_token) {
+    headers['Authorization'] = `Bearer ${session.access_token}`;
+  }
+
   const res = await fetch('/api/analyze-image', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ imageUrl }),
   });
 

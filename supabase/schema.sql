@@ -7,6 +7,16 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ============================================================
+-- Table: profiles
+-- ============================================================
+CREATE TABLE profiles (
+  id         UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  data       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
 -- Table: wardrobe_items
 -- ============================================================
 CREATE TABLE wardrobe_items (
@@ -18,7 +28,7 @@ CREATE TABLE wardrobe_items (
   accent_color  TEXT NOT NULL,
   emoji         TEXT NOT NULL,
   image_url     TEXT,
-  user_id       UUID,
+  user_id       UUID DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -34,7 +44,7 @@ CREATE TABLE chats (
   title         TEXT NOT NULL,
   subtitle      TEXT,
   starred       BOOLEAN NOT NULL DEFAULT FALSE,
-  user_id       UUID,
+  user_id       UUID DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -65,7 +75,7 @@ CREATE TABLE outfits (
   chat_id       UUID REFERENCES chats (id) ON DELETE SET NULL,
   vibe          TEXT NOT NULL,
   reasoning     TEXT,
-  user_id       UUID,
+  user_id       UUID DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -98,6 +108,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE TRIGGER set_profiles_updated_at
+  BEFORE UPDATE ON profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER set_wardrobe_items_updated_at
   BEFORE UPDATE ON wardrobe_items
   FOR EACH ROW
@@ -109,39 +124,75 @@ CREATE TRIGGER set_chats_updated_at
   EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================
+-- Trigger: auto-create profile on signup
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, data)
+  VALUES (NEW.id, '{}'::jsonb);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user();
+
+-- ============================================================
 -- Row Level Security (RLS)
 -- ============================================================
 
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE wardrobe_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE outfits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE outfit_items ENABLE ROW LEVEL SECURITY;
 
--- Permissive policies for development (pre-auth).
--- Replace with user-scoped policies when auth is implemented.
+-- Profiles: users can only access their own profile
+CREATE POLICY "profiles_select_own" ON profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "profiles_insert_own" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "profiles_update_own" ON profiles FOR UPDATE USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+CREATE POLICY "profiles_delete_own" ON profiles FOR DELETE USING (auth.uid() = id);
 
-CREATE POLICY "wardrobe_items_select_all" ON wardrobe_items FOR SELECT USING (true);
-CREATE POLICY "wardrobe_items_insert_all" ON wardrobe_items FOR INSERT WITH CHECK (true);
-CREATE POLICY "wardrobe_items_update_all" ON wardrobe_items FOR UPDATE USING (true) WITH CHECK (true);
-CREATE POLICY "wardrobe_items_delete_all" ON wardrobe_items FOR DELETE USING (true);
+-- Wardrobe items: users can only access their own items
+CREATE POLICY "wardrobe_items_select_own" ON wardrobe_items FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "wardrobe_items_insert_own" ON wardrobe_items FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "wardrobe_items_update_own" ON wardrobe_items FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "wardrobe_items_delete_own" ON wardrobe_items FOR DELETE USING (auth.uid() = user_id);
 
-CREATE POLICY "chats_select_all" ON chats FOR SELECT USING (true);
-CREATE POLICY "chats_insert_all" ON chats FOR INSERT WITH CHECK (true);
-CREATE POLICY "chats_update_all" ON chats FOR UPDATE USING (true) WITH CHECK (true);
-CREATE POLICY "chats_delete_all" ON chats FOR DELETE USING (true);
+-- Chats: users can only access their own chats
+CREATE POLICY "chats_select_own" ON chats FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "chats_insert_own" ON chats FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "chats_update_own" ON chats FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "chats_delete_own" ON chats FOR DELETE USING (auth.uid() = user_id);
 
-CREATE POLICY "messages_select_all" ON messages FOR SELECT USING (true);
-CREATE POLICY "messages_insert_all" ON messages FOR INSERT WITH CHECK (true);
-CREATE POLICY "messages_update_all" ON messages FOR UPDATE USING (true) WITH CHECK (true);
-CREATE POLICY "messages_delete_all" ON messages FOR DELETE USING (true);
+-- Messages: scoped via parent chat ownership
+CREATE POLICY "messages_select_own" ON messages FOR SELECT
+  USING (EXISTS (SELECT 1 FROM chats WHERE chats.id = messages.chat_id AND chats.user_id = auth.uid()));
+CREATE POLICY "messages_insert_own" ON messages FOR INSERT
+  WITH CHECK (EXISTS (SELECT 1 FROM chats WHERE chats.id = messages.chat_id AND chats.user_id = auth.uid()));
+CREATE POLICY "messages_update_own" ON messages FOR UPDATE
+  USING (EXISTS (SELECT 1 FROM chats WHERE chats.id = messages.chat_id AND chats.user_id = auth.uid()))
+  WITH CHECK (EXISTS (SELECT 1 FROM chats WHERE chats.id = messages.chat_id AND chats.user_id = auth.uid()));
+CREATE POLICY "messages_delete_own" ON messages FOR DELETE
+  USING (EXISTS (SELECT 1 FROM chats WHERE chats.id = messages.chat_id AND chats.user_id = auth.uid()));
 
-CREATE POLICY "outfits_select_all" ON outfits FOR SELECT USING (true);
-CREATE POLICY "outfits_insert_all" ON outfits FOR INSERT WITH CHECK (true);
-CREATE POLICY "outfits_update_all" ON outfits FOR UPDATE USING (true) WITH CHECK (true);
-CREATE POLICY "outfits_delete_all" ON outfits FOR DELETE USING (true);
+-- Outfits: users can only access their own outfits
+CREATE POLICY "outfits_select_own" ON outfits FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "outfits_insert_own" ON outfits FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "outfits_update_own" ON outfits FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "outfits_delete_own" ON outfits FOR DELETE USING (auth.uid() = user_id);
 
-CREATE POLICY "outfit_items_select_all" ON outfit_items FOR SELECT USING (true);
-CREATE POLICY "outfit_items_insert_all" ON outfit_items FOR INSERT WITH CHECK (true);
-CREATE POLICY "outfit_items_update_all" ON outfit_items FOR UPDATE USING (true) WITH CHECK (true);
-CREATE POLICY "outfit_items_delete_all" ON outfit_items FOR DELETE USING (true);
+-- Outfit items: scoped via parent outfit ownership
+CREATE POLICY "outfit_items_select_own" ON outfit_items FOR SELECT
+  USING (EXISTS (SELECT 1 FROM outfits WHERE outfits.id = outfit_items.outfit_id AND outfits.user_id = auth.uid()));
+CREATE POLICY "outfit_items_insert_own" ON outfit_items FOR INSERT
+  WITH CHECK (EXISTS (SELECT 1 FROM outfits WHERE outfits.id = outfit_items.outfit_id AND outfits.user_id = auth.uid()));
+CREATE POLICY "outfit_items_update_own" ON outfit_items FOR UPDATE
+  USING (EXISTS (SELECT 1 FROM outfits WHERE outfits.id = outfit_items.outfit_id AND outfits.user_id = auth.uid()))
+  WITH CHECK (EXISTS (SELECT 1 FROM outfits WHERE outfits.id = outfit_items.outfit_id AND outfits.user_id = auth.uid()));
+CREATE POLICY "outfit_items_delete_own" ON outfit_items FOR DELETE
+  USING (EXISTS (SELECT 1 FROM outfits WHERE outfits.id = outfit_items.outfit_id AND outfits.user_id = auth.uid()));

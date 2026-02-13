@@ -10,6 +10,7 @@ import { handleChatStream } from './api/chat-stream.js';
 import { handleUpload } from './api/upload.js';
 import { handleAnalyzeImage } from './api/analyze-image.js';
 import { handleGenerateOutfitVisualization } from './api/generate-outfit-visualization.js';
+import { requireAuth } from './middleware/auth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -22,12 +23,12 @@ const upload = multer({
 
 app.use(express.json({ limit: '1mb' }));
 
-// API routes
-app.post('/api/chat', handleChat);
-app.post('/api/chat/stream', handleChatStream);
-app.post('/api/upload', upload.single('image'), handleUpload);
-app.post('/api/analyze-image', handleAnalyzeImage);
-app.post('/api/generate-outfit-visualization', handleGenerateOutfitVisualization);
+// API routes (all protected by auth)
+app.post('/api/chat', requireAuth, handleChat);
+app.post('/api/chat/stream', requireAuth, handleChatStream);
+app.post('/api/upload', requireAuth, upload.single('image'), handleUpload);
+app.post('/api/analyze-image', requireAuth, handleAnalyzeImage);
+app.post('/api/generate-outfit-visualization', requireAuth, handleGenerateOutfitVisualization);
 
 // Serve static Vite build output
 app.use(express.static(join(__dirname, '..', 'dist')));

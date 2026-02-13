@@ -1,6 +1,7 @@
 import { getOpenAIClient } from '../_lib/openai.js';
 import { buildSystemPrompt } from '../_lib/prompts.js';
 import { parseOutfitResponse } from '../_lib/parse-outfits.js';
+import { verifyAuth } from '../_lib/auth.js';
 
 function extractMessageTextFromJsonBuffer(jsonBuffer) {
   const keyMatch = /"message"\s*:\s*"/.exec(jsonBuffer);
@@ -70,6 +71,9 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  const user = await verifyAuth(req, res);
+  if (!user) return;
 
   // Set SSE headers
   res.setHeader('Content-Type', 'text/event-stream');

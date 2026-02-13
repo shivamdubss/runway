@@ -24,7 +24,6 @@ function toDbItem(item) {
     accent_color: item.accent || item.accent_color || '#E8E8E8',
     emoji: item.emoji,
     image_url: item.image || item.image_url || null,
-    user_id: null,
   };
 }
 
@@ -86,7 +85,7 @@ export async function fetchChats() {
 export async function createChat({ title, subtitle }) {
   const { data, error } = await supabase
     .from('chats')
-    .insert({ title, subtitle: subtitle || '', starred: false, user_id: null })
+    .insert({ title, subtitle: subtitle || '', starred: false })
     .select()
     .single();
   if (error) throw error;
@@ -155,7 +154,7 @@ export async function saveOutfits({ chatId, outfits, wardrobeItems }) {
   for (const outfit of outfits) {
     const { data: outfitRow, error: outfitErr } = await supabase
       .from('outfits')
-      .insert({ chat_id: chatId, vibe: outfit.vibe, reasoning: outfit.reasoning || '', user_id: null })
+      .insert({ chat_id: chatId, vibe: outfit.vibe, reasoning: outfit.reasoning || '' })
       .select()
       .single();
     if (outfitErr) throw outfitErr;
@@ -179,6 +178,36 @@ export async function saveOutfits({ chatId, outfits, wardrobeItems }) {
   }
   return savedIds;
 }
+
+// ── Profile ───────────────────────────────────────────────
+
+export async function fetchProfile() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('data')
+    .eq('id', user.id)
+    .single();
+  if (error) throw error;
+  return data?.data || {};
+}
+
+export async function saveProfile(profileData) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert({ id: user.id, data: profileData })
+    .select('data')
+    .single();
+  if (error) throw error;
+  return data?.data;
+}
+
+// ── Outfits (read) ────────────────────────────────────────
 
 export async function fetchOutfitsForChat(chatId) {
   const { data: outfitRows, error: outfitErr } = await supabase

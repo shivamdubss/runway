@@ -1,6 +1,7 @@
 /**
  * Client-side service for outfit visualization generation
  */
+import { supabase } from './supabase';
 
 /**
  * Simple hash function for cache keys
@@ -124,11 +125,16 @@ function clearOldVisualizationCaches() {
  * Generate outfit visualization via API
  */
 export async function generateVisualization({ referencePhotoUrl, outfit, userProfile }) {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (session?.access_token) {
+    headers['Authorization'] = `Bearer ${session.access_token}`;
+  }
+
   const response = await fetch('/api/generate-outfit-visualization', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       referencePhotoUrl,
       outfit,

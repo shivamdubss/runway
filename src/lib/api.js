@@ -1,3 +1,13 @@
+import { supabase } from './supabase';
+
+async function getAuthHeaders(contentType = 'application/json') {
+  const { data: { session } } = await supabase.auth.getSession();
+  const headers = {};
+  if (contentType) headers['Content-Type'] = contentType;
+  if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+  return headers;
+}
+
 /**
  * Send a chat message and get outfit recommendations.
  *
@@ -8,9 +18,10 @@
  * @returns {Promise<{message: string, outfits: Array}>}
  */
 export async function sendChatMessage({ messages, wardrobeItems, profile }) {
+  const headers = await getAuthHeaders();
   const response = await fetch('/api/chat', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ messages, wardrobeItems, profile }),
   });
 
@@ -66,104 +77,109 @@ export function sendChatMessageStreaming({
   };
 
   resetTimeout();
-  fetch('/api/chat/stream', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages, wardrobeItems, profile }),
-    signal: controller.signal,
-  })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      if (!response.body) {
-        throw new Error('Streaming not supported in this browser');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      const handleEvent = (eventPayload) => {
-        let event;
-        try {
-          event = JSON.parse(eventPayload);
-        } catch (e) {
-          console.warn('Failed to parse SSE event:', eventPayload, e);
-          return;
+  getAuthHeaders().then(headers => {
+    fetch('/api/chat/stream', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ messages, wardrobeItems, profile }),
+      signal: controller.signal,
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
         }
 
-        if (event.type === 'token') {
-          onToken(event.content || '');
-          resetTimeout();
-          return;
+        if (!response.body) {
+          throw new Error('Streaming not supported in this browser');
         }
 
-        if (event.type === 'complete') {
-          finishStream();
-          onComplete({
-            message: event.message || '',
-            outfits: event.outfits || [],
-          });
-          return;
-        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
 
-        if (event.type === 'error') {
-          finishStream();
-          onError(new Error(event.error || 'Streaming request failed'));
-        }
-      };
-
-      const processBuffer = () => {
-        const normalized = buffer.replace(/\r\n/g, '\n');
-        const events = normalized.split('\n\n');
-        buffer = events.pop() || '';
-
-        for (const rawEvent of events) {
-          if (hasFinished) return;
-
-          const dataLines = rawEvent
-            .split('\n')
-            .filter(line => line.startsWith('data: '))
-            .map(line => line.slice(6));
-
-          if (dataLines.length > 0) {
-            handleEvent(dataLines.join('\n'));
+        const handleEvent = (eventPayload) => {
+          let event;
+          try {
+            event = JSON.parse(eventPayload);
+          } catch (e) {
+            console.warn('Failed to parse SSE event:', eventPayload, e);
+            return;
           }
-        }
-      };
 
-      function processText({ done, value }) {
-        if (hasFinished) {
-          return;
-        }
+          if (event.type === 'token') {
+            onToken(event.content || '');
+            resetTimeout();
+            return;
+          }
 
-        if (done) {
-          processBuffer();
-          if (!hasFinished) {
+          if (event.type === 'complete') {
             finishStream();
-            onError(new Error('Stream ended before completion'));
+            onComplete({
+              message: event.message || '',
+              outfits: event.outfits || [],
+            });
+            return;
           }
-          finishStream();
-          return;
-        }
 
-        buffer += decoder.decode(value, { stream: true });
-        processBuffer();
+          if (event.type === 'error') {
+            finishStream();
+            onError(new Error(event.error || 'Streaming request failed'));
+          }
+        };
+
+        const processBuffer = () => {
+          const normalized = buffer.replace(/\r\n/g, '\n');
+          const events = normalized.split('\n\n');
+          buffer = events.pop() || '';
+
+          for (const rawEvent of events) {
+            if (hasFinished) return;
+
+            const dataLines = rawEvent
+              .split('\n')
+              .filter(line => line.startsWith('data: '))
+              .map(line => line.slice(6));
+
+            if (dataLines.length > 0) {
+              handleEvent(dataLines.join('\n'));
+            }
+          }
+        };
+
+        function processText({ done, value }) {
+          if (hasFinished) {
+            return;
+          }
+
+          if (done) {
+            processBuffer();
+            if (!hasFinished) {
+              finishStream();
+              onError(new Error('Stream ended before completion'));
+            }
+            finishStream();
+            return;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          processBuffer();
+
+          return reader.read().then(processText);
+        }
 
         return reader.read().then(processText);
-      }
-
-      return reader.read().then(processText);
-    })
-    .catch(error => {
-      const wasFinished = hasFinished;
-      finishStream();
-      if (error.name !== 'AbortError' && !wasFinished) {
-        onError(error);
-      }
-    });
+      })
+      .catch(error => {
+        const wasFinished = hasFinished;
+        finishStream();
+        if (error.name !== 'AbortError' && !wasFinished) {
+          onError(error);
+        }
+      });
+  }).catch(error => {
+    finishStream();
+    onError(error);
+  });
 
   // Return abort function
   return () => {

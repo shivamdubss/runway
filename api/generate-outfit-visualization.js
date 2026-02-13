@@ -1,6 +1,7 @@
 import { put } from '@vercel/blob';
 import { randomUUID } from 'crypto';
 import { getOpenAIClient } from './_lib/openai.js';
+import { verifyAuth } from './_lib/auth.js';
 
 /**
  * Build prompt for outfit visualization
@@ -139,6 +140,9 @@ export default async function handler(req, res) {
       message: 'Method not allowed'
     });
   }
+
+  const user = await verifyAuth(req, res);
+  if (!user) return;
 
   try {
     const { referencePhotoUrl, outfit, userProfile } = req.body;
