@@ -1,6 +1,7 @@
 import { put } from '@vercel/blob';
 import { randomUUID } from 'crypto';
 import { getOpenAIClient } from './_lib/openai.js';
+import { toFile } from 'openai/uploads';
 
 /**
  * Build prompt for outfit visualization
@@ -43,7 +44,7 @@ Return a photorealistic image with ONLY the clothing changed.
 }
 
 /**
- * Generate outfit visualization using OpenAI gpt-image-1.5
+ * Generate outfit visualization using OpenAI GPT Image 1.5
  */
 async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProfile }) {
   const openai = getOpenAIClient();
@@ -52,10 +53,20 @@ async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProf
   console.log('[generateOutfitVisualization] Generating with prompt:', prompt);
 
   try {
-    // Call OpenAI Image Edit API
+    // Fetch the reference image
+    const imageResponse = await fetch(referencePhotoUrl);
+    if (!imageResponse.ok) {
+      throw new Error('Failed to fetch reference photo');
+    }
+    const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+
+    // Convert buffer to File object for OpenAI API
+    const imageFile = await toFile(imageBuffer, 'reference.png', { type: 'image/png' });
+
+    // Call OpenAI Image Edit API with GPT Image 1.5
     const response = await openai.images.edit({
-      model: "gpt-image-1.5",
-      image: referencePhotoUrl,
+      model: "gpt-image-1.5-2025-12-16",
+      image: imageFile,
       prompt: prompt,
       n: 1,
       size: "1024x1024",
@@ -85,6 +96,12 @@ async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProf
     return blob.url;
   } catch (error) {
     console.error('[generateOutfitVisualization] Error:', error);
+    console.error('[generateOutfitVisualization] Error details:', {
+      message: error.message,
+      status: error.status,
+      code: error.code,
+      type: error.type
+    });
 
     // Re-throw with more context
     if (error.status === 429 || error.code === 'rate_limit_exceeded') {
@@ -101,7 +118,11 @@ async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProf
       throw authError;
     }
 
-    throw error;
+    // Add more context to the error
+    const enhancedError = new Error(error.message || 'Failed to generate visualization');
+    enhancedError.status = error.status;
+    enhancedError.code = error.code;
+    throw enhancedError;
   }
 }
 
@@ -154,6 +175,7 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error('[/api/generate-outfit-visualization] Error:', error);
+    console.error('[/api/generate-outfit-visualization] Stack:', error.stack);
 
     // Handle specific error types
     if (error.status === 429 || error.code === 'rate_limit') {
@@ -169,15 +191,19 @@ export default async function handler(req, res) {
       return res.status(500).json({
         success: false,
         error: 'configuration_error',
-        message: 'Server configuration error. Please contact support.'
+        message: 'Invalid API key. Please check your OpenAI API key.'
       });
     }
 
-    // Generic error
+    // Generic error with more details in development
+    const isDevelopment = process.env.NODE_ENV !== 'production';
     return res.status(500).json({
       success: false,
       error: 'api_error',
-      message: 'Failed to generate visualization. Please try again.'
+      message: isDevelopment
+        ? `Failed to generate visualization: ${error.message}`
+        : 'Failed to generate visualization. Please try again.',
+      ...(isDevelopment && { details: error.message })
     });
   }
 }
