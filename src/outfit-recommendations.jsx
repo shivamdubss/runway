@@ -692,23 +692,16 @@ function OutfitView({ outfit, onItemClick }) {
       padding: `0 var(--container-padding-x)`,
       boxSizing: "border-box",
     }}>
-      <div className="item-card-grid">
-        {outfit.items.map((item, i) => (
-          <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />
-        ))}
-      </div>
-
       <div
         onClick={() => setReasoningExpanded(!reasoningExpanded)}
         style={{
-          marginTop: "var(--space-reasoning-margin-top)",
-          padding: "var(--space-reasoning-padding)",
+          padding: "14px 16px",
           background: reasoningExpanded ? "rgba(0,0,0,0.02)" : "transparent",
           borderRadius: 12,
-          border: "1px solid rgba(0,0,0,0.06)",
+          border: "1px solid rgba(0,0,0,0.1)",
           cursor: "pointer",
           transition: "all 0.25s ease",
-          marginBottom: 24,
+          marginBottom: 16,
         }}
       >
         <div style={{
@@ -717,16 +710,16 @@ function OutfitView({ outfit, onItemClick }) {
           justifyContent: "space-between",
         }}>
           <span style={{
-            fontSize: "var(--font-label-md)",
+            fontSize: "var(--font-item-name)",
             fontWeight: 600,
-            color: "#aaa",
+            color: "#666",
             fontFamily: "'DM Sans', sans-serif",
           }}>
             Why this works
           </span>
           <span style={{
-            fontSize: "var(--font-reasoning)",
-            color: "#ccc",
+            fontSize: "var(--font-item-name)",
+            color: "#888",
             transform: reasoningExpanded ? "rotate(180deg)" : "rotate(0deg)",
             transition: "transform 0.25s ease",
             display: "inline-block",
@@ -746,6 +739,12 @@ function OutfitView({ outfit, onItemClick }) {
             {outfit.reasoning}
           </p>
         )}
+      </div>
+
+      <div className="item-card-grid">
+        {outfit.items.map((item, i) => (
+          <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />
+        ))}
       </div>
     </div>
   );
