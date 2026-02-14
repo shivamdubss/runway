@@ -3234,6 +3234,10 @@ export default function OutfitRecommendations() {
 
       setCachedVisualization(outfit.id, profile.referencePhoto.url, result.imageUrl);
 
+      db.saveVisualizationUrl(outfit.id, result.imageUrl).catch(err =>
+        console.error("Failed to save visualization URL:", err)
+      );
+
       setVizGenerations(prev => ({
         ...prev,
         [outfit.id]: { status: 'ready', imageUrl: result.imageUrl, error: null, outfit }
@@ -3270,6 +3274,10 @@ export default function OutfitRecommendations() {
       });
 
       setCachedVisualization(outfit.id, profile.referencePhoto.url, result.imageUrl);
+
+      db.saveVisualizationUrl(outfit.id, result.imageUrl).catch(err =>
+        console.error("Failed to save visualization URL:", err)
+      );
 
       setVizGenerations(prev => ({
         ...prev,
@@ -3517,6 +3525,20 @@ export default function OutfitRecommendations() {
         image: m.image_url || null,
       })));
       setOutfits(chatOutfits);
+
+      const restoredViz = {};
+      for (const outfit of chatOutfits) {
+        if (outfit.visualizationUrl) {
+          restoredViz[outfit.id] = {
+            status: 'ready',
+            imageUrl: outfit.visualizationUrl,
+            error: null,
+            outfit,
+          };
+        }
+      }
+      setVizGenerations(restoredViz);
+
       setCurrent(0);
       setView("chat");
       setSidePanelOpen(false);

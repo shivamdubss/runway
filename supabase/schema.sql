@@ -75,6 +75,7 @@ CREATE TABLE outfits (
   chat_id       UUID REFERENCES chats (id) ON DELETE SET NULL,
   vibe          TEXT NOT NULL,
   reasoning     TEXT,
+  visualization_url TEXT,
   user_id       UUID DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

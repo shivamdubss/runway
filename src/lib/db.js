@@ -179,6 +179,14 @@ export async function saveOutfits({ chatId, outfits, wardrobeItems }) {
   return savedIds;
 }
 
+export async function saveVisualizationUrl(outfitId, visualizationUrl) {
+  const { error } = await supabase
+    .from('outfits')
+    .update({ visualization_url: visualizationUrl })
+    .eq('id', outfitId);
+  if (error) throw error;
+}
+
 // ── Profile ───────────────────────────────────────────────
 
 export async function fetchProfile() {
@@ -231,6 +239,7 @@ export async function fetchOutfitsForChat(chatId) {
       id: outfit.id,
       vibe: outfit.vibe,
       reasoning: outfit.reasoning,
+      visualizationUrl: outfit.visualization_url || null,
       items: (junctionRows || []).map(jr => toFrontendItem(jr.wardrobe_items)),
     });
   }
