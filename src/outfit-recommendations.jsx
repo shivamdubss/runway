@@ -3590,7 +3590,11 @@ export default function OutfitRecommendations() {
       position: "relative",
     }}>
       {lightboxItem && (
-        <Lightbox item={lightboxItem} onClose={() => setLightboxItem(null)} onDelete={handleDeleteWardrobeItem} />
+        <Lightbox
+          item={lightboxItem}
+          onClose={() => setLightboxItem(null)}
+          onDelete={view === "wardrobe" ? handleDeleteWardrobeItem : null}
+        />
       )}
       {addItemModalOpen && (
         <AddItemModal
