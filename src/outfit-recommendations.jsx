@@ -1671,7 +1671,7 @@ function ChatView({
             gap: 12,
             padding: "40px 20px",
           }}>
-            <span style={{ fontSize: 40 }}>👗</span>
+            <span style={{ fontSize: 40 }}>🪞</span>
             <span style={{
               fontSize: "var(--font-title)",
               fontFamily: "'Instrument Serif', serif",
@@ -1809,7 +1809,7 @@ function ChatView({
                     e.currentTarget.style.background = "#1A1A1A";
                   }}
                 >
-                  <span style={{ fontSize: 16 }}>👗</span>
+                  <span style={{ fontSize: 16 }}>🪞</span>
                   {msg.cta.label}
                   <span style={{ fontSize: 14, opacity: 0.7 }}>→</span>
                 </button>
@@ -2569,7 +2569,7 @@ function StylePreferencesCard({ profile, onSave }) {
           marginBottom: 16,
           fontFamily: "'DM Sans', sans-serif",
         }}>
-          👗 Style Preferences
+          🪞 Style Preferences
         </h3>
 
         <div style={{ marginBottom: 16 }}>
@@ -2690,7 +2690,7 @@ function StylePreferencesCard({ profile, onSave }) {
           color: "#1A1A1A",
           fontFamily: "'DM Sans', sans-serif",
         }}>
-          👗 Style Preferences
+          🪞 Style Preferences
         </h3>
         <button
           onClick={() => setIsEditing(true)}
@@ -3236,7 +3236,7 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, 
               transition: "opacity 0.2s ease",
             }}
           >
-            <span style={{ fontSize: 18 }}>👗</span>
+            <span style={{ fontSize: 18 }}>🪞</span>
             Full Wardrobe
           </button>
         </div>
