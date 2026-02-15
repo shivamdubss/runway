@@ -91,6 +91,10 @@ const SAMPLE_PROFILE = {
 };
 
 function Lightbox({ item, onClose, onDelete }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const images = item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : []);
+  const hasMultiple = images.length > 1;
+
   return (
     <div
       onClick={onClose}
@@ -153,17 +157,62 @@ function Lightbox({ item, onClose, onDelete }) {
           justifyContent: "center",
           fontSize: "var(--font-lightbox-emoji)",
           overflow: "hidden",
+          position: "relative",
         }}>
-          {item.image ? (
-            <img
-              src={item.image}
-              alt={item.name}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-              }}
-            />
+          {images.length > 0 ? (
+            <>
+              <img
+                src={images[activeIdx]}
+                alt={item.name}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                }}
+              />
+              {hasMultiple && activeIdx > 0 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setActiveIdx(i => i - 1); }}
+                  style={{
+                    position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
+                    width: 32, height: 32, borderRadius: 16,
+                    border: "none", background: "rgba(0,0,0,0.4)", color: "#fff",
+                    fontSize: 18, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  ‹
+                </button>
+              )}
+              {hasMultiple && activeIdx < images.length - 1 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setActiveIdx(i => i + 1); }}
+                  style={{
+                    position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                    width: 32, height: 32, borderRadius: 16,
+                    border: "none", background: "rgba(0,0,0,0.4)", color: "#fff",
+                    fontSize: 18, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  ›
+                </button>
+              )}
+              {hasMultiple && (
+                <div style={{
+                  position: "absolute", bottom: 10, left: "50%", transform: "translateX(-50%)",
+                  display: "flex", gap: 6,
+                }}>
+                  {images.map((_, i) => (
+                    <div key={i} style={{
+                      width: 6, height: 6, borderRadius: 3,
+                      background: i === activeIdx ? "#fff" : "rgba(255,255,255,0.45)",
+                      transition: "background 0.2s ease",
+                    }} />
+                  ))}
+                </div>
+              )}
+            </>
           ) : (
             <span>{item.emoji}</span>
           )}
@@ -475,16 +524,28 @@ function ItemCard({ item, onClick }) {
         overflow: "hidden",
         position: "relative",
       }}>
-        {item.image ? (
-          <img
-            src={item.image}
-            alt={item.name}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-            }}
-          />
+        {(item.images?.[0] || item.image) ? (
+          <>
+            <img
+              src={item.images?.[0] || item.image}
+              alt={item.name}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }}
+            />
+            {item.images?.length > 1 && (
+              <div style={{
+                position: "absolute", top: 6, right: 6,
+                background: "rgba(0,0,0,0.5)", color: "#fff",
+                borderRadius: 8, padding: "2px 6px",
+                fontSize: 10, fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
+              }}>
+                {item.images.length}
+              </div>
+            )}
+          </>
         ) : (
           <span>{item.emoji}</span>
         )}
@@ -581,58 +642,74 @@ function AddItemCard({ onClick }) {
   );
 }
 
-function AddItemModal({ onClose, onAdd }) {
+function AddItemModal({ onClose, onAdd, onBulkAdd }) {
+  // --- Mode: "single" or "bulk" ---
+  const [mode, setMode] = useState("single");
+
+  // --- Single-item state ---
   const [itemName, setItemName] = useState("");
   const [category, setCategory] = useState("Tops");
-  const [imagePreview, setImagePreview] = useState(null);
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [images, setImages] = useState([]); // [{previewUrl, uploadedUrl}]
   const [isUploading, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [uploadedUrl, setUploadedUrl] = useState(null);
   const [aiColor, setAiColor] = useState(null);
   const [aiAccent, setAiAccent] = useState(null);
   const [aiEmoji, setAiEmoji] = useState(null);
   const [analysisError, setAnalysisError] = useState(null);
   const [uploadError, setUploadError] = useState(null);
   const fileInputRef = useRef(null);
+  const extraFileInputRef = useRef(null);
+
+  // --- Bulk state ---
+  const [bulkQueue, setBulkQueue] = useState([]); // array of {previewUrl, uploadedUrl, name, category, color, accentColor, emoji, error}
+  const [bulkIndex, setBulkIndex] = useState(0);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [bulkEditName, setBulkEditName] = useState("");
+  const [bulkEditCategory, setBulkEditCategory] = useState("Tops");
+
+  // Cleanup preview URLs on unmount
+  useEffect(() => {
+    return () => {
+      images.forEach(img => { if (img.previewUrl) URL.revokeObjectURL(img.previewUrl); });
+      bulkQueue.forEach(item => { if (item.previewUrl) URL.revokeObjectURL(item.previewUrl); });
+    };
+  }, []);
+
+  // Sync bulk edit fields when bulkIndex changes
+  useEffect(() => {
+    if (mode === "bulk" && bulkQueue.length > 0 && bulkIndex < bulkQueue.length) {
+      setBulkEditName(bulkQueue[bulkIndex].name || "");
+      setBulkEditCategory(bulkQueue[bulkIndex].category || "Tops");
+    }
+  }, [bulkIndex, mode, bulkQueue]);
 
   const handleFileSelected = async (file) => {
     if (!file) return;
-
-    // Clear any previous errors
     setAnalysisError(null);
     setUploadError(null);
 
-    // Set up preview
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
     const previewUrl = URL.createObjectURL(file);
-    setImagePreview(previewUrl);
-    setSelectedFile(file);
+    setImages([{ previewUrl, uploadedUrl: null }]);
 
-    // Step 1: Upload the image
     let imageUrl;
     try {
       setIsUploading(true);
       imageUrl = await uploadImage(file);
-      setUploadedUrl(imageUrl);
+      setImages([{ previewUrl, uploadedUrl: imageUrl }]);
     } catch (err) {
       console.error("Image upload failed:", err);
       setUploadError("Failed to upload image. Please try again.");
-      // Clean up preview and reset state on upload failure
       URL.revokeObjectURL(previewUrl);
-      setImagePreview(null);
-      setSelectedFile(null);
+      setImages([]);
       return;
     } finally {
       setIsUploading(false);
     }
 
-    // Step 2: Analyze the uploaded image
     try {
       setIsAnalyzing(true);
       const result = await analyzeImage(imageUrl);
-
       setItemName((prev) => (prev.trim() ? prev : result.name));
       setCategory(result.category);
       setAiColor(result.color);
@@ -646,74 +723,377 @@ function AddItemModal({ onClose, onAdd }) {
     }
   };
 
+  const handleExtraFileSelected = async (file) => {
+    if (!file) return;
+    const previewUrl = URL.createObjectURL(file);
+    const placeholder = { previewUrl, uploadedUrl: null };
+    setImages(prev => [...prev, placeholder]);
+
+    try {
+      const url = await uploadImage(file);
+      setImages(prev => prev.map(img => img.previewUrl === previewUrl ? { ...img, uploadedUrl: url } : img));
+    } catch (err) {
+      console.error("Extra image upload failed:", err);
+      // Remove the failed image
+      URL.revokeObjectURL(previewUrl);
+      setImages(prev => prev.filter(img => img.previewUrl !== previewUrl));
+    }
+  };
+
+  const handleBulkFilesSelected = async (files) => {
+    setMode("bulk");
+    setBulkProcessing(true);
+    setBulkIndex(0);
+
+    const results = await Promise.allSettled(
+      files.map(async (file) => {
+        const previewUrl = URL.createObjectURL(file);
+        try {
+          const url = await uploadImage(file);
+          const analysis = await analyzeImage(url);
+          return {
+            previewUrl,
+            uploadedUrl: url,
+            name: analysis.name,
+            category: analysis.category,
+            color: analysis.color,
+            accentColor: analysis.accent_color,
+            emoji: analysis.emoji,
+            error: null,
+          };
+        } catch (err) {
+          return {
+            previewUrl,
+            uploadedUrl: null,
+            name: file.name.replace(/\.[^.]+$/, ""),
+            category: "Tops",
+            color: "#E8E8E8",
+            accentColor: "#D8D8D8",
+            emoji: "📷",
+            error: err.message,
+          };
+        }
+      })
+    );
+
+    const queue = results.map(r => r.status === "fulfilled" ? r.value : r.reason);
+    setBulkQueue(queue);
+    setBulkProcessing(false);
+  };
+
+  const handleBulkConfirmCurrent = () => {
+    // Save edits back to queue
+    setBulkQueue(prev => {
+      const copy = [...prev];
+      copy[bulkIndex] = { ...copy[bulkIndex], name: bulkEditName, category: bulkEditCategory, confirmed: true };
+      return copy;
+    });
+    if (bulkIndex < bulkQueue.length - 1) {
+      setBulkIndex(bulkIndex + 1);
+    } else {
+      // Last item - save all confirmed
+      const finalQueue = [...bulkQueue];
+      finalQueue[bulkIndex] = { ...finalQueue[bulkIndex], name: bulkEditName, category: bulkEditCategory, confirmed: true };
+      const confirmed = finalQueue.filter(item => item.confirmed && item.uploadedUrl);
+      if (confirmed.length > 0 && onBulkAdd) {
+        onBulkAdd(confirmed.map(item => ({
+          label: CATEGORY_TO_LABEL[item.category] || item.category,
+          name: item.name,
+          color: item.color || "#E8E8E8",
+          accent: item.accentColor || "#D8D8D8",
+          emoji: item.emoji || "📷",
+          images: [item.uploadedUrl],
+          category: item.category,
+        })));
+      }
+    }
+  };
+
+  const handleBulkSkip = () => {
+    if (bulkIndex < bulkQueue.length - 1) {
+      setBulkIndex(bulkIndex + 1);
+    } else {
+      // Last item - save all confirmed so far
+      const confirmed = bulkQueue.filter(item => item.confirmed && item.uploadedUrl);
+      if (confirmed.length > 0 && onBulkAdd) {
+        onBulkAdd(confirmed.map(item => ({
+          label: CATEGORY_TO_LABEL[item.category] || item.category,
+          name: item.name,
+          color: item.color || "#E8E8E8",
+          accent: item.accentColor || "#D8D8D8",
+          emoji: item.emoji || "📷",
+          images: [item.uploadedUrl],
+          category: item.category,
+        })));
+      } else {
+        onClose();
+      }
+    }
+  };
+
+  const handleBulkSaveAll = () => {
+    const finalQueue = bulkQueue.map((item, i) => {
+      if (i === bulkIndex) return { ...item, name: bulkEditName, category: bulkEditCategory };
+      return item;
+    });
+    const toSave = finalQueue.filter(item => item.uploadedUrl);
+    if (toSave.length > 0 && onBulkAdd) {
+      onBulkAdd(toSave.map(item => ({
+        label: CATEGORY_TO_LABEL[item.category] || item.category,
+        name: item.name,
+        color: item.color || "#E8E8E8",
+        accent: item.accentColor || "#D8D8D8",
+        emoji: item.emoji || "📷",
+        images: [item.uploadedUrl],
+        category: item.category,
+      })));
+    }
+  };
+
+  // --- Bulk processing / review UI ---
+  if (mode === "bulk") {
+    return (
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed", inset: 0, zIndex: 100,
+          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          padding: "var(--space-lightbox-padding)", animation: "fadeIn 0.2s ease",
+        }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: "relative", width: "100%", maxWidth: "var(--lightbox-max-width)",
+            borderRadius: 24, overflow: "hidden", background: "#fff",
+            boxShadow: "0 24px 80px rgba(0,0,0,0.3)", animation: "scaleIn 0.25s ease",
+          }}
+        >
+          <button
+            onClick={onClose}
+            style={{
+              position: "absolute", top: 12, right: 12, zIndex: 1,
+              width: "var(--lightbox-close-size)", height: "var(--lightbox-close-size)",
+              borderRadius: "calc(var(--lightbox-close-size) / 2)",
+              border: "none", background: "rgba(0,0,0,0.4)", color: "#fff",
+              fontSize: "var(--font-icon)", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            ✕
+          </button>
+
+          {bulkProcessing ? (
+            <div style={{
+              width: "100%", aspectRatio: "4 / 3", background: "#F3F2F0",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12,
+            }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: 16,
+                border: "3px solid #E8E8E8", borderTopColor: "#1A1A1A",
+                animation: "spin 0.8s linear infinite",
+              }} />
+              <span style={{ fontSize: "var(--font-body)", color: "#888", fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>
+                Uploading & analyzing items...
+              </span>
+            </div>
+          ) : bulkQueue.length > 0 && bulkIndex < bulkQueue.length ? (
+            <>
+              {/* Progress bar */}
+              <div style={{ width: "100%", height: 3, background: "#EEEDEB" }}>
+                <div style={{
+                  width: `${((bulkIndex + 1) / bulkQueue.length) * 100}%`,
+                  height: "100%", background: "#1A1A1A", transition: "width 0.3s ease",
+                }} />
+              </div>
+
+              {/* Image preview */}
+              <div style={{
+                width: "100%", aspectRatio: "4 / 3", background: "#F3F2F0",
+                display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative",
+              }}>
+                {bulkQueue[bulkIndex].previewUrl ? (
+                  <img src={bulkQueue[bulkIndex].previewUrl} alt="Preview" style={{
+                    width: "100%", height: "100%", objectFit: "cover",
+                  }} />
+                ) : (
+                  <span style={{ fontSize: 48 }}>{bulkQueue[bulkIndex].emoji || "📷"}</span>
+                )}
+                {/* Counter badge */}
+                <div style={{
+                  position: "absolute", top: 12, left: 12,
+                  background: "rgba(0,0,0,0.5)", color: "#fff",
+                  borderRadius: 10, padding: "4px 10px",
+                  fontSize: 12, fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
+                }}>
+                  {bulkIndex + 1} of {bulkQueue.length}
+                </div>
+              </div>
+
+              {/* Edit fields */}
+              <div style={{ padding: "16px var(--container-padding-x) var(--container-padding-x)" }}>
+                {bulkQueue[bulkIndex].error && (
+                  <div style={{ padding: "8px 0", fontSize: "var(--font-body)", color: "#c0392b", fontFamily: "'DM Sans', sans-serif" }}>
+                    Upload failed — you can skip this item.
+                  </div>
+                )}
+                <input
+                  type="text"
+                  value={bulkEditName}
+                  onChange={(e) => setBulkEditName(e.target.value)}
+                  placeholder="Item name"
+                  className="chat-input"
+                  style={{
+                    width: "100%", height: "var(--input-height)",
+                    borderRadius: "calc(var(--input-height) / 2)",
+                    border: "1px solid rgba(0,0,0,0.09)", background: "#fff", color: "#333",
+                    fontSize: "var(--font-chat)", padding: "0 var(--container-padding-x)",
+                    fontFamily: "'DM Sans', sans-serif", marginBottom: 12, boxSizing: "border-box",
+                  }}
+                />
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+                  {CATEGORIES.map((cat) => {
+                    const isActive = bulkEditCategory === cat;
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setBulkEditCategory(cat)}
+                        style={{
+                          height: 32, padding: "0 14px", borderRadius: 16,
+                          border: isActive ? "none" : "1px solid rgba(0,0,0,0.08)",
+                          background: isActive ? "#1A1A1A" : "#fff",
+                          color: isActive ? "#fff" : "#555",
+                          fontSize: "var(--font-body)", fontWeight: 500,
+                          fontFamily: "'DM Sans', sans-serif", cursor: "pointer",
+                          transition: "all 0.15s ease", whiteSpace: "nowrap",
+                        }}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={handleBulkSkip}
+                    style={{
+                      flex: 1, height: 48, borderRadius: 14,
+                      border: "1px solid rgba(0,0,0,0.1)", background: "#fff", color: "#888",
+                      fontSize: "var(--font-body)", fontWeight: 600,
+                      fontFamily: "'DM Sans', sans-serif", cursor: "pointer",
+                    }}
+                  >
+                    Skip
+                  </button>
+                  <button
+                    onClick={handleBulkConfirmCurrent}
+                    disabled={!bulkEditName.trim() || !!bulkQueue[bulkIndex].error}
+                    style={{
+                      flex: 2, height: 48, borderRadius: 14, border: "none",
+                      background: (bulkEditName.trim() && !bulkQueue[bulkIndex].error) ? "#1A1A1A" : "#EEEDEB",
+                      color: (bulkEditName.trim() && !bulkQueue[bulkIndex].error) ? "#fff" : "#ccc",
+                      fontSize: "var(--font-body)", fontWeight: 600,
+                      fontFamily: "'DM Sans', sans-serif",
+                      cursor: (bulkEditName.trim() && !bulkQueue[bulkIndex].error) ? "pointer" : "default",
+                    }}
+                  >
+                    {bulkIndex < bulkQueue.length - 1 ? "Next" : "Done"}
+                  </button>
+                </div>
+                {bulkQueue.length > 1 && (
+                  <button
+                    onClick={handleBulkSaveAll}
+                    style={{
+                      width: "100%", height: 40, marginTop: 8,
+                      borderRadius: 14, border: "none",
+                      background: "transparent", color: "#667eea",
+                      fontSize: "var(--font-body)", fontWeight: 600,
+                      fontFamily: "'DM Sans', sans-serif", cursor: "pointer",
+                    }}
+                  >
+                    Save all as-is
+                  </button>
+                )}
+              </div>
+            </>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  // --- Single-item UI ---
+  const primaryPreview = images[0]?.previewUrl || null;
+  const isWorking = isUploading || isAnalyzing;
+
   return (
     <div
       onClick={onClose}
       style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 100,
-        background: "rgba(0,0,0,0.6)",
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "var(--space-lightbox-padding)",
-        animation: "fadeIn 0.2s ease",
+        position: "fixed", inset: 0, zIndex: 100,
+        background: "rgba(0,0,0,0.6)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        padding: "var(--space-lightbox-padding)", animation: "fadeIn 0.2s ease",
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          position: "relative",
-          width: "100%",
-          maxWidth: "var(--lightbox-max-width)",
-          borderRadius: 24,
-          overflow: "hidden",
-          background: "#fff",
-          boxShadow: "0 24px 80px rgba(0,0,0,0.3)",
-          animation: "scaleIn 0.25s ease",
+          position: "relative", width: "100%", maxWidth: "var(--lightbox-max-width)",
+          borderRadius: 24, overflow: "hidden", background: "#fff",
+          boxShadow: "0 24px 80px rgba(0,0,0,0.3)", animation: "scaleIn 0.25s ease",
         }}
       >
         <button
           onClick={onClose}
           style={{
-            position: "absolute",
-            top: 12,
-            right: 12,
-            zIndex: 1,
-            width: "var(--lightbox-close-size)",
-            height: "var(--lightbox-close-size)",
+            position: "absolute", top: 12, right: 12, zIndex: 1,
+            width: "var(--lightbox-close-size)", height: "var(--lightbox-close-size)",
             borderRadius: "calc(var(--lightbox-close-size) / 2)",
-            border: "none",
-            background: "rgba(0,0,0,0.4)",
-            color: "#fff",
-            fontSize: "var(--font-icon)",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            border: "none", background: "rgba(0,0,0,0.4)", color: "#fff",
+            fontSize: "var(--font-icon)", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
           }}
         >
           ✕
         </button>
 
+        {/* Main file input (supports multi-select) */}
         <input
           ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const files = Array.from(e.target.files || []);
+            if (files.length > 1) {
+              handleBulkFilesSelected(files);
+            } else if (files.length === 1) {
+              handleFileSelected(files[0]);
+            }
+            e.target.value = "";
+          }}
+        />
+
+        {/* Extra photo input (single) */}
+        <input
+          ref={extraFileInputRef}
           type="file"
           accept="image/*"
           style={{ display: "none" }}
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) handleFileSelected(file);
+            if (file) handleExtraFileSelected(file);
             e.target.value = "";
           }}
         />
 
         <div
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => { if (!primaryPreview) fileInputRef.current?.click(); }}
           onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
           onDragLeave={() => setIsDragOver(false)}
           onDrop={(e) => {
@@ -722,42 +1102,25 @@ function AddItemModal({ onClose, onAdd }) {
             if (file) handleFileSelected(file);
           }}
           style={{
-            width: "100%",
-            aspectRatio: "4 / 3",
+            width: "100%", aspectRatio: "4 / 3",
             background: isDragOver ? "#E8E6E2" : "#F3F2F0",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            gap: 8,
-            position: "relative",
-            overflow: "hidden",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            cursor: primaryPreview ? "default" : "pointer",
+            gap: 8, position: "relative", overflow: "hidden",
             border: isDragOver ? "2px dashed #999" : "2px dashed transparent",
             transition: "background 0.15s ease, border-color 0.15s ease",
           }}
         >
-          {imagePreview ? (
+          {primaryPreview ? (
             <>
-              <img src={imagePreview} alt="Preview" style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                position: "absolute",
-                inset: 0,
+              <img src={primaryPreview} alt="Preview" style={{
+                width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0,
               }} />
-              {(isUploading || isAnalyzing) && (
+              {isWorking && (
                 <div style={{
-                  position: "absolute",
-                  inset: 0,
-                  background: "rgba(0,0,0,0.4)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#fff",
-                  fontSize: "var(--font-body)",
-                  fontFamily: "'DM Sans', sans-serif",
-                  fontWeight: 500,
+                  position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "#fff", fontSize: "var(--font-body)", fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
                 }}>
                   {isUploading ? "Uploading..." : "Analyzing..."}
                 </div>
@@ -770,35 +1133,66 @@ function AddItemModal({ onClose, onAdd }) {
                 <circle cx="12" cy="13" r="4"/>
               </svg>
               <span style={{
-                fontSize: "var(--font-body)",
-                color: "#bbb",
-                fontFamily: "'DM Sans', sans-serif",
-                fontWeight: 500,
+                fontSize: "var(--font-body)", color: "#bbb", fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
               }}>
-                Tap or drop photo
+                Tap or drop photos
               </span>
             </>
           )}
         </div>
 
+        {/* Thumbnail strip for multiple images */}
+        {images.length > 0 && (
+          <div style={{
+            display: "flex", gap: 6, padding: "8px var(--container-padding-x) 0",
+            overflowX: "auto", WebkitOverflowScrolling: "touch",
+          }}>
+            {images.map((img, i) => (
+              <div key={i} style={{
+                width: 48, height: 48, borderRadius: 8, overflow: "hidden", flexShrink: 0,
+                border: i === 0 ? "2px solid #1A1A1A" : "1px solid rgba(0,0,0,0.1)",
+                position: "relative",
+              }}>
+                <img src={img.previewUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                {!img.uploadedUrl && (
+                  <div style={{
+                    position: "absolute", inset: 0, background: "rgba(255,255,255,0.6)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <div style={{
+                      width: 14, height: 14, borderRadius: 7,
+                      border: "2px solid #ccc", borderTopColor: "#1A1A1A",
+                      animation: "spin 0.8s linear infinite",
+                    }} />
+                  </div>
+                )}
+              </div>
+            ))}
+            {/* + Add photo button */}
+            {!isWorking && (
+              <div
+                onClick={() => extraFileInputRef.current?.click()}
+                style={{
+                  width: 48, height: 48, borderRadius: 8, flexShrink: 0,
+                  border: "1px dashed rgba(0,0,0,0.15)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  cursor: "pointer", fontSize: 20, color: "#bbb",
+                }}
+              >
+                +
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ padding: "16px var(--container-padding-x) var(--container-padding-x)" }}>
           {uploadError && (
-            <div style={{
-              padding: "8px 0",
-              fontSize: "var(--font-body)",
-              color: "#c0392b",
-              fontFamily: "'DM Sans', sans-serif",
-            }}>
+            <div style={{ padding: "8px 0", fontSize: "var(--font-body)", color: "#c0392b", fontFamily: "'DM Sans', sans-serif" }}>
               {uploadError}
             </div>
           )}
           {analysisError && (
-            <div style={{
-              padding: "8px 0",
-              fontSize: "var(--font-body)",
-              color: "#c0392b",
-              fontFamily: "'DM Sans', sans-serif",
-            }}>
+            <div style={{ padding: "8px 0", fontSize: "var(--font-body)", color: "#c0392b", fontFamily: "'DM Sans', sans-serif" }}>
               {analysisError}
             </div>
           )}
@@ -809,26 +1203,15 @@ function AddItemModal({ onClose, onAdd }) {
             placeholder="Item name"
             className="chat-input"
             style={{
-              width: "100%",
-              height: "var(--input-height)",
+              width: "100%", height: "var(--input-height)",
               borderRadius: "calc(var(--input-height) / 2)",
-              border: "1px solid rgba(0,0,0,0.09)",
-              background: "#fff",
-              color: "#333",
-              fontSize: "var(--font-chat)",
-              padding: "0 var(--container-padding-x)",
-              fontFamily: "'DM Sans', sans-serif",
-              marginBottom: 12,
-              boxSizing: "border-box",
+              border: "1px solid rgba(0,0,0,0.09)", background: "#fff", color: "#333",
+              fontSize: "var(--font-chat)", padding: "0 var(--container-padding-x)",
+              fontFamily: "'DM Sans', sans-serif", marginBottom: 12, boxSizing: "border-box",
             }}
           />
 
-          <div style={{
-            display: "flex",
-            gap: 8,
-            flexWrap: "wrap",
-            marginBottom: 16,
-          }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
             {CATEGORIES.map((cat) => {
               const isActive = category === cat;
               return (
@@ -836,18 +1219,13 @@ function AddItemModal({ onClose, onAdd }) {
                   key={cat}
                   onClick={() => setCategory(cat)}
                   style={{
-                    height: 32,
-                    padding: "0 14px",
-                    borderRadius: 16,
+                    height: 32, padding: "0 14px", borderRadius: 16,
                     border: isActive ? "none" : "1px solid rgba(0,0,0,0.08)",
                     background: isActive ? "#1A1A1A" : "#fff",
                     color: isActive ? "#fff" : "#555",
-                    fontSize: "var(--font-body)",
-                    fontWeight: 500,
-                    fontFamily: "'DM Sans', sans-serif",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                    whiteSpace: "nowrap",
+                    fontSize: "var(--font-body)", fontWeight: 500,
+                    fontFamily: "'DM Sans', sans-serif", cursor: "pointer",
+                    transition: "all 0.15s ease", whiteSpace: "nowrap",
                   }}
                 >
                   {cat}
@@ -858,54 +1236,32 @@ function AddItemModal({ onClose, onAdd }) {
 
           <button
             onClick={async () => {
-              if (!itemName.trim() || isUploading || isAnalyzing) return;
+              if (!itemName.trim() || isWorking) return;
 
-              let imageUrl = uploadedUrl;
-              if (!imageUrl && selectedFile) {
-                try {
-                  setIsUploading(true);
-                  imageUrl = await uploadImage(selectedFile);
-                } catch (err) {
-                  console.error("Image upload failed:", err);
-                  setUploadError("Failed to upload image. Please try again.");
-                  setIsUploading(false);
-                  return;
-                } finally {
-                  setIsUploading(false);
-                }
-              }
-
+              const uploadedImages = images.filter(img => img.uploadedUrl).map(img => img.uploadedUrl);
               onAdd({
                 label: CATEGORY_TO_LABEL[category] || category,
                 name: itemName.trim(),
                 color: aiColor || "#E8E8E8",
                 accent: aiAccent || "#D8D8D8",
                 emoji: aiEmoji || "📷",
-                image: imageUrl,
+                images: uploadedImages,
+                image: uploadedImages[0] || null,
                 category: category,
               });
             }}
-            disabled={!itemName.trim() || isUploading || isAnalyzing}
+            disabled={!itemName.trim() || isWorking}
             style={{
-              width: "100%",
-              height: 48,
-              borderRadius: 14,
-              border: "none",
-              background: (itemName.trim() && !isUploading && !isAnalyzing) ? "#1A1A1A" : "#EEEDEB",
-              color: (itemName.trim() && !isUploading && !isAnalyzing) ? "#fff" : "#ccc",
-              fontSize: "var(--font-body)",
-              fontWeight: 600,
+              width: "100%", height: 48, borderRadius: 14, border: "none",
+              background: (itemName.trim() && !isWorking) ? "#1A1A1A" : "#EEEDEB",
+              color: (itemName.trim() && !isWorking) ? "#fff" : "#ccc",
+              fontSize: "var(--font-body)", fontWeight: 600,
               fontFamily: "'DM Sans', sans-serif",
-              cursor: (itemName.trim() && !isUploading && !isAnalyzing) ? "pointer" : "default",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              transition: "all 0.15s ease",
+              cursor: (itemName.trim() && !isWorking) ? "pointer" : "default",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              gap: 8, transition: "all 0.15s ease",
             }}
-            onPointerDown={(e) => {
-              if (itemName.trim() && !isUploading && !isAnalyzing) e.currentTarget.style.transform = "scale(0.97)";
-            }}
+            onPointerDown={(e) => { if (itemName.trim() && !isWorking) e.currentTarget.style.transform = "scale(0.97)"; }}
             onPointerUp={(e) => e.currentTarget.style.transform = "scale(1)"}
             onPointerLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
           >
@@ -3193,6 +3549,21 @@ export default function OutfitRecommendations() {
     }
   }, []);
 
+  const handleBulkAddItems = useCallback(async (items) => {
+    try {
+      await db.addWardrobeItemsBulk(items);
+      const [grouped, flat] = await Promise.all([
+        db.fetchWardrobeItems(),
+        db.fetchWardrobeItemsFlat(),
+      ]);
+      setWardrobeItems(grouped);
+      setWardrobeFlat(flat);
+      setAddItemModalOpen(false);
+    } catch (err) {
+      console.error("Failed to bulk add wardrobe items:", err);
+    }
+  }, []);
+
   const handleVisualizeOutfit = useCallback(async (outfit) => {
     if (!profile.referencePhoto) {
       console.log('No reference photo available');
@@ -3622,6 +3993,7 @@ export default function OutfitRecommendations() {
         <AddItemModal
           onClose={() => setAddItemModalOpen(false)}
           onAdd={handleAddItem}
+          onBulkAdd={handleBulkAddItems}
         />
       )}
       {vizModalOutfitId && vizGenerations[vizModalOutfitId] && (

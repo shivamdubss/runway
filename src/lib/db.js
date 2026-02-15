@@ -3,6 +3,9 @@ import { supabase } from './supabase';
 // ── Shape mappers ──────────────────────────────────────────
 
 function toFrontendItem(row) {
+  const images = Array.isArray(row.image_urls) && row.image_urls.length > 0
+    ? row.image_urls
+    : row.image_url ? [row.image_url] : [];
   return {
     id: row.id,
     label: row.label,
@@ -10,12 +13,19 @@ function toFrontendItem(row) {
     color: row.color,
     accent: row.accent_color,
     emoji: row.emoji,
-    image: row.image_url || null,
+    images,
+    image: images[0] || null,
     category: row.category,
   };
 }
 
 function toDbItem(item) {
+  let imageUrls = [];
+  if (Array.isArray(item.images) && item.images.length > 0) {
+    imageUrls = item.images;
+  } else if (item.image || item.image_url) {
+    imageUrls = [item.image || item.image_url];
+  }
   return {
     category: item.category,
     label: item.label,
@@ -23,7 +33,7 @@ function toDbItem(item) {
     color: item.color,
     accent_color: item.accent || item.accent_color || '#E8E8E8',
     emoji: item.emoji,
-    image_url: item.image || item.image_url || null,
+    image_urls: imageUrls,
   };
 }
 
@@ -61,6 +71,16 @@ export async function addWardrobeItem(item) {
     .single();
   if (error) throw error;
   return toFrontendItem(data);
+}
+
+export async function addWardrobeItemsBulk(items) {
+  const dbItems = items.map(toDbItem);
+  const { data, error } = await supabase
+    .from('wardrobe_items')
+    .insert(dbItems)
+    .select();
+  if (error) throw error;
+  return data.map(toFrontendItem);
 }
 
 export async function deleteWardrobeItem(id) {

@@ -27,7 +27,7 @@ CREATE TABLE wardrobe_items (
   color         TEXT NOT NULL,
   accent_color  TEXT NOT NULL,
   emoji         TEXT NOT NULL,
-  image_url     TEXT,
+  image_urls    JSONB NOT NULL DEFAULT '[]'::jsonb,
   user_id       UUID DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
