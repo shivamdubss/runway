@@ -124,6 +124,8 @@ function clearOldVisualizationCaches() {
 /**
  * Generate outfit visualization via API
  */
+const CLIENT_TIMEOUT_MS = 65_000;
+
 export async function generateVisualization({ referencePhotoUrl, outfit, userProfile }) {
   const { data: { session } } = await supabase.auth.getSession();
 
@@ -132,23 +134,36 @@ export async function generateVisualization({ referencePhotoUrl, outfit, userPro
     headers['Authorization'] = `Bearer ${session.access_token}`;
   }
 
-  const response = await fetch('/api/generate-outfit-visualization', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      referencePhotoUrl,
-      outfit,
-      userProfile
-    })
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const error = new Error(errorData.message || 'Failed to generate visualization');
-    error.code = errorData.error;
-    error.retryAfter = errorData.retryAfter;
+  try {
+    const response = await fetch('/api/generate-outfit-visualization', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        referencePhotoUrl,
+        outfit,
+        userProfile
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(errorData.message || 'Failed to generate visualization');
+      error.code = errorData.error;
+      error.retryAfter = errorData.retryAfter;
+      throw error;
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Visualization request timed out. Please try again.');
+    }
     throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return response.json();
 }

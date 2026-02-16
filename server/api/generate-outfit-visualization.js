@@ -4,13 +4,20 @@ import { randomUUID } from 'crypto';
 /**
  * Build prompt for outfit visualization
  */
-function buildVisualizationPrompt(outfit, userProfile) {
-  const items = outfit.items.map(item => {
-    const parts = [item.name];
-    if (item.color) parts.push(`in ${item.color}`);
-    if (item.category) parts.push(`(${item.category.toLowerCase()})`);
-    return parts.join(' ');
-  }).join('; ');
+export function buildVisualizationPrompt(outfit, userProfile) {
+  const items = outfit.items
+    .filter(item => item.name)
+    .map(item => {
+      const parts = [item.name];
+      if (item.color) parts.push(`in ${item.color}`);
+      if (item.category) parts.push(`(${item.category.toLowerCase()})`);
+      return parts.join(' ');
+    })
+    .join('; ');
+
+  if (!items) {
+    throw new Error('No valid items to visualize');
+  }
 
   const contextParts = [];
   if (userProfile && userProfile.style && userProfile.style.genderPreference) {
@@ -30,6 +37,49 @@ Replace ONLY the clothing with: ${items}.
 Style direction: ${outfit.vibe || 'casual'}, photorealistic editorial look.${contextBlock}
 
 The replacement garments must drape naturally on the existing body with physically correct wrinkles, shadows, and fabric weight. Match the scene lighting on the new clothing surfaces exactly.`.trim();
+}
+
+const OPENAI_TIMEOUT_MS = 55_000;
+const MAX_RETRIES = 1;
+
+/**
+ * Fetch with retry for transient errors (429, 5xx).
+ * Shares a single AbortController so the overall timeout spans all attempts.
+ */
+async function fetchWithRetry(url, options, signal) {
+  let lastError;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(url, { ...options, signal });
+      if (response.ok) return response;
+
+      const errBody = await response.json().catch(() => ({}));
+      const errMsg = errBody.error?.message || `OpenAI API returned ${response.status}`;
+      const err = new Error(errMsg);
+      err.status = response.status;
+
+      // Only retry on 429 or 5xx
+      if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
+        const delay = Math.pow(2, attempt + 1) * 1000;
+        console.log(`[fetchWithRetry] Attempt ${attempt + 1} failed with ${response.status}, retrying in ${delay}ms`);
+        await new Promise(r => setTimeout(r, delay));
+        lastError = err;
+        continue;
+      }
+      throw err;
+    } catch (error) {
+      if (error.name === 'AbortError') throw error;
+      if (!error.status && attempt < MAX_RETRIES) {
+        const delay = Math.pow(2, attempt + 1) * 1000;
+        console.log(`[fetchWithRetry] Network error, retrying in ${delay}ms`);
+        await new Promise(r => setTimeout(r, delay));
+        lastError = error;
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
 }
 
 /**
@@ -58,67 +108,92 @@ export async function handleGenerateOutfitVisualization(req, res) {
       });
     }
 
+    // Validate reference photo is accessible before expensive OpenAI call
+    try {
+      const headResponse = await fetch(referencePhotoUrl, { method: 'HEAD' });
+      if (!headResponse.ok) {
+        return res.status(400).json({
+          success: false,
+          error: 'reference_photo_inaccessible',
+          message: 'Reference photo is no longer accessible. Please re-upload your photo.'
+        });
+      }
+    } catch {
+      return res.status(400).json({
+        success: false,
+        error: 'reference_photo_inaccessible',
+        message: 'Could not reach reference photo URL. Please re-upload your photo.'
+      });
+    }
+
     const prompt = buildVisualizationPrompt(outfit, userProfile);
 
     console.log('[generateOutfitVisualization] Generating visualization...');
 
-    // Call OpenAI Image Edit API with GPT Image 1.5
-    // Use fetch directly — the SDK's images.edit sends multipart/form-data
-    // which doesn't support the newer images[] JSON format
-    const apiResponse = await fetch('https://api.openai.com/v1/images/edits', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: "gpt-image-1.5",
-        images: [{ image_url: referencePhotoUrl }],
-        prompt: prompt,
-        n: 1,
-        size: "1024x1024",
-        input_fidelity: "high"
-      })
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
 
-    if (!apiResponse.ok) {
-      const errBody = await apiResponse.json().catch(() => ({}));
-      const errMsg = errBody.error?.message || `OpenAI API returned ${apiResponse.status}`;
-      const err = new Error(errMsg);
-      err.status = apiResponse.status;
-      throw err;
-    }
+    try {
+      // Call OpenAI Image Edit API with GPT Image 1.5
+      // Use fetch directly — the SDK's images.edit sends multipart/form-data
+      // which doesn't support the newer images[] JSON format
+      const apiResponse = await fetchWithRetry('https://api.openai.com/v1/images/edits', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: "gpt-image-1.5",
+          images: [{ image_url: referencePhotoUrl }],
+          prompt: prompt,
+          n: 1,
+          size: "1024x1024",
+          input_fidelity: "high"
+        })
+      }, controller.signal);
 
-    const response = await apiResponse.json();
+      const response = await apiResponse.json();
 
-    if (!response.data || !response.data[0] || !response.data[0].b64_json) {
-      throw new Error('Invalid response from OpenAI API');
-    }
-
-    // Convert base64 to buffer for upload
-    const generatedImageBuffer = Buffer.from(response.data[0].b64_json, 'base64');
-
-    // Upload to Vercel Blob
-    const blob = await put(
-      `runway/visualizations/${randomUUID()}.png`,
-      generatedImageBuffer,
-      {
-        access: 'public',
-        token: process.env.runway_READ_WRITE_TOKEN,
-        contentType: 'image/png'
+      if (!response.data || !response.data[0] || !response.data[0].b64_json) {
+        throw new Error('Invalid response from OpenAI API');
       }
-    );
 
-    console.log('[generateOutfitVisualization] Successfully generated:', blob.url);
+      // Convert base64 to buffer for upload
+      const generatedImageBuffer = Buffer.from(response.data[0].b64_json, 'base64');
 
-    return res.json({
-      success: true,
-      imageUrl: blob.url,
-      generatedAt: new Date().toISOString(),
-      cached: false
-    });
+      // Upload to Vercel Blob
+      const blob = await put(
+        `runway/visualizations/${randomUUID()}.png`,
+        generatedImageBuffer,
+        {
+          access: 'public',
+          token: process.env.runway_READ_WRITE_TOKEN,
+          contentType: 'image/png'
+        }
+      );
+
+      console.log('[generateOutfitVisualization] Successfully generated:', blob.url);
+
+      return res.json({
+        success: true,
+        imageUrl: blob.url,
+        generatedAt: new Date().toISOString(),
+        cached: false
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
   } catch (error) {
     console.error('[/api/generate-outfit-visualization] Error:', error);
+
+    if (error.name === 'AbortError' || error.status === 504 || error.code === 'timeout') {
+      return res.status(504).json({
+        success: false,
+        error: 'timeout',
+        message: 'Visualization generation timed out. Please try again.'
+      });
+    }
 
     if (error.status === 429 || error.code === 'rate_limit_exceeded') {
       return res.status(429).json({

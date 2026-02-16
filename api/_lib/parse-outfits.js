@@ -39,7 +39,7 @@ export function parseOutfitResponse(rawResponse, wardrobeItems) {
     return undefined;
   }
 
-  // Resolve item names to full objects
+  // Resolve item names to full objects, filter out outfits with no resolved items
   const outfits = (parsed.outfits || []).map((outfit, index) => ({
     id: index + 1,
     vibe: outfit.vibe || `Look ${index + 1}`,
@@ -47,7 +47,10 @@ export function parseOutfitResponse(rawResponse, wardrobeItems) {
     items: (outfit.items || [])
       .map(name => resolveItemName(name))
       .filter(Boolean),
-  }));
+  })).filter(outfit => outfit.items.length > 0);
+
+  // Renumber IDs after filtering
+  outfits.forEach((outfit, i) => { outfit.id = i + 1; });
 
   return {
     message: parsed.message || '',
