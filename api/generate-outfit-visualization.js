@@ -8,12 +8,12 @@ const VALID_POSES = ['front', 'angle', 'seated'];
 const POSE_CONFIGS = {
   front: {
     preservation: "Keep the subject's face, facial structure, skin, hair, expression, body pose, proportions, and the entire background pixel-identical to the input photo. Do not alter lighting, camera angle, or depth of field.",
-    framing: '',
+    framing: 'Maintain the exact same framing as the input photo. Full body must be visible from head to toe, including all footwear. Do not crop or zoom in.',
   },
   angle: {
     preservation: "Keep the subject's face, facial structure, skin tone, hair, and expression identical to the input photo. Preserve the subject's body proportions and build.",
     pose: "Transform the subject into a 30-50 degree three-quarter turn showing the side silhouette, with the head turned slightly toward the camera. The background should remain a clean, neutral environment consistent with the original scene lighting.",
-    framing: "Full body visible from head to mid-shin. This angle should clearly show how the garment drapes along the side of the body, back pocket placement, jacket vents, and how the hem sits at the side.",
+    framing: "Full body visible from head to toe, including all footwear. This angle should clearly show how the garment drapes along the side of the body, back pocket placement, jacket vents, and how the hem sits at the side.",
   },
   seated: {
     preservation: "Keep the subject's face, facial structure, skin tone, hair, and expression identical to the input photo. Preserve the subject's body proportions and build.",

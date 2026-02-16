@@ -539,50 +539,33 @@ function OutfitVisualizationModal({ poses, outfit, onClose, onRegenerate }) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: "16px 24px 24px" }}>
+        <div style={{ padding: "12px 24px 20px" }}>
           <h3 style={{
             fontSize: 18,
             fontWeight: 600,
             color: "#1A1A1A",
-            marginBottom: 16,
+            marginBottom: 12,
             fontFamily: "'DM Sans', sans-serif",
           }}>
             {outfit?.vibe}
           </h3>
-          <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ display: "flex", justifyContent: "center" }}>
             <button
               onClick={onRegenerate}
               style={{
-                flex: 1,
-                padding: "12px",
-                borderRadius: 12,
-                border: "1px solid #E5E5E5",
-                background: "#fff",
-                color: "#666",
-                fontSize: 14,
-                fontWeight: 600,
+                padding: "8px 20px",
+                borderRadius: 8,
+                border: "1px solid #E0E0E0",
+                background: "transparent",
+                color: "#888",
+                fontSize: 13,
+                fontWeight: 500,
                 cursor: "pointer",
                 fontFamily: "'DM Sans', sans-serif",
+                transition: "all 0.2s ease",
               }}
             >
               Regenerate All
-            </button>
-            <button
-              onClick={onClose}
-              style={{
-                flex: 1,
-                padding: "12px",
-                borderRadius: 12,
-                border: "none",
-                background: "#1A1A1A",
-                color: "#fff",
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: "pointer",
-                fontFamily: "'DM Sans', sans-serif",
-              }}
-            >
-              Close
             </button>
           </div>
         </div>

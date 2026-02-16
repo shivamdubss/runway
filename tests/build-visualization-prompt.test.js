@@ -153,6 +153,19 @@ describe('buildVisualizationPrompt – pose support', () => {
     expect(result).toContain('jacket vents');
   });
 
+  it('front pose includes full-body framing instructions', () => {
+    const result = buildVisualizationPrompt(outfit, null, 'front');
+    expect(result).toContain('head to toe');
+    expect(result).toContain('footwear');
+    expect(result).toContain('Do not crop or zoom in');
+  });
+
+  it('angle pose includes head-to-toe framing', () => {
+    const result = buildVisualizationPrompt(outfit, null, 'angle');
+    expect(result).toContain('head to toe');
+    expect(result).not.toContain('mid-shin');
+  });
+
   it('seated pose instructs seated position', () => {
     const result = buildVisualizationPrompt(outfit, null, 'seated');
     expect(result).toContain('seated position');
