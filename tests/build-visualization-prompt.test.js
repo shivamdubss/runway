@@ -116,3 +116,84 @@ describe('buildVisualizationPrompt', () => {
     expect(result).not.toContain('red;');
   });
 });
+
+describe('buildVisualizationPrompt – pose support', () => {
+  const outfit = {
+    items: [{ name: 'White Shirt', color: 'white', category: 'Tops' }],
+    vibe: 'casual',
+  };
+
+  it('defaults to front pose when no pose argument is given', () => {
+    const withDefault = buildVisualizationPrompt(outfit, null);
+    const withFront = buildVisualizationPrompt(outfit, null, 'front');
+    expect(withDefault).toBe(withFront);
+  });
+
+  it('front pose preserves body pose and background pixel-identical', () => {
+    const result = buildVisualizationPrompt(outfit, null, 'front');
+    expect(result).toContain('body pose');
+    expect(result).toContain('background pixel-identical');
+  });
+
+  it('angle pose instructs three-quarter turn', () => {
+    const result = buildVisualizationPrompt(outfit, null, 'angle');
+    expect(result).toContain('three-quarter turn');
+    expect(result).toContain('side silhouette');
+    expect(result).toContain('head turned slightly toward the camera');
+  });
+
+  it('angle pose does NOT preserve body pose pixel-identical', () => {
+    const result = buildVisualizationPrompt(outfit, null, 'angle');
+    expect(result).not.toContain('body pose, proportions, and the entire background pixel-identical');
+  });
+
+  it('angle pose includes framing instructions', () => {
+    const result = buildVisualizationPrompt(outfit, null, 'angle');
+    expect(result).toContain('garment drapes');
+    expect(result).toContain('jacket vents');
+  });
+
+  it('seated pose instructs seated position', () => {
+    const result = buildVisualizationPrompt(outfit, null, 'seated');
+    expect(result).toContain('seated position');
+    expect(result).toContain('stool or bench');
+  });
+
+  it('seated pose does NOT preserve body pose pixel-identical', () => {
+    const result = buildVisualizationPrompt(outfit, null, 'seated');
+    expect(result).not.toContain('body pose, proportions, and the entire background pixel-identical');
+  });
+
+  it('seated pose includes fit-related framing', () => {
+    const result = buildVisualizationPrompt(outfit, null, 'seated');
+    expect(result).toContain('fabric bunches');
+    expect(result).toContain('waistband digs in');
+  });
+
+  it('all poses contain face preservation and clothing replacement', () => {
+    for (const pose of ['front', 'angle', 'seated']) {
+      const result = buildVisualizationPrompt(outfit, null, pose);
+      expect(result).toContain("Keep the subject's face");
+      expect(result).toContain('Replace ONLY the clothing');
+      expect(result).toContain('physically correct wrinkles');
+    }
+  });
+
+  it('defaults to front for invalid pose value', () => {
+    const result = buildVisualizationPrompt(outfit, null, 'dancing');
+    const frontResult = buildVisualizationPrompt(outfit, null, 'front');
+    expect(result).toBe(frontResult);
+  });
+
+  it('includes user profile context in all poses', () => {
+    const profile = {
+      style: { genderPreference: 'feminine' },
+      body: { bodyType: 'athletic' },
+    };
+    for (const pose of ['front', 'angle', 'seated']) {
+      const result = buildVisualizationPrompt(outfit, profile, pose);
+      expect(result).toContain('Gender presentation: feminine');
+      expect(result).toContain('Body type: athletic');
+    }
+  });
+});

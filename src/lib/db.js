@@ -207,6 +207,17 @@ export async function saveVisualizationUrl(outfitId, visualizationUrl) {
   if (error) throw error;
 }
 
+export async function saveVisualizationUrls(outfitId, poses) {
+  const { error } = await supabase
+    .from('outfits')
+    .update({
+      visualization_url: poses.front || null,
+      visualization_urls: poses
+    })
+    .eq('id', outfitId);
+  if (error) throw error;
+}
+
 // ── Profile ───────────────────────────────────────────────
 
 export async function fetchProfile() {
@@ -260,6 +271,7 @@ export async function fetchOutfitsForChat(chatId) {
       vibe: outfit.vibe,
       reasoning: outfit.reasoning,
       visualizationUrl: outfit.visualization_url || null,
+      visualizationUrls: outfit.visualization_urls || (outfit.visualization_url ? { front: outfit.visualization_url } : null),
       items: (junctionRows || []).map(jr => toFrontendItem(jr.wardrobe_items)),
     });
   }

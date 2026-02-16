@@ -1,10 +1,32 @@
 import { put } from '@vercel/blob';
 import { randomUUID } from 'crypto';
 
+const VALID_POSES = ['front', 'angle', 'seated'];
+
+const POSE_CONFIGS = {
+  front: {
+    preservation: "Keep the subject's face, facial structure, skin, hair, expression, body pose, proportions, and the entire background pixel-identical to the input photo. Do not alter lighting, camera angle, or depth of field.",
+    framing: '',
+  },
+  angle: {
+    preservation: "Keep the subject's face, facial structure, skin tone, hair, and expression identical to the input photo. Preserve the subject's body proportions and build.",
+    pose: "Transform the subject into a 30-50 degree three-quarter turn showing the side silhouette, with the head turned slightly toward the camera. The background should remain a clean, neutral environment consistent with the original scene lighting.",
+    framing: "Full body visible from head to mid-shin. This angle should clearly show how the garment drapes along the side of the body, back pocket placement, jacket vents, and how the hem sits at the side.",
+  },
+  seated: {
+    preservation: "Keep the subject's face, facial structure, skin tone, hair, and expression identical to the input photo. Preserve the subject's body proportions and build.",
+    pose: "Transform the subject into a natural seated position on a simple, neutral stool or bench. Posture is relaxed and upright with a slight forward lean. Full torso and lap visible, legs visible to at least mid-calf. The background should remain a clean, neutral environment consistent with the original scene lighting.",
+    framing: "For tops: show how fabric bunches, pulls, or gaps when seated. For bottoms: show how pants rise at the shin, how a skirt falls, and whether the waistband digs in.",
+  },
+};
+
 /**
  * Build prompt for outfit visualization
+ * Supports multiple poses: 'front' (default), 'angle', 'seated'
  */
-export function buildVisualizationPrompt(outfit, userProfile) {
+export function buildVisualizationPrompt(outfit, userProfile, pose = 'front') {
+  if (!VALID_POSES.includes(pose)) pose = 'front';
+
   const items = outfit.items
     .filter(item => item.name)
     .map(item => {
@@ -31,10 +53,15 @@ export function buildVisualizationPrompt(outfit, userProfile) {
     ? `\nSubject context: ${contextParts.join(' ')}`
     : '';
 
-  return `Virtual try-on edit. Keep the subject's face, facial structure, skin, hair, expression, body pose, proportions, and the entire background pixel-identical to the input photo. Do not alter lighting, camera angle, or depth of field.
+  const config = POSE_CONFIGS[pose];
+
+  const poseBlock = config.pose ? `\n\n${config.pose}` : '';
+  const framingBlock = config.framing ? `\n\n${config.framing}` : '';
+
+  return `Virtual try-on edit. ${config.preservation}${poseBlock}
 
 Replace ONLY the clothing with: ${items}.
-Style direction: ${outfit.vibe || 'casual'}, photorealistic editorial look.${contextBlock}
+Style direction: ${outfit.vibe || 'casual'}, photorealistic editorial look.${contextBlock}${framingBlock}
 
 The replacement garments must drape naturally on the existing body with physically correct wrinkles, shadows, and fabric weight. Match the scene lighting on the new clothing surfaces exactly.`.trim();
 }
@@ -90,7 +117,8 @@ async function fetchWithRetry(url, options, signal) {
  */
 export async function handleGenerateOutfitVisualization(req, res) {
   try {
-    const { referencePhotoUrl, outfit, userProfile } = req.body;
+    const { referencePhotoUrl, outfit, userProfile, pose } = req.body;
+    const validatedPose = VALID_POSES.includes(pose) ? pose : 'front';
 
     if (!referencePhotoUrl) {
       return res.status(400).json({
@@ -126,9 +154,9 @@ export async function handleGenerateOutfitVisualization(req, res) {
       });
     }
 
-    const prompt = buildVisualizationPrompt(outfit, userProfile);
+    const prompt = buildVisualizationPrompt(outfit, userProfile, validatedPose);
 
-    console.log('[generateOutfitVisualization] Generating visualization...');
+    console.log('[generateOutfitVisualization] Generating visualization (pose: %s)...', validatedPose);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);

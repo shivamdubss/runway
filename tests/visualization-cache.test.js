@@ -43,33 +43,41 @@ beforeEach(() => {
 // Import after mocks are set up
 const { getCachedVisualization, setCachedVisualization, clearVisualizationCache } = await import('../src/lib/visualization.js');
 
-describe('getCachedVisualization', () => {
+describe('getCachedVisualization – multi-pose format', () => {
   it('returns null when no cache exists', () => {
     const result = getCachedVisualization('outfit-1', 'http://photo.jpg');
     expect(result).toBeNull();
   });
 
-  it('returns cached imageUrl when valid and not expired', () => {
-    setCachedVisualization('outfit-1', 'http://photo.jpg', 'http://cached-image.png');
+  it('returns poses object when valid and not expired', () => {
+    const poses = { front: 'http://front.png', angle: 'http://angle.png', seated: 'http://seated.png' };
+    setCachedVisualization('outfit-1', 'http://photo.jpg', poses);
     const result = getCachedVisualization('outfit-1', 'http://photo.jpg');
-    expect(result).toBe('http://cached-image.png');
+    expect(result).toEqual(poses);
+  });
+
+  it('returns partial poses object when only some poses are cached', () => {
+    const poses = { front: 'http://front.png' };
+    setCachedVisualization('outfit-1', 'http://photo.jpg', poses);
+    const result = getCachedVisualization('outfit-1', 'http://photo.jpg');
+    expect(result).toEqual({ front: 'http://front.png' });
   });
 
   it('returns null for a different outfitId', () => {
-    setCachedVisualization('outfit-1', 'http://photo.jpg', 'http://cached-image.png');
+    setCachedVisualization('outfit-1', 'http://photo.jpg', { front: 'http://img.png' });
     const result = getCachedVisualization('outfit-2', 'http://photo.jpg');
     expect(result).toBeNull();
   });
 
   it('returns null for a different referencePhotoUrl', () => {
-    setCachedVisualization('outfit-1', 'http://photo-a.jpg', 'http://cached-image.png');
+    setCachedVisualization('outfit-1', 'http://photo-a.jpg', { front: 'http://img.png' });
     const result = getCachedVisualization('outfit-1', 'http://photo-b.jpg');
     expect(result).toBeNull();
   });
 
   it('returns null and removes entry when expired', () => {
     vi.useFakeTimers();
-    setCachedVisualization('outfit-1', 'http://photo.jpg', 'http://old.png');
+    setCachedVisualization('outfit-1', 'http://photo.jpg', { front: 'http://old.png' });
     // Advance past 7-day expiry
     vi.advanceTimersByTime(8 * 24 * 60 * 60 * 1000);
     const result = getCachedVisualization('outfit-1', 'http://photo.jpg');
@@ -77,20 +85,19 @@ describe('getCachedVisualization', () => {
     vi.useRealTimers();
   });
 
-  it('returns imageUrl when still within 7-day window', () => {
+  it('returns poses when still within 7-day window', () => {
     vi.useFakeTimers();
-    setCachedVisualization('outfit-1', 'http://photo.jpg', 'http://valid.png');
+    const poses = { front: 'http://valid.png', angle: 'http://angle.png' };
+    setCachedVisualization('outfit-1', 'http://photo.jpg', poses);
     // Advance 6 days (still valid)
     vi.advanceTimersByTime(6 * 24 * 60 * 60 * 1000);
     const result = getCachedVisualization('outfit-1', 'http://photo.jpg');
-    expect(result).toBe('http://valid.png');
+    expect(result).toEqual(poses);
     vi.useRealTimers();
   });
 
   it('returns null on corrupted JSON in localStorage', () => {
-    // Set valid data first, then corrupt the stored value
-    setCachedVisualization('outfit-1', 'http://photo.jpg', 'http://img.png');
-    // Find the viz_ key in the store and corrupt it
+    setCachedVisualization('outfit-1', 'http://photo.jpg', { front: 'http://img.png' });
     const store = localStorageMock._store;
     const vizKey = Object.keys(store).find(k => k.startsWith('viz_'));
     if (vizKey) {
@@ -101,25 +108,51 @@ describe('getCachedVisualization', () => {
   });
 });
 
-describe('setCachedVisualization', () => {
-  it('stores data that can be retrieved', () => {
-    setCachedVisualization('o1', 'http://photo.jpg', 'http://result.png');
+describe('getCachedVisualization – backward compatibility', () => {
+  it('reads old { imageUrl } format as { front: imageUrl }', () => {
+    // Manually write old format to localStorage
+    const store = localStorageMock._store;
+    const key = 'viz_outfit-old_' + '12345';
+    store[key] = JSON.stringify({
+      imageUrl: 'http://legacy.png',
+      expiresAt: Date.now() + 1000000,
+      createdAt: Date.now(),
+    });
+    // We need to use the same key the function would generate,
+    // so let's use setCached then overwrite with old format
+    setCachedVisualization('outfit-compat', 'http://photo.jpg', { front: 'temp' });
+    const vizKey = Object.keys(store).find(k => k.startsWith('viz_outfit-compat'));
+    store[vizKey] = JSON.stringify({
+      imageUrl: 'http://legacy.png',
+      expiresAt: Date.now() + 1000000,
+      createdAt: Date.now(),
+    });
+    const result = getCachedVisualization('outfit-compat', 'http://photo.jpg');
+    expect(result).toEqual({ front: 'http://legacy.png' });
+  });
+});
+
+describe('setCachedVisualization – multi-pose format', () => {
+  it('stores poses that can be retrieved', () => {
+    const poses = { front: 'http://f.png', angle: 'http://a.png', seated: 'http://s.png' };
+    setCachedVisualization('o1', 'http://photo.jpg', poses);
     const result = getCachedVisualization('o1', 'http://photo.jpg');
-    expect(result).toBe('http://result.png');
+    expect(result).toEqual(poses);
   });
 
   it('overwrites existing cache for the same key', () => {
-    setCachedVisualization('o1', 'http://photo.jpg', 'http://old.png');
-    setCachedVisualization('o1', 'http://photo.jpg', 'http://new.png');
+    setCachedVisualization('o1', 'http://photo.jpg', { front: 'http://old.png' });
+    const fullPoses = { front: 'http://new.png', angle: 'http://a.png', seated: 'http://s.png' };
+    setCachedVisualization('o1', 'http://photo.jpg', fullPoses);
     const result = getCachedVisualization('o1', 'http://photo.jpg');
-    expect(result).toBe('http://new.png');
+    expect(result).toEqual(fullPoses);
   });
 });
 
 describe('clearVisualizationCache', () => {
   it('removes all viz_ prefixed entries', () => {
-    setCachedVisualization('o1', 'http://a.jpg', 'http://r1.png');
-    setCachedVisualization('o2', 'http://a.jpg', 'http://r2.png');
+    setCachedVisualization('o1', 'http://a.jpg', { front: 'http://r1.png' });
+    setCachedVisualization('o2', 'http://a.jpg', { front: 'http://r2.png' });
     clearVisualizationCache();
     expect(getCachedVisualization('o1', 'http://a.jpg')).toBeNull();
     expect(getCachedVisualization('o2', 'http://a.jpg')).toBeNull();
@@ -127,7 +160,7 @@ describe('clearVisualizationCache', () => {
 
   it('does not remove non-viz entries', () => {
     localStorageMock.setItem('other_key', 'should-stay');
-    setCachedVisualization('o1', 'http://a.jpg', 'http://r1.png');
+    setCachedVisualization('o1', 'http://a.jpg', { front: 'http://r1.png' });
     clearVisualizationCache();
     expect(localStorageMock.getItem('other_key')).toBe('should-stay');
   });

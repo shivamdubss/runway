@@ -3,7 +3,7 @@ import { sendChatMessageStreaming } from "./lib/api";
 import { uploadImage } from "./lib/upload";
 import { analyzeImage } from "./lib/analyze";
 import * as db from "./lib/db";
-import { generateVisualization, getCachedVisualization, setCachedVisualization, clearVisualizationCache } from "./lib/visualization";
+import { generateVisualization, generateMultiPoseVisualization, getCachedVisualization, setCachedVisualization, clearVisualizationCache } from "./lib/visualization";
 import { useAuth } from "./lib/auth";
 
 // Inject CSS animations for streaming states
@@ -263,27 +263,132 @@ function Lightbox({ item, onClose, onDelete }) {
   );
 }
 
-function OutfitVisualizationModal({ imageUrl, outfit, isLoading, error, onClose, onRegenerate }) {
-  const [loadingMessage, setLoadingMessage] = useState("Analyzing outfit...");
+const POSE_ORDER = ['front', 'angle', 'seated'];
+const POSE_LABELS = { front: 'Front View', angle: '3/4 Angle', seated: 'Seated' };
+
+function VizCarouselSlot({ poseData, loadingMessage }) {
+  if (!poseData || poseData.status === 'idle') {
+    return (
+      <div style={{
+        width: "100%",
+        height: 400,
+        borderRadius: 16,
+        background: "#F3F2F0",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}>
+        <p style={{ fontSize: 14, color: "#aaa", fontFamily: "'DM Sans', sans-serif" }}>
+          Not generated
+        </p>
+      </div>
+    );
+  }
+
+  if (poseData.status === 'generating') {
+    return (
+      <div style={{ textAlign: "center" }}>
+        <div className="shimmer-effect" style={{
+          width: "100%",
+          height: 400,
+          borderRadius: 16,
+          marginBottom: 12,
+          background: "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
+          backgroundSize: "200% 100%",
+          animation: "shimmer 1.5s infinite",
+        }} />
+        <p style={{
+          fontSize: 14,
+          color: "#666",
+          fontFamily: "'DM Sans', sans-serif",
+          fontWeight: 500,
+          margin: 0,
+        }}>
+          {loadingMessage}
+        </p>
+      </div>
+    );
+  }
+
+  if (poseData.status === 'error') {
+    return (
+      <div style={{
+        width: "100%",
+        height: 400,
+        borderRadius: 16,
+        background: "#F3F2F0",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 12,
+        padding: 24,
+      }}>
+        <div style={{ fontSize: 36 }}>😞</div>
+        <p style={{
+          fontSize: 14,
+          color: "#666",
+          fontFamily: "'DM Sans', sans-serif",
+          textAlign: "center",
+          margin: 0,
+        }}>
+          {poseData.error || 'Failed to generate'}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={poseData.imageUrl}
+      alt="Outfit visualization"
+      style={{
+        width: "100%",
+        maxHeight: 520,
+        objectFit: "contain",
+        display: "block",
+        borderRadius: 16,
+        background: "#F3F2F0",
+      }}
+    />
+  );
+}
+
+function OutfitVisualizationModal({ poses, outfit, onClose, onRegenerate }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [loadingMessages, setLoadingMessages] = useState({
+    front: "Analyzing outfit...",
+    angle: "Preparing angle view...",
+    seated: "Preparing seated view...",
+  });
 
   useEffect(() => {
-    if (!isLoading) return;
+    const messagesByPose = {
+      front: ["Analyzing outfit...", "Preparing your photo...", "Generating front view...", "Almost there..."],
+      angle: ["Preparing angle view...", "Adjusting perspective...", "Generating 3/4 view...", "Almost there..."],
+      seated: ["Preparing seated view...", "Setting up pose...", "Generating seated view...", "Almost there..."],
+    };
+    const indices = { front: 0, angle: 0, seated: 0 };
 
-    const messages = [
-      "Analyzing outfit...",
-      "Preparing your photo...",
-      "Generating visualization...",
-      "Almost there..."
-    ];
-
-    let index = 0;
     const interval = setInterval(() => {
-      index = (index + 1) % messages.length;
-      setLoadingMessage(messages[index]);
+      setLoadingMessages(prev => {
+        const next = { ...prev };
+        for (const pose of POSE_ORDER) {
+          if (poses?.[pose]?.status === 'generating') {
+            indices[pose] = (indices[pose] + 1) % messagesByPose[pose].length;
+            next[pose] = messagesByPose[pose][indices[pose]];
+          }
+        }
+        return next;
+      });
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [isLoading]);
+  }, [poses]);
+
+  // If all poses are idle or missing, treat as full-loading (initial state)
+  const allGenerating = poses && POSE_ORDER.every(p => poses[p]?.status === 'generating');
+  const frontFailed = poses?.front?.status === 'error';
 
   return (
     <div
@@ -316,6 +421,7 @@ function OutfitVisualizationModal({ imageUrl, outfit, isLoading, error, onClose,
           animation: "scaleIn 0.25s ease",
         }}
       >
+        {/* Close button */}
         <button
           onClick={onClose}
           style={{
@@ -340,156 +446,146 @@ function OutfitVisualizationModal({ imageUrl, outfit, isLoading, error, onClose,
           ✕
         </button>
 
-        {isLoading ? (
-          <div style={{
-            padding: "20px 20px 40px 20px",
-            textAlign: "center",
-          }}>
-            <div className="shimmer-effect" style={{
-              width: "100%",
-              height: 400,
-              borderRadius: 16,
-              marginBottom: 20,
-              background: "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
-              backgroundSize: "200% 100%",
-              animation: "shimmer 1.5s infinite",
-            }} />
-            <p style={{
-              fontSize: 16,
-              color: "#666",
-              fontFamily: "'DM Sans', sans-serif",
-              fontWeight: 500,
+        {/* Carousel area */}
+        <div style={{ padding: "20px 20px 0 20px", position: "relative" }}>
+          <div style={{ overflow: "hidden", borderRadius: 16 }}>
+            <div style={{
+              display: "flex",
+              transform: `translateX(-${activeIdx * 100}%)`,
+              transition: "transform 0.3s ease",
             }}>
-              {loadingMessage}
-            </p>
-          </div>
-        ) : error ? (
-          <div style={{
-            padding: 40,
-            textAlign: "center",
-          }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>😞</div>
-            <h3 style={{
-              fontSize: 18,
-              fontWeight: 600,
-              color: "#1A1A1A",
-              marginBottom: 12,
-              fontFamily: "'DM Sans', sans-serif",
-            }}>
-              Failed to Generate Visualization
-            </h3>
-            <p style={{
-              fontSize: 14,
-              color: "#666",
-              marginBottom: 24,
-              fontFamily: "'DM Sans', sans-serif",
-            }}>
-              {error}
-            </p>
-            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-              <button
-                onClick={onRegenerate}
-                style={{
-                  padding: "12px 24px",
-                  borderRadius: 12,
-                  border: "none",
-                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                  color: "#fff",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  fontFamily: "'DM Sans', sans-serif",
-                }}
-              >
-                Try Again
-              </button>
-              <button
-                onClick={onClose}
-                style={{
-                  padding: "12px 24px",
-                  borderRadius: 12,
-                  border: "1px solid #E5E5E5",
-                  background: "#fff",
-                  color: "#666",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  fontFamily: "'DM Sans', sans-serif",
-                }}
-              >
-                Close
-              </button>
+              {POSE_ORDER.map((pose) => (
+                <div key={pose} style={{ width: "100%", flexShrink: 0 }}>
+                  <VizCarouselSlot
+                    poseData={poses?.[pose]}
+                    loadingMessage={loadingMessages[pose]}
+                  />
+                </div>
+              ))}
             </div>
           </div>
-        ) : imageUrl ? (
-          <div>
-            <div style={{
-              padding: "20px 20px 0 20px",
-            }}>
-              <img
-                src={imageUrl}
-                alt="Outfit visualization"
+
+          {/* Left arrow */}
+          {activeIdx > 0 && (
+            <button
+              onClick={() => setActiveIdx(i => i - 1)}
+              style={{
+                position: "absolute", left: 28, top: "50%", transform: "translateY(-50%)",
+                width: 36, height: 36, borderRadius: 18,
+                border: "none", background: "rgba(0,0,0,0.45)", color: "#fff",
+                fontSize: 20, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "background 0.2s ease",
+              }}
+            >
+              ‹
+            </button>
+          )}
+
+          {/* Right arrow */}
+          {activeIdx < POSE_ORDER.length - 1 && (
+            <button
+              onClick={() => setActiveIdx(i => i + 1)}
+              style={{
+                position: "absolute", right: 28, top: "50%", transform: "translateY(-50%)",
+                width: 36, height: 36, borderRadius: 18,
+                border: "none", background: "rgba(0,0,0,0.45)", color: "#fff",
+                fontSize: 20, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "background 0.2s ease",
+              }}
+            >
+              ›
+            </button>
+          )}
+        </div>
+
+        {/* Pose label + dots */}
+        <div style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 8,
+          padding: "12px 20px 0",
+        }}>
+          <span style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: "#888",
+            fontFamily: "'DM Sans', sans-serif",
+            textTransform: "uppercase",
+            letterSpacing: "0.06em",
+          }}>
+            {POSE_LABELS[POSE_ORDER[activeIdx]]}
+          </span>
+          <div style={{ display: "flex", gap: 8 }}>
+            {POSE_ORDER.map((pose, i) => (
+              <button
+                key={pose}
+                onClick={() => setActiveIdx(i)}
                 style={{
-                  width: "100%",
-                  maxHeight: 520,
-                  objectFit: "contain",
-                  display: "block",
-                  borderRadius: 16,
-                  background: "#F3F2F0",
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  background: i === activeIdx ? "#1A1A1A" : "#D4D4D4",
+                  transition: "background 0.2s ease",
                 }}
               />
-            </div>
-            <div style={{
-              padding: "20px 24px 24px",
-            }}>
-              <h3 style={{
-                fontSize: 18,
-                fontWeight: 600,
-                color: "#1A1A1A",
-                marginBottom: 16,
-                fontFamily: "'DM Sans', sans-serif",
-              }}>
-                {outfit.vibe}
-              </h3>
-              <div style={{ display: "flex", gap: 12 }}>
-                <button
-                  onClick={onRegenerate}
-                  style={{
-                    flex: 1,
-                    padding: "12px",
-                    borderRadius: 12,
-                    border: "1px solid #E5E5E5",
-                    background: "#fff",
-                    color: "#666",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}
-                >
-                  🔄 Regenerate
-                </button>
-                <button
-                  onClick={onClose}
-                  style={{
-                    flex: 1,
-                    padding: "12px",
-                    borderRadius: 12,
-                    border: "none",
-                    background: "#1A1A1A",
-                    color: "#fff",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
+            ))}
           </div>
-        ) : null}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "16px 24px 24px" }}>
+          <h3 style={{
+            fontSize: 18,
+            fontWeight: 600,
+            color: "#1A1A1A",
+            marginBottom: 16,
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+            {outfit?.vibe}
+          </h3>
+          <div style={{ display: "flex", gap: 12 }}>
+            <button
+              onClick={onRegenerate}
+              style={{
+                flex: 1,
+                padding: "12px",
+                borderRadius: 12,
+                border: "1px solid #E5E5E5",
+                background: "#fff",
+                color: "#666",
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              Regenerate All
+            </button>
+            <button
+              onClick={onClose}
+              style={{
+                flex: 1,
+                padding: "12px",
+                borderRadius: 12,
+                border: "none",
+                background: "#1A1A1A",
+                color: "#fff",
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -3564,6 +3660,8 @@ export default function OutfitRecommendations() {
     }
   }, []);
 
+  const makePoseEntry = (status, imageUrl = null, error = null) => ({ status, imageUrl, error });
+
   const handleVisualizeOutfit = useCallback(async (outfit) => {
     if (!profile.referencePhoto) {
       console.log('No reference photo available');
@@ -3571,11 +3669,19 @@ export default function OutfitRecommendations() {
     }
 
     // Check cache first
-    const cachedImage = getCachedVisualization(outfit.id, profile.referencePhoto.url);
-    if (cachedImage) {
+    const cachedPoses = getCachedVisualization(outfit.id, profile.referencePhoto.url);
+    if (cachedPoses?.front) {
       setVizGenerations(prev => ({
         ...prev,
-        [outfit.id]: { status: 'ready', imageUrl: cachedImage, error: null, outfit }
+        [outfit.id]: {
+          status: 'ready',
+          poses: {
+            front:  makePoseEntry('ready', cachedPoses.front),
+            angle:  makePoseEntry(cachedPoses.angle ? 'ready' : 'idle', cachedPoses.angle),
+            seated: makePoseEntry(cachedPoses.seated ? 'ready' : 'idle', cachedPoses.seated),
+          },
+          outfit
+        }
       }));
       setVizModalOutfitId(outfit.id);
       return;
@@ -3590,41 +3696,57 @@ export default function OutfitRecommendations() {
       return;
     }
 
-    // Start background generation
+    // Start parallel generation of all 3 poses
     setVizGenerations(prev => ({
       ...prev,
-      [outfit.id]: { status: 'generating', imageUrl: null, error: null, outfit }
+      [outfit.id]: {
+        status: 'generating',
+        poses: {
+          front:  makePoseEntry('generating'),
+          angle:  makePoseEntry('generating'),
+          seated: makePoseEntry('generating'),
+        },
+        outfit
+      }
     }));
 
-    try {
-      const result = await generateVisualization({
-        referencePhotoUrl: profile.referencePhoto.url,
-        outfit,
-        userProfile: profile
-      });
+    await generateMultiPoseVisualization({
+      referencePhotoUrl: profile.referencePhoto.url,
+      outfit,
+      userProfile: profile,
+      onPoseComplete: (pose, result) => {
+        setVizGenerations(prev => {
+          const current = prev[outfit.id];
+          if (!current) return prev;
 
-      setCachedVisualization(outfit.id, profile.referencePhoto.url, result.imageUrl);
+          const updatedPoses = { ...current.poses, [pose]: result };
 
-      db.saveVisualizationUrl(outfit.id, result.imageUrl).catch(err =>
-        console.error("Failed to save visualization URL:", err)
-      );
+          // Build cache-worthy URL map
+          const urlMap = {};
+          for (const [k, v] of Object.entries(updatedPoses)) {
+            if (v.imageUrl) urlMap[k] = v.imageUrl;
+          }
+          if (Object.keys(urlMap).length > 0) {
+            setCachedVisualization(outfit.id, profile.referencePhoto.url, urlMap);
+            db.saveVisualizationUrls(outfit.id, urlMap).catch(err =>
+              console.error("Failed to save visualization URLs:", err)
+            );
+          }
 
-      setVizGenerations(prev => ({
-        ...prev,
-        [outfit.id]: { status: 'ready', imageUrl: result.imageUrl, error: null, outfit }
-      }));
-    } catch (error) {
-      console.error('Failed to generate visualization:', error);
-      setVizGenerations(prev => ({
-        ...prev,
-        [outfit.id]: {
-          status: 'error',
-          imageUrl: null,
-          error: error.message || 'Failed to generate visualization',
-          outfit
-        }
-      }));
-    }
+          // Derive top-level status: 'ready' once front is done, 'error' only if front failed
+          const frontDone = updatedPoses.front.status === 'ready' || updatedPoses.front.status === 'error';
+          let topStatus = 'generating';
+          if (frontDone) {
+            topStatus = updatedPoses.front.status === 'ready' ? 'ready' : 'error';
+          }
+
+          return {
+            ...prev,
+            [outfit.id]: { ...current, status: topStatus, poses: updatedPoses }
+          };
+        });
+      }
+    });
   }, [profile, vizGenerations]);
 
   const handleRegenerateVisualization = useCallback(async (outfitId) => {
@@ -3632,40 +3754,55 @@ export default function OutfitRecommendations() {
     if (!genEntry?.outfit) return;
     const outfit = genEntry.outfit;
 
+    // Reset all poses to generating
     setVizGenerations(prev => ({
       ...prev,
-      [outfitId]: { status: 'generating', imageUrl: null, error: null, outfit }
+      [outfitId]: {
+        status: 'generating',
+        poses: {
+          front:  makePoseEntry('generating'),
+          angle:  makePoseEntry('generating'),
+          seated: makePoseEntry('generating'),
+        },
+        outfit
+      }
     }));
 
-    try {
-      const result = await generateVisualization({
-        referencePhotoUrl: profile.referencePhoto.url,
-        outfit,
-        userProfile: profile
-      });
+    await generateMultiPoseVisualization({
+      referencePhotoUrl: profile.referencePhoto.url,
+      outfit,
+      userProfile: profile,
+      onPoseComplete: (pose, result) => {
+        setVizGenerations(prev => {
+          const current = prev[outfitId];
+          if (!current) return prev;
 
-      setCachedVisualization(outfit.id, profile.referencePhoto.url, result.imageUrl);
+          const updatedPoses = { ...current.poses, [pose]: result };
 
-      db.saveVisualizationUrl(outfit.id, result.imageUrl).catch(err =>
-        console.error("Failed to save visualization URL:", err)
-      );
+          const urlMap = {};
+          for (const [k, v] of Object.entries(updatedPoses)) {
+            if (v.imageUrl) urlMap[k] = v.imageUrl;
+          }
+          if (Object.keys(urlMap).length > 0) {
+            setCachedVisualization(outfit.id, profile.referencePhoto.url, urlMap);
+            db.saveVisualizationUrls(outfit.id, urlMap).catch(err =>
+              console.error("Failed to save visualization URLs:", err)
+            );
+          }
 
-      setVizGenerations(prev => ({
-        ...prev,
-        [outfitId]: { status: 'ready', imageUrl: result.imageUrl, error: null, outfit }
-      }));
-    } catch (error) {
-      console.error('Failed to regenerate visualization:', error);
-      setVizGenerations(prev => ({
-        ...prev,
-        [outfitId]: {
-          status: 'error',
-          imageUrl: null,
-          error: error.message || 'Failed to regenerate visualization',
-          outfit
-        }
-      }));
-    }
+          const frontDone = updatedPoses.front.status === 'ready' || updatedPoses.front.status === 'error';
+          let topStatus = 'generating';
+          if (frontDone) {
+            topStatus = updatedPoses.front.status === 'ready' ? 'ready' : 'error';
+          }
+
+          return {
+            ...prev,
+            [outfitId]: { ...current, status: topStatus, poses: updatedPoses }
+          };
+        });
+      }
+    });
   }, [vizGenerations, profile]);
 
   const allWardrobeItems = wardrobeFlat;
@@ -3899,11 +4036,15 @@ export default function OutfitRecommendations() {
 
       const restoredViz = {};
       for (const outfit of chatOutfits) {
-        if (outfit.visualizationUrl) {
+        const urls = outfit.visualizationUrls || (outfit.visualizationUrl ? { front: outfit.visualizationUrl } : null);
+        if (urls?.front) {
           restoredViz[outfit.id] = {
             status: 'ready',
-            imageUrl: outfit.visualizationUrl,
-            error: null,
+            poses: {
+              front:  makePoseEntry('ready', urls.front),
+              angle:  makePoseEntry(urls.angle ? 'ready' : 'idle', urls.angle),
+              seated: makePoseEntry(urls.seated ? 'ready' : 'idle', urls.seated),
+            },
             outfit,
           };
         }
@@ -3998,10 +4139,8 @@ export default function OutfitRecommendations() {
       )}
       {vizModalOutfitId && vizGenerations[vizModalOutfitId] && (
         <OutfitVisualizationModal
-          imageUrl={vizGenerations[vizModalOutfitId].imageUrl}
+          poses={vizGenerations[vizModalOutfitId].poses}
           outfit={vizGenerations[vizModalOutfitId].outfit}
-          isLoading={vizGenerations[vizModalOutfitId].status === 'generating'}
-          error={vizGenerations[vizModalOutfitId].status === 'error' ? vizGenerations[vizModalOutfitId].error : null}
           onClose={() => setVizModalOutfitId(null)}
           onRegenerate={() => handleRegenerateVisualization(vizModalOutfitId)}
         />
