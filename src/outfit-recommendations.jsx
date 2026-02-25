@@ -3755,28 +3755,29 @@ export default function OutfitRecommendations() {
       }
     }));
 
+    // Closure-scoped accumulator so persistence survives chat switches
+    const completedUrls = {};
+
     await generateMultiPoseVisualization({
       referencePhotoUrl: profile.referencePhoto.url,
       outfit,
       userProfile: profile,
       onPoseComplete: (pose, result) => {
+        // Always persist regardless of which chat is active
+        if (result.imageUrl) {
+          completedUrls[pose] = result.imageUrl;
+          setCachedVisualization(outfit.id, profile.referencePhoto.url, completedUrls);
+          db.saveVisualizationUrls(outfit.id, completedUrls).catch(err =>
+            console.error("Failed to save visualization URLs:", err)
+          );
+        }
+
+        // Update React state only if this outfit is still in vizGenerations
         setVizGenerations(prev => {
           const current = prev[outfit.id];
           if (!current) return prev;
 
           const updatedPoses = { ...current.poses, [pose]: result };
-
-          // Build cache-worthy URL map
-          const urlMap = {};
-          for (const [k, v] of Object.entries(updatedPoses)) {
-            if (v.imageUrl) urlMap[k] = v.imageUrl;
-          }
-          if (Object.keys(urlMap).length > 0) {
-            setCachedVisualization(outfit.id, profile.referencePhoto.url, urlMap);
-            db.saveVisualizationUrls(outfit.id, urlMap).catch(err =>
-              console.error("Failed to save visualization URLs:", err)
-            );
-          }
 
           // Derive top-level status: 'ready' once front is done, 'error' only if front failed
           const frontDone = updatedPoses.front.status === 'ready' || updatedPoses.front.status === 'error';
@@ -3813,27 +3814,29 @@ export default function OutfitRecommendations() {
       }
     }));
 
+    // Closure-scoped accumulator so persistence survives chat switches
+    const completedUrls = {};
+
     await generateMultiPoseVisualization({
       referencePhotoUrl: profile.referencePhoto.url,
       outfit,
       userProfile: profile,
       onPoseComplete: (pose, result) => {
+        // Always persist regardless of which chat is active
+        if (result.imageUrl) {
+          completedUrls[pose] = result.imageUrl;
+          setCachedVisualization(outfit.id, profile.referencePhoto.url, completedUrls);
+          db.saveVisualizationUrls(outfit.id, completedUrls).catch(err =>
+            console.error("Failed to save visualization URLs:", err)
+          );
+        }
+
+        // Update React state only if this outfit is still in vizGenerations
         setVizGenerations(prev => {
           const current = prev[outfitId];
           if (!current) return prev;
 
           const updatedPoses = { ...current.poses, [pose]: result };
-
-          const urlMap = {};
-          for (const [k, v] of Object.entries(updatedPoses)) {
-            if (v.imageUrl) urlMap[k] = v.imageUrl;
-          }
-          if (Object.keys(urlMap).length > 0) {
-            setCachedVisualization(outfit.id, profile.referencePhoto.url, urlMap);
-            db.saveVisualizationUrls(outfit.id, urlMap).catch(err =>
-              console.error("Failed to save visualization URLs:", err)
-            );
-          }
 
           const frontDone = updatedPoses.front.status === 'ready' || updatedPoses.front.status === 'error';
           let topStatus = 'generating';
