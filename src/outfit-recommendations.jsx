@@ -1450,7 +1450,26 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
         }}
       >
         {vizStatus === 'generating' ? (
-          <span>Generating...</span>
+          <span
+            role="status"
+            aria-label="Generating visualization"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <span
+              style={{
+                width: 16,
+                height: 16,
+                borderRadius: "50%",
+                border: "2px solid #D8D8D8",
+                borderTopColor: "#8A8A8A",
+                animation: "spin 0.8s linear infinite",
+              }}
+            />
+          </span>
         ) : vizStatus === 'ready' ? (
           <span>View visualization</span>
         ) : vizStatus === 'error' ? (
