@@ -91,9 +91,10 @@ Do not include any text outside the JSON block.`;
  * @param {Object} params
  * @param {Array} params.wardrobeItems - Array of { category, label, name, color, accent, emoji }
  * @param {Object} params.profile - User profile with body, style, lifestyle sections
+ * @param {Object} [params.weather] - Current weather data from OpenWeatherMap
  * @returns {string}
  */
-export function buildSystemPrompt({ wardrobeItems, profile }) {
+export function buildSystemPrompt({ wardrobeItems, profile, weather }) {
   const sections = [CORE_PROMPT];
 
   // Wardrobe inventory grouped by category
@@ -116,6 +117,10 @@ export function buildSystemPrompt({ wardrobeItems, profile }) {
   // User profile (only if provided)
   const profileLines = buildProfileSection(profile);
   if (profileLines) sections.push(profileLines);
+
+  // Weather context (only if provided)
+  const weatherLines = buildWeatherSection(weather);
+  if (weatherLines) sections.push(weatherLines);
 
   // JSON schema
   sections.push(`## Response JSON schema
@@ -184,4 +189,24 @@ function buildProfileSection(profile) {
   }
 
   return hasContent ? parts.join('\n') : null;
+}
+
+export function buildWeatherSection(weather) {
+  if (!weather || !weather.temp) return null;
+
+  const lines = ['## Current weather context'];
+  lines.push(`Location: ${weather.city}`);
+  lines.push(`Now: ${weather.temp}°F, ${weather.condition}`);
+  if (weather.high && weather.low) {
+    lines.push(`Today's range: ${weather.low}°F – ${weather.high}°F`);
+  }
+  if (weather.wind) {
+    lines.push(`Wind: ${weather.wind} mph`);
+  }
+  lines.push('');
+  lines.push('Factor this weather into your recommendations. Prioritize weather-appropriate');
+  lines.push('layers and materials. If rain or snow is likely, prefer water-resistant footwear');
+  lines.push('and outerwear when available in the wardrobe.');
+
+  return lines.join('\n');
 }

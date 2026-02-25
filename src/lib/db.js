@@ -91,6 +91,23 @@ export async function deleteWardrobeItem(id) {
   if (error) throw error;
 }
 
+export async function updateWardrobeItem(id, fields) {
+  const updates = {};
+  if (fields.name !== undefined) updates.name = fields.name;
+  if (fields.category !== undefined) {
+    updates.category = fields.category;
+    updates.label = fields.label;
+  }
+  const { data, error } = await supabase
+    .from('wardrobe_items')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toFrontendItem(data);
+}
+
 // ── Chats ──────────────────────────────────────────────────
 
 export async function fetchChats() {

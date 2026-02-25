@@ -1,6 +1,7 @@
 import { getOpenAIClient } from '../openai.js';
 import { buildSystemPrompt } from '../prompts.js';
 import { parseOutfitResponse } from '../parse-outfits.js';
+import { fetchWeather } from '../weather.js';
 
 export function extractMessageProgressFromJsonBuffer(jsonBuffer) {
   const keyMatch = /"message"\s*:\s*"/.exec(jsonBuffer);
@@ -82,7 +83,7 @@ export async function handleChatStream(req, res) {
   };
 
   try {
-    const { messages, wardrobeItems, profile } = req.body;
+    const { messages, wardrobeItems, profile, location } = req.body;
 
     // Validation
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -99,7 +100,8 @@ export async function handleChatStream(req, res) {
     sendEvent('start');
 
     const openai = getOpenAIClient();
-    const systemPrompt = buildSystemPrompt({ wardrobeItems, profile });
+    const weather = location?.city ? await fetchWeather(location.city) : null;
+    const systemPrompt = buildSystemPrompt({ wardrobeItems, profile, weather });
 
     const apiMessages = [
       { role: 'system', content: systemPrompt },

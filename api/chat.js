@@ -2,6 +2,7 @@ import { getOpenAIClient } from './_lib/openai.js';
 import { buildSystemPrompt } from './_lib/prompts.js';
 import { parseOutfitResponse } from './_lib/parse-outfits.js';
 import { verifyAuth } from './_lib/auth.js';
+import { fetchWeather } from './_lib/weather.js';
 
 /**
  * POST /api/chat
@@ -18,7 +19,7 @@ export default async function handler(req, res) {
   if (!user) return;
 
   try {
-    const { messages, wardrobeItems, profile } = req.body;
+    const { messages, wardrobeItems, profile, location } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'messages array is required' });
@@ -30,7 +31,8 @@ export default async function handler(req, res) {
 
     const openai = getOpenAIClient();
 
-    const systemPrompt = buildSystemPrompt({ wardrobeItems, profile });
+    const weather = location?.city ? await fetchWeather(location.city) : null;
+    const systemPrompt = buildSystemPrompt({ wardrobeItems, profile, weather });
 
     const apiMessages = [
       { role: 'system', content: systemPrompt },

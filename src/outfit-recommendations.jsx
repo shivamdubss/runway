@@ -5,6 +5,7 @@ import { analyzeImage } from "./lib/analyze";
 import * as db from "./lib/db";
 import { generateVisualization, generateMultiPoseVisualization, getCachedVisualization, setCachedVisualization, clearVisualizationCache } from "./lib/visualization";
 import { useAuth } from "./lib/auth";
+import { fetchWeatherForDisplay, weatherIconToEmoji } from "./lib/weather";
 
 // Inject CSS animations for streaming states
 const style = document.createElement('style');
@@ -28,10 +29,11 @@ style.textContent = `
 document.head.appendChild(style);
 
 const QUICK_CHIPS = [
+  { label: "Today", icon: "☀️" },
   { label: "Dinner party", icon: "🍽️" },
   { label: "Date night", icon: "🌙" },
   { label: "Job interview", icon: "💼" },
-  { label: "Weekend brunch", icon: "☀️" },
+  { label: "Weekend brunch", icon: "🥂" },
   { label: "Wedding guest", icon: "💐" },
 ];
 
@@ -93,10 +95,38 @@ const SAMPLE_PROFILE = {
   referencePhoto: null, // { url, uploadedAt }
 };
 
-function Lightbox({ item, onClose, onDelete }) {
+function Lightbox({ item, onClose, onDelete, onEdit }) {
   const [activeIdx, setActiveIdx] = useState(0);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(item.name);
+  const [editCategory, setEditCategory] = useState(item.category);
+  const [isSaving, setIsSaving] = useState(false);
   const images = item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : []);
   const hasMultiple = images.length > 1;
+  const canEdit = item.id && onEdit;
+  const hasChanges = editName.trim() !== item.name || editCategory !== item.category;
+  const canSave = editName.trim().length > 0 && hasChanges && !isSaving;
+
+  const handleSave = async () => {
+    if (!canSave) return;
+    setIsSaving(true);
+    try {
+      await onEdit(item.id, {
+        name: editName.trim(),
+        category: editCategory,
+        label: CATEGORY_TO_LABEL[editCategory],
+      });
+      setIsEditing(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setEditName(item.name);
+    setEditCategory(item.category);
+    setIsEditing(false);
+  };
 
   return (
     <div
@@ -221,44 +251,172 @@ function Lightbox({ item, onClose, onDelete }) {
           )}
         </div>
         <div style={{ padding: "16px var(--container-padding-x) var(--container-padding-x)" }}>
-          <div style={{
-            fontSize: "var(--font-caption)",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            color: "#aaa",
-            marginBottom: 4,
-            fontFamily: "'DM Sans', sans-serif",
-          }}>
-            {item.label}
-          </div>
-          <div style={{
-            fontSize: "var(--font-lightbox-title)",
-            fontWeight: 600,
-            color: "#1A1A1A",
-            fontFamily: "'DM Sans', sans-serif",
-            lineHeight: 1.25,
-          }}>
-            {item.name}
-          </div>
-          {item.id && onDelete && (
-            <button
-              onClick={() => { onDelete(item.id); onClose(); }}
-              style={{
-                width: "100%",
-                padding: "12px 0",
-                marginTop: 12,
-                border: "none",
-                background: "transparent",
-                color: "#C85A5A",
+          {isEditing ? (
+            <>
+              <div style={{
                 fontSize: "var(--font-caption)",
                 fontWeight: 600,
-                cursor: "pointer",
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                color: "#aaa",
+                marginBottom: 6,
                 fontFamily: "'DM Sans', sans-serif",
-              }}
-            >
-              Remove from Wardrobe
-            </button>
+              }}>
+                Category
+              </div>
+              <select
+                value={editCategory}
+                onChange={(e) => setEditCategory(e.target.value)}
+                style={{
+                  width: "100%",
+                  height: 40,
+                  borderRadius: 10,
+                  border: "1px solid rgba(0,0,0,0.12)",
+                  padding: "0 12px",
+                  fontSize: "var(--font-caption)",
+                  fontWeight: 600,
+                  fontFamily: "'DM Sans', sans-serif",
+                  color: "#1A1A1A",
+                  background: "#fff",
+                  appearance: "auto",
+                  cursor: "pointer",
+                  marginBottom: 12,
+                }}
+              >
+                {CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              <div style={{
+                fontSize: "var(--font-caption)",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                color: "#aaa",
+                marginBottom: 6,
+                fontFamily: "'DM Sans', sans-serif",
+              }}>
+                Name
+              </div>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Item name"
+                className="chat-input"
+                style={{
+                  width: "100%",
+                  height: 40,
+                  borderRadius: 10,
+                  border: "1px solid rgba(0,0,0,0.12)",
+                  padding: "0 12px",
+                  fontSize: "var(--font-lightbox-title)",
+                  fontWeight: 600,
+                  fontFamily: "'DM Sans', sans-serif",
+                  color: "#1A1A1A",
+                  boxSizing: "border-box",
+                  marginBottom: 12,
+                }}
+              />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={handleCancel}
+                  style={{
+                    flex: 1,
+                    height: 44,
+                    borderRadius: 12,
+                    border: "1px solid rgba(0,0,0,0.12)",
+                    background: "#fff",
+                    color: "#555",
+                    fontSize: "var(--font-caption)",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={!canSave}
+                  style={{
+                    flex: 2,
+                    height: 44,
+                    borderRadius: 12,
+                    border: "none",
+                    background: canSave ? "#1A1A1A" : "#EEEDEB",
+                    color: canSave ? "#fff" : "#ccc",
+                    fontSize: "var(--font-caption)",
+                    fontWeight: 600,
+                    cursor: canSave ? "pointer" : "default",
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                >
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{
+                fontSize: "var(--font-caption)",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                color: "#aaa",
+                marginBottom: 4,
+                fontFamily: "'DM Sans', sans-serif",
+              }}>
+                {item.label}
+              </div>
+              <div style={{
+                fontSize: "var(--font-lightbox-title)",
+                fontWeight: 600,
+                color: "#1A1A1A",
+                fontFamily: "'DM Sans', sans-serif",
+                lineHeight: 1.25,
+              }}>
+                {item.name}
+              </div>
+              {canEdit && (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  style={{
+                    width: "100%",
+                    padding: "12px 0",
+                    marginTop: 12,
+                    border: "none",
+                    background: "transparent",
+                    color: "#555",
+                    fontSize: "var(--font-caption)",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                >
+                  Edit
+                </button>
+              )}
+              {item.id && onDelete && (
+                <button
+                  onClick={() => { onDelete(item.id); onClose(); }}
+                  style={{
+                    width: "100%",
+                    padding: "12px 0",
+                    marginTop: canEdit ? 0 : 12,
+                    border: "none",
+                    background: "transparent",
+                    color: "#C85A5A",
+                    fontSize: "var(--font-caption)",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}
+                >
+                  Remove from Wardrobe
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -1690,6 +1848,9 @@ function ChatView({
   onImageRemove,
   isWaitingForFirstToken,
   isGenerating,
+  weather,
+  hasLocation,
+  onOpenProfile,
 }) {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -1772,6 +1933,50 @@ function ChatView({
             gap: 12,
             padding: "40px 20px",
           }}>
+            {weather ? (
+              <button
+                onClick={onOpenProfile}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 14px",
+                  borderRadius: 16,
+                  border: "1px solid rgba(0,0,0,0.09)",
+                  background: "#fff",
+                  color: "#555",
+                  fontSize: "var(--font-caption)",
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  marginBottom: 4,
+                }}
+              >
+                <span style={{ fontSize: 14 }}>{weatherIconToEmoji(weather.icon)}</span>
+                {weather.temp}°F {weather.city}
+              </button>
+            ) : !hasLocation ? (
+              <button
+                onClick={onOpenProfile}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 14px",
+                  borderRadius: 16,
+                  border: "1px dashed rgba(0,0,0,0.15)",
+                  background: "transparent",
+                  color: "#999",
+                  fontSize: "var(--font-caption)",
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  marginBottom: 4,
+                }}
+              >
+                Set location for weather-aware outfits
+              </button>
+            ) : null}
             <span style={{ fontSize: 40 }}>🪞</span>
             <span style={{
               fontSize: "var(--font-title)",
@@ -2849,6 +3054,178 @@ function StylePreferencesCard({ profile, onSave }) {
   );
 }
 
+function LocationCard({ profile, onSave }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(profile.location?.city || "");
+
+  const handleSave = () => {
+    const city = draft.trim();
+    onSave({
+      ...profile,
+      location: city ? { city, source: "manual" } : null,
+      lastUpdated: new Date().toISOString(),
+    });
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setDraft(profile.location?.city || "");
+    setIsEditing(false);
+  };
+
+  if (isEditing) {
+    return (
+      <div style={{
+        background: "#fff",
+        borderRadius: 16,
+        padding: 20,
+        marginBottom: 16,
+        border: "1px solid #E5E5E5",
+      }}>
+        <h3 style={{
+          fontSize: "var(--font-body)",
+          fontWeight: 600,
+          color: "#1A1A1A",
+          marginBottom: 16,
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+          Location
+        </h3>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{
+            display: "block",
+            fontSize: "var(--font-caption)",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            color: "#999",
+            marginBottom: 8,
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+            City
+          </label>
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="e.g., New York"
+            style={{
+              width: "100%",
+              padding: "12px 16px",
+              borderRadius: 8,
+              border: "2px solid #E5E5E5",
+              fontSize: "var(--font-body)",
+              fontFamily: "'DM Sans', sans-serif",
+              outline: "none",
+            }}
+          />
+          <span style={{
+            display: "block",
+            fontSize: "var(--font-caption)",
+            color: "#999",
+            marginTop: 6,
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+            Used to give you weather-aware outfit recommendations.
+          </span>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          <button
+            onClick={handleCancel}
+            style={{
+              flex: 1,
+              padding: "10px 16px",
+              borderRadius: 8,
+              border: "1px solid #E5E5E5",
+              background: "#fff",
+              color: "#666",
+              fontSize: "var(--font-caption)",
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            style={{
+              flex: 1,
+              padding: "10px 16px",
+              borderRadius: 8,
+              border: "none",
+              background: "#1A1A1A",
+              color: "#fff",
+              fontSize: "var(--font-caption)",
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      background: "#fff",
+      borderRadius: 16,
+      padding: 20,
+      marginBottom: 16,
+      border: "1px solid #E5E5E5",
+    }}>
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 12,
+      }}>
+        <h3 style={{
+          fontSize: "var(--font-body)",
+          fontWeight: 600,
+          color: "#1A1A1A",
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+          Location
+        </h3>
+        <button
+          onClick={() => setIsEditing(true)}
+          style={{
+            padding: "4px 12px",
+            borderRadius: 6,
+            border: "1px solid #E5E5E5",
+            background: "#fff",
+            color: "#666",
+            fontSize: "var(--font-caption)",
+            fontWeight: 600,
+            cursor: "pointer",
+            fontFamily: "'DM Sans', sans-serif",
+          }}
+        >
+          Edit
+        </button>
+      </div>
+      <div style={{
+        fontSize: "var(--font-body)",
+        color: "#333",
+        fontFamily: "'DM Sans', sans-serif",
+        lineHeight: 1.6,
+      }}>
+        {profile.location?.city ? (
+          <div><strong>City:</strong> {profile.location.city}</div>
+        ) : (
+          <div style={{ color: "#999" }}>Not set — add your city for weather-aware outfits</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function StyleContextCard({ profile, onSave }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(profile.styleContext || { notes: "" });
@@ -3244,6 +3621,7 @@ function ProfileView({ profile, onSave }) {
       )}
 
       <ReferencePhotoCard profile={profile} onSave={onSave} />
+      <LocationCard profile={profile} onSave={onSave} />
       <BodyFitCard profile={profile} onSave={onSave} />
       <StylePreferencesCard profile={profile} onSave={onSave} />
       <StyleContextCard profile={profile} onSave={onSave} />
@@ -3489,6 +3867,7 @@ export default function OutfitRecommendations() {
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [vizGenerations, setVizGenerations] = useState({});
   const [vizModalOutfitId, setVizModalOutfitId] = useState(null);
+  const [weather, setWeather] = useState(null);
   const chatSessionRef = useRef(0);
   const streamAbortRef = useRef(null);
   const ctaInterimTimerRef = useRef(null);
@@ -3536,6 +3915,12 @@ export default function OutfitRecommendations() {
       console.error("Failed to save profile:", err)
     );
   }, [profile, profileLoaded]);
+
+  useEffect(() => {
+    const city = profile.location?.city;
+    if (!city) { setWeather(null); return; }
+    fetchWeatherForDisplay(city).then(setWeather);
+  }, [profile.location?.city]);
 
   useEffect(() => {
     async function loadInitialData() {
@@ -4056,6 +4441,7 @@ export default function OutfitRecommendations() {
           messages: conversationHistory,
           wardrobeItems: allWardrobeItems,
           profile,
+          location: profile.location,
           onToken: (token) => {
             if (chatSessionRef.current !== sessionId || !token) return;
 
@@ -4309,6 +4695,21 @@ export default function OutfitRecommendations() {
     }
   }, []);
 
+  const handleUpdateWardrobeItem = useCallback(async (itemId, fields) => {
+    try {
+      const updated = await db.updateWardrobeItem(itemId, fields);
+      const [grouped, flat] = await Promise.all([
+        db.fetchWardrobeItems(),
+        db.fetchWardrobeItemsFlat(),
+      ]);
+      setWardrobeItems(grouped);
+      setWardrobeFlat(flat);
+      setLightboxItem(updated);
+    } catch (err) {
+      console.error("Failed to update wardrobe item:", err);
+    }
+  }, []);
+
   const isSelected = outfits.length > 0 && selected === outfits[current]?.id;
 
   return (
@@ -4329,6 +4730,7 @@ export default function OutfitRecommendations() {
           item={lightboxItem}
           onClose={() => setLightboxItem(null)}
           onDelete={view === "wardrobe" ? handleDeleteWardrobeItem : null}
+          onEdit={view === "wardrobe" ? handleUpdateWardrobeItem : null}
         />
       )}
       {addItemModalOpen && (
@@ -4563,6 +4965,9 @@ export default function OutfitRecommendations() {
           onImageRemove={handleImageRemove}
           isWaitingForFirstToken={isWaitingForFirstToken}
           isGenerating={isGenerating}
+          weather={weather}
+          hasLocation={!!profile.location?.city}
+          onOpenProfile={() => setView("profile")}
         />
       )}
 
