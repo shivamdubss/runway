@@ -41,6 +41,7 @@ export async function sendChatMessage({ messages, wardrobeItems, profile }) {
  * @param {Array} params.wardrobeItems - User's wardrobe items
  * @param {Object} params.profile - User profile
  * @param {Function} params.onToken - Callback for each token: (content: string) => void
+ * @param {Function} [params.onMessageDone] - Callback when primary assistant message text is complete
  * @param {Function} params.onComplete - Callback on completion: ({message, outfits}) => void
  * @param {Function} params.onError - Callback on error: (error: Error) => void
  * @returns {Function} Abort function to cancel the stream
@@ -50,6 +51,7 @@ export function sendChatMessageStreaming({
   wardrobeItems,
   profile,
   onToken,
+  onMessageDone,
   onComplete,
   onError,
 }) {
@@ -108,6 +110,14 @@ export function sendChatMessageStreaming({
 
           if (event.type === 'token') {
             onToken(event.content || '');
+            resetTimeout();
+            return;
+          }
+
+          if (event.type === 'message_done') {
+            if (onMessageDone) {
+              onMessageDone(event.message || '');
+            }
             resetTimeout();
             return;
           }

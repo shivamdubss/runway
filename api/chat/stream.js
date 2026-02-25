@@ -3,9 +3,11 @@ import { buildSystemPrompt } from '../_lib/prompts.js';
 import { parseOutfitResponse } from '../_lib/parse-outfits.js';
 import { verifyAuth } from '../_lib/auth.js';
 
-function extractMessageTextFromJsonBuffer(jsonBuffer) {
+export function extractMessageProgressFromJsonBuffer(jsonBuffer) {
   const keyMatch = /"message"\s*:\s*"/.exec(jsonBuffer);
-  if (!keyMatch) return null;
+  if (!keyMatch) {
+    return { text: null, isComplete: false };
+  }
 
   let i = keyMatch.index + keyMatch[0].length;
   let value = '';
@@ -27,7 +29,7 @@ function extractMessageTextFromJsonBuffer(jsonBuffer) {
           value += String.fromCharCode(parseInt(hex, 16));
           i += 4;
         } else {
-          return value;
+          return { text: value, isComplete: false };
         }
       } else {
         value += ch;
@@ -44,7 +46,7 @@ function extractMessageTextFromJsonBuffer(jsonBuffer) {
     }
 
     if (ch === '"') {
-      return value;
+      return { text: value, isComplete: true };
     }
 
     value += ch;
@@ -52,7 +54,7 @@ function extractMessageTextFromJsonBuffer(jsonBuffer) {
   }
 
   // Partial JSON so far: return whatever is decoded.
-  return value;
+  return { text: value, isComplete: false };
 }
 
 /**
@@ -64,6 +66,7 @@ function extractMessageTextFromJsonBuffer(jsonBuffer) {
  * SSE Events:
  * - { type: 'start' } - Stream started
  * - { type: 'token', content: '...' } - Text token received
+ * - { type: 'message_done', message: '...' } - Primary assistant text completed
  * - { type: 'complete', message: '...', outfits: [...] } - Stream completed
  * - { type: 'error', error: '...' } - Error occurred
  */
@@ -126,6 +129,7 @@ export default async function handler(req, res) {
 
     let fullContent = '';
     let streamedMessage = '';
+    let hasEmittedMessageDone = false;
 
     // Stream tokens as they arrive
     for await (const chunk of stream) {
@@ -133,11 +137,17 @@ export default async function handler(req, res) {
       if (delta) {
         fullContent += delta;
 
-        const extractedMessage = extractMessageTextFromJsonBuffer(fullContent);
+        const messageProgress = extractMessageProgressFromJsonBuffer(fullContent);
+        const extractedMessage = messageProgress.text;
         if (typeof extractedMessage === 'string' && extractedMessage.length > streamedMessage.length) {
           const newText = extractedMessage.slice(streamedMessage.length);
           streamedMessage = extractedMessage;
           sendEvent('token', { content: newText });
+        }
+
+        if (messageProgress.isComplete && !hasEmittedMessageDone) {
+          hasEmittedMessageDone = true;
+          sendEvent('message_done', { message: extractedMessage || '' });
         }
       }
     }
