@@ -68,8 +68,8 @@ Style direction: ${outfit.vibe || 'casual'}, photorealistic editorial look.${con
 The replacement garments must drape naturally on the existing body with physically correct wrinkles, shadows, and fabric weight. Match the scene lighting on the new clothing surfaces exactly.`.trim();
 }
 
-const OPENAI_TIMEOUT_MS = 55_000;
-const MAX_RETRIES = 1;
+const OPENAI_TIMEOUT_MS = 50_000;
+const MAX_RETRIES = 0;
 
 /**
  * Fetch with retry for transient errors (429, 5xx).
@@ -179,7 +179,7 @@ export async function handleGenerateOutfitVisualization(req, res) {
           prompt: prompt,
           n: 1,
           size: VISUALIZATION_OUTPUT_SIZE,
-          input_fidelity: "high"
+          input_fidelity: "low"
         })
       }, controller.signal);
 

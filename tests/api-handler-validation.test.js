@@ -129,15 +129,15 @@ describe('API handler validation', () => {
     expect(put.mock.calls[0][0]).toContain('runway/visualizations/v2/');
   });
 
-  it('returns 429 on rate limit error from OpenAI', async () => {
-    let callCount = 0;
+  it('returns 429 on rate limit error from OpenAI without retrying', async () => {
+    let openAICallCount = 0;
     globalThis.fetch = vi.fn((url) => {
       // HEAD request for reference photo validation
       if (url === validBody.referencePhotoUrl) {
         return Promise.resolve({ ok: true });
       }
-      callCount++;
-      // OpenAI returns 429 — fetchWithRetry will retry once then throw
+      openAICallCount++;
+      // OpenAI returns 429 — with MAX_RETRIES=0, no retry occurs
       return Promise.resolve({
         ok: false,
         status: 429,
@@ -150,6 +150,7 @@ describe('API handler validation', () => {
     expect(res.statusCode).toBe(429);
     expect(res.body.error).toBe('rate_limit');
     expect(res.body.retryAfter).toBe(30);
+    expect(openAICallCount).toBe(1);
   });
 
   it('returns 500 on non-retryable OpenAI error (e.g., 400)', async () => {

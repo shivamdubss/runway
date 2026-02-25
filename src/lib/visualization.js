@@ -140,7 +140,7 @@ function clearOldVisualizationCaches() {
 /**
  * Generate outfit visualization via API for a single pose
  */
-const CLIENT_TIMEOUT_MS = 65_000;
+const CLIENT_TIMEOUT_MS = 62_000;
 
 export async function generateVisualization({ referencePhotoUrl, outfit, userProfile, pose = 'front' }) {
   const { data: { session } } = await supabase.auth.getSession();
