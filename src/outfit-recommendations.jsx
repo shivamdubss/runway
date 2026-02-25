@@ -3644,6 +3644,7 @@ export default function OutfitRecommendations() {
   }, []);
 
   const makePoseEntry = (status, imageUrl = null, error = null) => ({ status, imageUrl, error });
+  const isCurrentVisualizationUrl = (url) => typeof url === "string" && url.includes("/visualizations/v2/");
 
   const handleVisualizeOutfit = useCallback(async (outfit) => {
     if (!profile.referencePhoto) {
@@ -4020,13 +4021,18 @@ export default function OutfitRecommendations() {
       const restoredViz = {};
       for (const outfit of chatOutfits) {
         const urls = outfit.visualizationUrls || (outfit.visualizationUrl ? { front: outfit.visualizationUrl } : null);
-        if (urls?.front) {
+        const compatibleUrls = urls
+          ? Object.fromEntries(
+            Object.entries(urls).filter(([, url]) => isCurrentVisualizationUrl(url))
+          )
+          : null;
+        if (compatibleUrls?.front) {
           restoredViz[outfit.id] = {
             status: 'ready',
             poses: {
-              front:  makePoseEntry('ready', urls.front),
-              angle:  makePoseEntry(urls.angle ? 'ready' : 'idle', urls.angle),
-              seated: makePoseEntry(urls.seated ? 'ready' : 'idle', urls.seated),
+              front:  makePoseEntry('ready', compatibleUrls.front),
+              angle:  makePoseEntry(compatibleUrls.angle ? 'ready' : 'idle', compatibleUrls.angle),
+              seated: makePoseEntry(compatibleUrls.seated ? 'ready' : 'idle', compatibleUrls.seated),
             },
             outfit,
           };

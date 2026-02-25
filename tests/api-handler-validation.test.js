@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { put } from '@vercel/blob';
 
 // Mock external dependencies before importing the handler
 vi.mock('@vercel/blob', () => ({
-  put: vi.fn(() => Promise.resolve({ url: 'https://blob.vercel-storage.com/test.png' }))
+  put: vi.fn(() => Promise.resolve({ url: 'https://blob.vercel-storage.com/runway/visualizations/v2/test.png' }))
 }));
 
 vi.mock('../api/_lib/openai.js', () => ({
@@ -115,8 +116,17 @@ describe('API handler validation', () => {
     await handler(mockReq({ body: validBody }), res);
     expect(res.statusCode).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.imageUrl).toBe('https://blob.vercel-storage.com/test.png');
+    expect(res.body.imageUrl).toBe('https://blob.vercel-storage.com/runway/visualizations/v2/test.png');
+    expect(res.body.imageUrl).toContain('/visualizations/v2/');
     expect(res.body.generatedAt).toBeDefined();
+
+    const openAICall = globalThis.fetch.mock.calls.find(([url]) => url === 'https://api.openai.com/v1/images/edits');
+    expect(openAICall).toBeDefined();
+    const openAIRequestBody = JSON.parse(openAICall[1].body);
+    expect(openAIRequestBody.size).toBe('1024x1536');
+
+    expect(put).toHaveBeenCalledTimes(1);
+    expect(put.mock.calls[0][0]).toContain('runway/visualizations/v2/');
   });
 
   it('returns 429 on rate limit error from OpenAI', async () => {

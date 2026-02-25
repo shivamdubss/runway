@@ -4,6 +4,12 @@
 import { supabase } from './supabase';
 
 const POSE_ORDER = ['front', 'angle', 'seated'];
+const VISUALIZATION_CACHE_PREFIX = 'viz_';
+const VISUALIZATION_CACHE_VERSION = 'v2';
+
+function buildCacheKey(outfitId, referencePhotoUrl) {
+  return `${VISUALIZATION_CACHE_PREFIX}${VISUALIZATION_CACHE_VERSION}_${outfitId}_${hashString(referencePhotoUrl)}`;
+}
 
 /**
  * Simple hash function for cache keys
@@ -24,7 +30,7 @@ function hashString(str) {
  * Backward compat: old { imageUrl } format maps to { front: imageUrl }.
  */
 export function getCachedVisualization(outfitId, referencePhotoUrl) {
-  const cacheKey = `viz_${outfitId}_${hashString(referencePhotoUrl)}`;
+  const cacheKey = buildCacheKey(outfitId, referencePhotoUrl);
 
   try {
     const cached = localStorage.getItem(cacheKey);
@@ -55,7 +61,7 @@ export function getCachedVisualization(outfitId, referencePhotoUrl) {
  * poses: { front?: url, angle?: url, seated?: url }
  */
 export function setCachedVisualization(outfitId, referencePhotoUrl, poses) {
-  const cacheKey = `viz_${outfitId}_${hashString(referencePhotoUrl)}`;
+  const cacheKey = buildCacheKey(outfitId, referencePhotoUrl);
   const expiresAt = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days
 
   try {
@@ -89,7 +95,7 @@ export function setCachedVisualization(outfitId, referencePhotoUrl, poses) {
 export function clearVisualizationCache() {
   try {
     const keys = Object.keys(localStorage);
-    const vizKeys = keys.filter(key => key.startsWith('viz_'));
+    const vizKeys = keys.filter(key => key.startsWith(VISUALIZATION_CACHE_PREFIX));
 
     vizKeys.forEach(key => {
       localStorage.removeItem(key);
@@ -107,7 +113,7 @@ export function clearVisualizationCache() {
 function clearOldVisualizationCaches() {
   try {
     const keys = Object.keys(localStorage);
-    const vizKeys = keys.filter(key => key.startsWith('viz_'));
+    const vizKeys = keys.filter(key => key.startsWith(VISUALIZATION_CACHE_PREFIX));
 
     // Parse and sort by creation time
     const vizEntries = vizKeys.map(key => {

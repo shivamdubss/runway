@@ -43,6 +43,16 @@ beforeEach(() => {
 // Import after mocks are set up
 const { getCachedVisualization, setCachedVisualization, clearVisualizationCache } = await import('../src/lib/visualization.js');
 
+function hashStringForLegacyKey(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36);
+}
+
 describe('getCachedVisualization – multi-pose format', () => {
   it('returns null when no cache exists', () => {
     const result = getCachedVisualization('outfit-1', 'http://photo.jpg');
@@ -121,7 +131,7 @@ describe('getCachedVisualization – backward compatibility', () => {
     // We need to use the same key the function would generate,
     // so let's use setCached then overwrite with old format
     setCachedVisualization('outfit-compat', 'http://photo.jpg', { front: 'temp' });
-    const vizKey = Object.keys(store).find(k => k.startsWith('viz_outfit-compat'));
+    const vizKey = Object.keys(store).find(k => k.startsWith('viz_v2_outfit-compat'));
     store[vizKey] = JSON.stringify({
       imageUrl: 'http://legacy.png',
       expiresAt: Date.now() + 1000000,
@@ -133,6 +143,13 @@ describe('getCachedVisualization – backward compatibility', () => {
 });
 
 describe('setCachedVisualization – multi-pose format', () => {
+  it('writes cache entries with v2 key prefix', () => {
+    setCachedVisualization('o-prefix', 'http://photo.jpg', { front: 'http://f.png' });
+    const storeKeys = Object.keys(localStorageMock._store);
+    expect(storeKeys.some(key => key.startsWith('viz_v2_'))).toBe(true);
+    expect(storeKeys.some(key => key.startsWith('viz_o-prefix_'))).toBe(false);
+  });
+
   it('stores poses that can be retrieved', () => {
     const poses = { front: 'http://f.png', angle: 'http://a.png', seated: 'http://s.png' };
     setCachedVisualization('o1', 'http://photo.jpg', poses);
@@ -163,5 +180,21 @@ describe('clearVisualizationCache', () => {
     setCachedVisualization('o1', 'http://a.jpg', { front: 'http://r1.png' });
     clearVisualizationCache();
     expect(localStorageMock.getItem('other_key')).toBe('should-stay');
+  });
+});
+
+describe('legacy cache key handling', () => {
+  it('ignores legacy non-versioned keys', () => {
+    const outfitId = 'legacy-o1';
+    const referencePhotoUrl = 'http://legacy-photo.jpg';
+    const legacyKey = `viz_${outfitId}_${hashStringForLegacyKey(referencePhotoUrl)}`;
+    localStorageMock.setItem(legacyKey, JSON.stringify({
+      poses: { front: 'http://legacy-front.png' },
+      expiresAt: Date.now() + 1000000,
+      createdAt: Date.now(),
+    }));
+
+    const result = getCachedVisualization(outfitId, referencePhotoUrl);
+    expect(result).toBeNull();
   });
 });

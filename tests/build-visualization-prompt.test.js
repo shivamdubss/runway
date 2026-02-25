@@ -157,7 +157,7 @@ describe('buildVisualizationPrompt – pose support', () => {
     const result = buildVisualizationPrompt(outfit, null, 'front');
     expect(result).toContain('head to toe');
     expect(result).toContain('footwear');
-    expect(result).toContain('Do not crop or zoom in');
+    expect(result).toContain('no crop, zoom');
   });
 
   it('angle pose includes head-to-toe framing', () => {

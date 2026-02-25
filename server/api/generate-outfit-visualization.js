@@ -2,11 +2,13 @@ import { put } from '@vercel/blob';
 import { randomUUID } from 'crypto';
 
 const VALID_POSES = ['front', 'angle', 'seated'];
+const VISUALIZATION_OUTPUT_SIZE = '1024x1536';
+const VISUALIZATION_BLOB_PREFIX = 'runway/visualizations/v2';
 
 const POSE_CONFIGS = {
   front: {
     preservation: "Keep the subject's face, facial structure, skin, hair, expression, body pose, proportions, and the entire background pixel-identical to the input photo. Do not alter lighting, camera angle, or depth of field.",
-    framing: 'Maintain the exact same framing as the input photo. Full body must be visible from head to toe, including all footwear. Do not crop or zoom in.',
+    framing: 'Maintain the same camera distance and perspective as the input photo while preserving a full-body composition. Keep the subject fully visible from head to toe, including all footwear, with no crop, zoom, or truncation of limbs.',
   },
   angle: {
     preservation: "Keep the subject's face, facial structure, skin tone, hair, and expression identical to the input photo. Preserve the subject's body proportions and build.",
@@ -176,7 +178,7 @@ export async function handleGenerateOutfitVisualization(req, res) {
           images: [{ image_url: referencePhotoUrl }],
           prompt: prompt,
           n: 1,
-          size: "1024x1024",
+          size: VISUALIZATION_OUTPUT_SIZE,
           input_fidelity: "high"
         })
       }, controller.signal);
@@ -192,7 +194,7 @@ export async function handleGenerateOutfitVisualization(req, res) {
 
       // Upload to Vercel Blob
       const blob = await put(
-        `runway/visualizations/${randomUUID()}.png`,
+        `${VISUALIZATION_BLOB_PREFIX}/${randomUUID()}.png`,
         generatedImageBuffer,
         {
           access: 'public',
