@@ -67,9 +67,6 @@ const CATEGORY_TO_LABEL = {
 };
 
 const CATEGORIES = ["Tops", "Layers", "Bottoms", "Shoes", "Accessories"];
-const CTA_INTERIM_TEXT = "Pulling outfit options from your wardrobe...";
-const CTA_INTERIM_INTERVAL_MS = 22;
-const CTA_FINAL_INTERVAL_MS = 16;
 
 function getImageFileFromDrop(e) {
   e.preventDefault();
@@ -4333,9 +4330,6 @@ export default function OutfitRecommendations() {
   const [weather, setWeather] = useState(null);
   const chatSessionRef = useRef(0);
   const streamAbortRef = useRef(null);
-  const ctaInterimTimerRef = useRef(null);
-  const ctaFinalTimerRef = useRef(null);
-  const ctaFinalStreamResolveRef = useRef(null);
 
   useEffect(() => {
     const link = document.createElement("link");
@@ -4423,44 +4417,21 @@ export default function OutfitRecommendations() {
     loadInitialData();
   }, []);
 
-  const clearCtaTimers = useCallback(() => {
-    if (ctaInterimTimerRef.current) {
-      clearInterval(ctaInterimTimerRef.current);
-      ctaInterimTimerRef.current = null;
-    }
-    if (ctaFinalTimerRef.current) {
-      clearInterval(ctaFinalTimerRef.current);
-      ctaFinalTimerRef.current = null;
-    }
-    if (ctaFinalStreamResolveRef.current) {
-      const resolve = ctaFinalStreamResolveRef.current;
-      ctaFinalStreamResolveRef.current = null;
-      resolve(false);
-    }
-  }, []);
-
-  const removePendingCtaMessages = useCallback(() => {
-    setMessages((prev) => prev.filter((msg) => !(msg.isCtaStream && !msg.cta)));
-  }, []);
-
   const cancelActiveStream = useCallback(() => {
     if (streamAbortRef.current) {
       streamAbortRef.current();
       streamAbortRef.current = null;
     }
-    clearCtaTimers();
-    removePendingCtaMessages();
     setIsWaitingForFirstToken(false);
-  }, [clearCtaTimers, removePendingCtaMessages]);
+  }, []);
 
   useEffect(() => {
     return () => {
       if (streamAbortRef.current) {
         streamAbortRef.current();
       }
-      clearCtaTimers();
     };
-  }, [clearCtaTimers]);
+  }, []);
 
   const DIRECTION_THRESHOLD = 10; // pixels to determine direction
 
@@ -4772,131 +4743,8 @@ export default function OutfitRecommendations() {
 
     const streamId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const assistantMessageId = `assistant-${streamId}`;
-    const ctaMessageId = `assistant-cta-${streamId}`;
     let streamedMessage = "";
     let hasStreamedToken = false;
-    let hasStartedCtaStream = false;
-
-    const upsertCtaMessage = (updates) => {
-      setMessages((prev) => {
-        const index = prev.findIndex((msg) => msg.id === ctaMessageId);
-        if (index === -1) {
-          return [
-            ...prev,
-            {
-              id: ctaMessageId,
-              role: "assistant",
-              text: "",
-              isStreaming: true,
-              isCtaStream: true,
-              ...updates,
-            },
-          ];
-        }
-
-        const next = [...prev];
-        next[index] = { ...next[index], ...updates };
-        return next;
-      });
-    };
-
-    const removeCtaMessage = () => {
-      setMessages((prev) => prev.filter((msg) => msg.id !== ctaMessageId));
-    };
-
-    const startInterimCtaStream = () => {
-      if (chatSessionRef.current !== sessionId || hasStartedCtaStream) return;
-      hasStartedCtaStream = true;
-
-      if (ctaInterimTimerRef.current) {
-        clearInterval(ctaInterimTimerRef.current);
-        ctaInterimTimerRef.current = null;
-      }
-
-      let index = 0;
-      upsertCtaMessage({ text: "", cta: undefined, isStreaming: true, isCtaStream: true });
-
-      ctaInterimTimerRef.current = setInterval(() => {
-        if (chatSessionRef.current !== sessionId) {
-          if (ctaInterimTimerRef.current) {
-            clearInterval(ctaInterimTimerRef.current);
-            ctaInterimTimerRef.current = null;
-          }
-          return;
-        }
-
-        index += 1;
-        const nextText = CTA_INTERIM_TEXT.slice(0, index);
-        upsertCtaMessage({ text: nextText, cta: undefined, isStreaming: true, isCtaStream: true });
-
-        if (index >= CTA_INTERIM_TEXT.length) {
-          if (ctaInterimTimerRef.current) {
-            clearInterval(ctaInterimTimerRef.current);
-            ctaInterimTimerRef.current = null;
-          }
-        }
-      }, CTA_INTERIM_INTERVAL_MS);
-    };
-
-    const streamFinalCtaText = (textToStream) =>
-      new Promise((resolve) => {
-        if (chatSessionRef.current !== sessionId) {
-          resolve(false);
-          return;
-        }
-
-        if (ctaInterimTimerRef.current) {
-          clearInterval(ctaInterimTimerRef.current);
-          ctaInterimTimerRef.current = null;
-        }
-        if (ctaFinalTimerRef.current) {
-          clearInterval(ctaFinalTimerRef.current);
-          ctaFinalTimerRef.current = null;
-        }
-
-        hasStartedCtaStream = true;
-        upsertCtaMessage({ text: "", cta: undefined, isStreaming: true, isCtaStream: true });
-
-        if (!textToStream) {
-          upsertCtaMessage({ text: "", cta: undefined, isStreaming: false, isCtaStream: true });
-          resolve(true);
-          return;
-        }
-
-        let index = 0;
-        ctaFinalStreamResolveRef.current = resolve;
-        ctaFinalTimerRef.current = setInterval(() => {
-          if (chatSessionRef.current !== sessionId) {
-            if (ctaFinalTimerRef.current) {
-              clearInterval(ctaFinalTimerRef.current);
-              ctaFinalTimerRef.current = null;
-            }
-            if (ctaFinalStreamResolveRef.current) {
-              const pendingResolve = ctaFinalStreamResolveRef.current;
-              ctaFinalStreamResolveRef.current = null;
-              pendingResolve(false);
-            }
-            return;
-          }
-
-          index += 1;
-          const nextText = textToStream.slice(0, index);
-          const done = index >= textToStream.length;
-          upsertCtaMessage({ text: nextText, cta: undefined, isStreaming: !done, isCtaStream: true });
-
-          if (done) {
-            if (ctaFinalTimerRef.current) {
-              clearInterval(ctaFinalTimerRef.current);
-              ctaFinalTimerRef.current = null;
-            }
-            if (ctaFinalStreamResolveRef.current) {
-              const pendingResolve = ctaFinalStreamResolveRef.current;
-              ctaFinalStreamResolveRef.current = null;
-              pendingResolve(true);
-            }
-          }
-        }, CTA_FINAL_INTERVAL_MS);
-      });
 
     try {
       const result = await new Promise((resolve, reject) => {
@@ -4928,10 +4776,7 @@ export default function OutfitRecommendations() {
               )
             );
           },
-          onMessageDone: () => {
-            if (chatSessionRef.current !== sessionId) return;
-            startInterimCtaStream();
-          },
+          onMessageDone: () => {},
           onComplete: (payload) => resolve(payload),
           onError: (error) => reject(error),
         });
@@ -4970,21 +4815,15 @@ export default function OutfitRecommendations() {
         setOutfits(result.outfits);
         setCurrent(0);
 
-        const ctaText = `Here are ${result.outfits.length} outfit options from your wardrobe. Swipe through them and let me know what you think, or tell me what to change.`;
-        const didFinishStreamingCta = await streamFinalCtaText(ctaText);
-        if (chatSessionRef.current !== sessionId || !didFinishStreamingCta) return;
-
-        upsertCtaMessage({
-          text: ctaText,
-          isStreaming: false,
-          isCtaStream: true,
-          cta: { label: "View Outfits", action: "navigate_outfits" },
-        });
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessageId
+              ? { ...msg, cta: { label: "View Outfits", action: "navigate_outfits" } }
+              : msg
+          )
+        );
 
         if (chatId) {
-          db.saveMessage({ chatId, role: "assistant", content: ctaText }).catch(err =>
-            console.error("Failed to save CTA message:", err)
-          );
           db.saveOutfits({ chatId, outfits: result.outfits, wardrobeItems: wardrobeFlat }).catch(err =>
             console.error("Failed to save outfits:", err)
           );
@@ -4995,16 +4834,11 @@ export default function OutfitRecommendations() {
             ));
           }).catch(err => console.error("Failed to update chat subtitle:", err));
         }
-      } else {
-        clearCtaTimers();
-        removeCtaMessage();
       }
     } catch (error) {
       if (chatSessionRef.current !== sessionId) return;
       console.error("Chat error:", error);
       setIsWaitingForFirstToken(false);
-      clearCtaTimers();
-      removeCtaMessage();
 
       if (hasStreamedToken && streamedMessage.trim()) {
         setMessages((prev) =>
@@ -5023,7 +4857,6 @@ export default function OutfitRecommendations() {
     } finally {
       if (chatSessionRef.current === sessionId) {
         streamAbortRef.current = null;
-        clearCtaTimers();
         setIsGenerating(false);
         setIsWaitingForFirstToken(false);
       }
@@ -5038,7 +4871,6 @@ export default function OutfitRecommendations() {
     profile,
     activeChatId,
     cancelActiveStream,
-    clearCtaTimers,
   ]);
 
   const handleSend = () => handleSendMessage(inputValue.trim());
