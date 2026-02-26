@@ -26,8 +26,28 @@ style.textContent = `
     0%, 49% { opacity: 1; }
     50%, 100% { opacity: 0; }
   }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
 `;
 document.head.appendChild(style);
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return { emoji: '☀️', text: 'Good morning — what are we styling?' };
+  if (hour < 17) return { emoji: '🌤️', text: 'Good afternoon — what are we wearing?' };
+  return { emoji: '🌙', text: "Good evening — what's the occasion?" };
+}
+
+const TYPING_MESSAGES = [
+  "Raiding your closet...",
+  "Mixing patterns (tastefully)...",
+  "Checking if those shoes match...",
+  "Consulting the fashion gods...",
+  "Channeling your inner stylist...",
+];
 
 const QUICK_CHIPS = [
   { label: "Today", icon: "☀️" },
@@ -827,64 +847,9 @@ function ItemCard({ item, onClick }) {
   );
 }
 
-function AddItemCard({ onClick }) {
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        borderRadius: "var(--card-border-radius)",
-        overflow: "hidden",
-        background: "#fff",
-        border: "2px dashed rgba(0,0,0,0.10)",
-        cursor: "pointer",
-        transition: "transform 0.15s ease",
-        display: "flex",
-        flexDirection: "column",
-      }}
-      onPointerDown={(e) => e.currentTarget.style.transform = "scale(0.98)"}
-      onPointerUp={(e) => e.currentTarget.style.transform = "scale(1)"}
-      onPointerLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
-    >
-      <div style={{
-        width: "100%",
-        height: "var(--card-image-height)",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-      }}>
-        <div style={{
-          width: 40,
-          height: 40,
-          borderRadius: 20,
-          background: "#F3F2F0",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 20,
-          color: "#bbb",
-        }}>
-          +
-        </div>
-        <span style={{
-          fontSize: "var(--font-body)",
-          color: "#bbb",
-          fontFamily: "'DM Sans', sans-serif",
-          fontWeight: 500,
-        }}>
-          Add Item
-        </span>
-      </div>
-      <div style={{ padding: "var(--space-card-padding)", visibility: "hidden" }}>
-        <span style={{ fontSize: "var(--font-item-name)" }}>&nbsp;</span>
-      </div>
-    </div>
-  );
-}
 
 function AddItemModal({ onClose, onAdd, onBulkAdd }) {
-  // --- Mode: "single" or "bulk" ---
+  // --- Mode: "single", "bulk", or "import" ---
   const [mode, setMode] = useState("single");
 
   // --- Single-item state ---
@@ -902,6 +867,20 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
   const fileInputRef = useRef(null);
   const extraFileInputRef = useRef(null);
 
+  // --- Import-from-photo state ---
+  const [importPhase, setImportPhase] = useState("upload"); // 'upload' | 'analyzing' | 'review'
+  const [importPreviewUrl, setImportPreviewUrl] = useState(null);
+  const [importIsUploading, setImportIsUploading] = useState(false);
+  const [importIsDragOver, setImportIsDragOver] = useState(false);
+  const [importUploadError, setImportUploadError] = useState(null);
+  const [importAnalysisError, setImportAnalysisError] = useState(null);
+  const [importItems, setImportItems] = useState([]);
+  const [genProgress, setGenProgress] = useState({ completed: 0, total: 0 });
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState("");
+  const [editCategory, setEditCategory] = useState("Tops");
+  const importFileInputRef = useRef(null);
+
   // --- Bulk state ---
   const [bulkQueue, setBulkQueue] = useState([]); // array of {previewUrl, uploadedUrl, name, category, color, accentColor, emoji, error}
   const [bulkIndex, setBulkIndex] = useState(0);
@@ -914,6 +893,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
     return () => {
       images.forEach(img => { if (img.previewUrl) URL.revokeObjectURL(img.previewUrl); });
       bulkQueue.forEach(item => { if (item.previewUrl) URL.revokeObjectURL(item.previewUrl); });
+      if (importPreviewUrl) URL.revokeObjectURL(importPreviewUrl);
     };
   }, []);
 
@@ -1091,6 +1071,117 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
     }
   };
 
+  // --- Import-from-photo functions ---
+  const handleImportFileSelected = async (file) => {
+    if (!file) return;
+    setImportUploadError(null);
+    setImportAnalysisError(null);
+
+    const preview = URL.createObjectURL(file);
+    setImportPreviewUrl(preview);
+
+    let imageUrl;
+    try {
+      setImportIsUploading(true);
+      imageUrl = await uploadImage(file);
+    } catch (err) {
+      console.error("Import photo upload failed:", err);
+      setImportUploadError("Failed to upload image. Please try again.");
+      URL.revokeObjectURL(preview);
+      setImportPreviewUrl(null);
+      return;
+    } finally {
+      setImportIsUploading(false);
+    }
+
+    try {
+      setImportPhase("analyzing");
+      const result = await analyzeOutfitPhoto(imageUrl);
+      const identified = (result.items || []).map((item, i) => ({
+        id: `import-${Date.now()}-${i}`,
+        ...item,
+        imageUrl: null,
+        imageStatus: "pending",
+        removed: false,
+      }));
+      setImportItems(identified);
+      setImportPhase("review");
+      generateAllImages(identified);
+    } catch (err) {
+      console.error("Outfit analysis failed:", err);
+      setImportAnalysisError("Could not identify items in this photo. Try a well-lit, full-body photo.");
+      setImportPhase("upload");
+    }
+  };
+
+  const generateAllImages = async (itemList) => {
+    const MAX_CONCURRENT = 3;
+    const queue = [...itemList];
+    setGenProgress({ completed: 0, total: queue.length });
+    let completed = 0;
+
+    async function processNext() {
+      if (queue.length === 0) return;
+      const item = queue.shift();
+      try {
+        const result = await generateItemImage({
+          name: item.name,
+          description: item.description,
+          color: item.color,
+          category: item.category,
+        });
+        setImportItems(prev => prev.map(i =>
+          i.id === item.id ? { ...i, imageUrl: result.imageUrl, imageStatus: "ready" } : i
+        ));
+      } catch (err) {
+        console.error(`Image generation failed for ${item.name}:`, err);
+        setImportItems(prev => prev.map(i =>
+          i.id === item.id ? { ...i, imageStatus: "error" } : i
+        ));
+      } finally {
+        completed++;
+        setGenProgress({ completed, total: itemList.length });
+        await processNext();
+      }
+    }
+
+    const workers = Array(Math.min(MAX_CONCURRENT, queue.length))
+      .fill(null)
+      .map(() => processNext());
+    await Promise.all(workers);
+  };
+
+  const importActiveItems = importItems.filter(i => !i.removed);
+  const allGenDone = genProgress.total > 0 && genProgress.completed >= genProgress.total;
+
+  const handleImportConfirm = async () => {
+    const toAdd = importActiveItems.map(item => ({
+      label: CATEGORY_TO_LABEL[item.category] || item.category,
+      name: item.name,
+      color: item.color || "#E8E8E8",
+      accent: item.accent_color || "#D8D8D8",
+      emoji: item.emoji || "👕",
+      images: item.imageUrl ? [item.imageUrl] : [],
+      category: item.category,
+    }));
+    if (toAdd.length > 0 && onBulkAdd) {
+      onBulkAdd(toAdd);
+    }
+  };
+
+  const startImportEdit = (item) => {
+    setEditingId(item.id);
+    setEditName(item.name);
+    setEditCategory(item.category);
+  };
+
+  const saveImportEdit = () => {
+    setImportItems(prev => prev.map(i =>
+      i.id === editingId ? { ...i, name: editName, category: editCategory } : i
+    ));
+    setEditingId(null);
+  };
+
   // --- Bulk processing / review UI ---
   if (mode === "bulk") {
     return (
@@ -1266,6 +1357,279 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
     );
   }
 
+  // --- Import-from-photo UI ---
+  if (mode === "import") {
+    return (
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed", inset: 0, zIndex: 100,
+          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "var(--space-lightbox-padding)", animation: "fadeIn 0.2s ease",
+        }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            background: "#fff", borderRadius: 24, width: "92vw", maxWidth: 480,
+            maxHeight: "85vh", display: "flex", flexDirection: "column",
+            animation: "scaleIn 0.25s ease", position: "relative", overflow: "hidden",
+          }}
+        >
+          {/* Header */}
+          <div style={{ padding: "20px 20px 0", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                onClick={() => { setMode("single"); setImportPhase("upload"); setImportItems([]); setImportAnalysisError(null); }}
+                style={{
+                  width: 28, height: 28, borderRadius: 14, border: "none", background: "#F3F2F0",
+                  fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >←</button>
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 17 }}>Import from Photo</span>
+            </div>
+            <button onClick={onClose} style={{
+              width: 32, height: 32, borderRadius: 16, border: "none", background: "#F3F2F0",
+              fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            }}>✕</button>
+          </div>
+
+          {/* Progress bar during generation */}
+          {importPhase === "review" && genProgress.total > 0 && !allGenDone && (
+            <div style={{ padding: "12px 20px 0", flexShrink: 0 }}>
+              <div style={{ fontSize: 12, color: "#888", fontFamily: "'DM Sans', sans-serif", marginBottom: 6 }}>
+                Generating images... {genProgress.completed} of {genProgress.total}
+              </div>
+              <div style={{ height: 3, background: "#F3F2F0", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%", background: "#1A1A1A", borderRadius: 2,
+                  width: `${(genProgress.completed / genProgress.total) * 100}%`,
+                  transition: "width 0.3s ease",
+                }} />
+              </div>
+            </div>
+          )}
+
+          {/* Content area */}
+          <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+            {/* Upload phase */}
+            {importPhase === "upload" && (
+              <div>
+                <input
+                  ref={importFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={(e) => { const f = e.target.files[0]; if (f) handleImportFileSelected(f); e.target.value = ""; }}
+                />
+                <div
+                  onClick={() => importFileInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); setImportIsDragOver(true); }}
+                  onDragLeave={() => setImportIsDragOver(false)}
+                  onDrop={(e) => { setImportIsDragOver(false); const f = getImageFileFromDrop(e); if (f) handleImportFileSelected(f); }}
+                  style={{
+                    width: "100%", aspectRatio: "3/4", background: importIsDragOver ? "#f0f0ff" : "#F3F2F0",
+                    borderRadius: 16, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", border: importIsDragOver ? "2px dashed #667eea" : "2px dashed rgba(0,0,0,0.08)",
+                    transition: "all 0.15s ease", gap: 8,
+                  }}
+                >
+                  {importIsUploading ? (
+                    <>
+                      <div style={{
+                        width: 36, height: 36, border: "3px solid #eee", borderTopColor: "#1A1A1A",
+                        borderRadius: "50%", animation: "spin 0.8s linear infinite",
+                      }} />
+                      <span style={{ fontSize: 14, color: "#888", fontFamily: "'DM Sans', sans-serif" }}>Uploading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: 36 }}>📸</span>
+                      <span style={{ fontSize: 14, color: "#888", fontFamily: "'DM Sans', sans-serif", fontWeight: 500, textAlign: "center", padding: "0 20px" }}>
+                        Upload a photo of yourself wearing an outfit
+                      </span>
+                      <span style={{ fontSize: 12, color: "#bbb", fontFamily: "'DM Sans', sans-serif" }}>
+                        Tap or drop a photo
+                      </span>
+                    </>
+                  )}
+                </div>
+                {importUploadError && (
+                  <div style={{ color: "#c0392b", fontSize: 13, marginTop: 8, fontFamily: "'DM Sans', sans-serif" }}>{importUploadError}</div>
+                )}
+                {importAnalysisError && (
+                  <div style={{ color: "#c0392b", fontSize: 13, marginTop: 8, fontFamily: "'DM Sans', sans-serif" }}>{importAnalysisError}</div>
+                )}
+              </div>
+            )}
+
+            {/* Analyzing phase */}
+            {importPhase === "analyzing" && (
+              <div style={{ position: "relative" }}>
+                {importPreviewUrl && (
+                  <img src={importPreviewUrl} alt="Outfit" style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover", borderRadius: 16, opacity: 0.5 }} />
+                )}
+                <div style={{
+                  position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center", gap: 12,
+                }}>
+                  <div style={{
+                    width: 36, height: 36, border: "3px solid #eee", borderTopColor: "#1A1A1A",
+                    borderRadius: "50%", animation: "spin 0.8s linear infinite",
+                  }} />
+                  <span style={{ fontSize: 14, color: "#1A1A1A", fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>
+                    Identifying items in your outfit...
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Review phase — item grid */}
+            {importPhase === "review" && (
+              <div className="item-card-grid" style={{ gap: 12 }}>
+                {importItems.map((item) => {
+                  if (item.removed) return null;
+                  const isEditing = editingId === item.id;
+
+                  return (
+                    <div key={item.id} style={{
+                      borderRadius: "var(--card-border-radius)", overflow: "hidden", background: "#fff",
+                      border: "1px solid rgba(0,0,0,0.06)", position: "relative",
+                    }}>
+                      {/* Image area */}
+                      <div style={{
+                        width: "100%", aspectRatio: "1/1", background: "#F3F2F0", position: "relative",
+                        display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
+                      }}>
+                        {item.imageStatus === "ready" && item.imageUrl ? (
+                          <img src={item.imageUrl} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        ) : item.imageStatus === "error" ? (
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 32 }}>{item.emoji}</div>
+                            <div style={{ fontSize: 10, color: "#c0392b", fontFamily: "'DM Sans', sans-serif", marginTop: 4 }}>Image failed</div>
+                          </div>
+                        ) : (
+                          <div style={{
+                            width: "100%", height: "100%",
+                            background: "linear-gradient(90deg, #F3F2F0 25%, #E8E7E5 50%, #F3F2F0 75%)",
+                            backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite",
+                          }} />
+                        )}
+                        <button
+                          onClick={() => setImportItems(prev => prev.map(i => i.id === item.id ? { ...i, removed: true } : i))}
+                          style={{
+                            position: "absolute", top: 6, right: 6, width: 24, height: 24, borderRadius: 12,
+                            background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", fontSize: 12,
+                            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                          }}
+                        >✕</button>
+                      </div>
+
+                      {/* Info area */}
+                      <div style={{ padding: 10 }}>
+                        {isEditing ? (
+                          <div>
+                            <input
+                              type="text" value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              style={{
+                                width: "100%", padding: "6px 8px", borderRadius: 8,
+                                border: "1px solid rgba(0,0,0,0.12)", fontSize: 13,
+                                fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box",
+                              }}
+                            />
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+                              {CATEGORIES.map((cat) => (
+                                <button
+                                  key={cat}
+                                  onClick={() => setEditCategory(cat)}
+                                  style={{
+                                    height: 26, padding: "0 10px", borderRadius: 13, fontSize: 11,
+                                    fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
+                                    border: editCategory === cat ? "none" : "1px solid rgba(0,0,0,0.08)",
+                                    background: editCategory === cat ? "#1A1A1A" : "#fff",
+                                    color: editCategory === cat ? "#fff" : "#555",
+                                    cursor: "pointer",
+                                  }}
+                                >{cat}</button>
+                              ))}
+                            </div>
+                            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                              <button
+                                onClick={saveImportEdit}
+                                style={{
+                                  flex: 1, height: 30, borderRadius: 8, border: "none",
+                                  background: "#1A1A1A", color: "#fff", fontSize: 12,
+                                  fontFamily: "'DM Sans', sans-serif", fontWeight: 600, cursor: "pointer",
+                                }}
+                              >Save</button>
+                              <button
+                                onClick={() => setEditingId(null)}
+                                style={{
+                                  flex: 1, height: 30, borderRadius: 8,
+                                  border: "1px solid rgba(0,0,0,0.08)", background: "#fff",
+                                  color: "#555", fontSize: 12, fontFamily: "'DM Sans', sans-serif",
+                                  fontWeight: 500, cursor: "pointer",
+                                }}
+                              >Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div onClick={() => startImportEdit(item)} style={{ cursor: "pointer" }}>
+                            <div style={{
+                              fontSize: 10, fontWeight: 600, textTransform: "uppercase",
+                              letterSpacing: "0.06em", color: "#aaa",
+                              fontFamily: "'DM Sans', sans-serif",
+                            }}>{CATEGORY_TO_LABEL[item.category] || item.category}</div>
+                            <div style={{
+                              fontSize: 13, fontWeight: 500, color: "#1A1A1A",
+                              fontFamily: "'DM Sans', sans-serif", marginTop: 2,
+                              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                            }}>{item.name}</div>
+                            <div style={{
+                              fontSize: 10, color: "#bbb", fontFamily: "'DM Sans', sans-serif", marginTop: 4,
+                            }}>Tap to edit</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Bottom action bar */}
+          {importPhase === "review" && (
+            <div style={{
+              padding: "12px 20px calc(12px + var(--safe-bottom))", flexShrink: 0,
+              borderTop: "1px solid rgba(0,0,0,0.06)",
+            }}>
+              <button
+                onClick={handleImportConfirm}
+                disabled={importActiveItems.length === 0}
+                style={{
+                  width: "100%", height: 48, borderRadius: 14, border: "none",
+                  background: importActiveItems.length > 0 ? "#1A1A1A" : "#EEEDEB",
+                  color: importActiveItems.length > 0 ? "#fff" : "#ccc",
+                  fontSize: 15, fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
+                  cursor: importActiveItems.length > 0 ? "pointer" : "not-allowed",
+                  transition: "all 0.15s ease",
+                }}
+                onPointerDown={(e) => { if (importActiveItems.length > 0) e.currentTarget.style.transform = "scale(0.97)"; }}
+                onPointerUp={(e) => e.currentTarget.style.transform = "scale(1)"}
+                onPointerLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+              >
+                Add {importActiveItems.length} item{importActiveItems.length !== 1 ? "s" : ""} to Wardrobe
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // --- Single-item UI ---
   const primaryPreview = images[0]?.previewUrl || null;
   const isWorking = isUploading || isAnalyzing;
@@ -1378,6 +1742,27 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
               }}>
                 Tap or drop photos
               </span>
+              {/* Divider + import option */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: 12, width: "70%", marginTop: 8,
+              }}>
+                <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,0.08)" }} />
+                <span style={{ fontSize: 12, color: "#bbb", fontFamily: "'DM Sans', sans-serif" }}>or</span>
+                <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,0.08)" }} />
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); setMode("import"); }}
+                style={{
+                  marginTop: 4, padding: "8px 18px", borderRadius: 20,
+                  border: "1px solid rgba(0,0,0,0.1)", background: "#fff",
+                  fontSize: 13, fontWeight: 500, fontFamily: "'DM Sans', sans-serif",
+                  color: "#555", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <span style={{ fontSize: 16 }}>📸</span>
+                Import from outfit photo
+              </button>
             </>
           )}
         </div>
@@ -1514,400 +1899,6 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
   );
 }
 
-function ImportFromPhotoModal({ onClose, onBulkAdd }) {
-  const [phase, setPhase] = useState("upload"); // 'upload' | 'analyzing' | 'review'
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [uploadedUrl, setUploadedUrl] = useState(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [uploadError, setUploadError] = useState(null);
-  const [analysisError, setAnalysisError] = useState(null);
-  const [items, setItems] = useState([]); // { id, name, category, color, accent_color, emoji, description, imageUrl, imageStatus, removed }
-  const [genProgress, setGenProgress] = useState({ completed: 0, total: 0 });
-  const [editingId, setEditingId] = useState(null);
-  const [editName, setEditName] = useState("");
-  const [editCategory, setEditCategory] = useState("Tops");
-  const fileInputRef = useRef(null);
-
-  useEffect(() => {
-    return () => { if (previewUrl) URL.revokeObjectURL(previewUrl); };
-  }, []);
-
-  const handleFileSelected = async (file) => {
-    if (!file) return;
-    setUploadError(null);
-    setAnalysisError(null);
-
-    const preview = URL.createObjectURL(file);
-    setPreviewUrl(preview);
-
-    let imageUrl;
-    try {
-      setIsUploading(true);
-      imageUrl = await uploadImage(file);
-      setUploadedUrl(imageUrl);
-    } catch (err) {
-      console.error("Import photo upload failed:", err);
-      setUploadError("Failed to upload image. Please try again.");
-      URL.revokeObjectURL(preview);
-      setPreviewUrl(null);
-      return;
-    } finally {
-      setIsUploading(false);
-    }
-
-    try {
-      setPhase("analyzing");
-      const result = await analyzeOutfitPhoto(imageUrl);
-      const identified = (result.items || []).map((item, i) => ({
-        id: `import-${Date.now()}-${i}`,
-        ...item,
-        imageUrl: null,
-        imageStatus: "pending",
-        removed: false,
-      }));
-      setItems(identified);
-      setPhase("review");
-      generateAllImages(identified, imageUrl);
-    } catch (err) {
-      console.error("Outfit analysis failed:", err);
-      setAnalysisError("Could not identify items in this photo. Try a well-lit, full-body photo.");
-      setPhase("upload");
-    }
-  };
-
-  const generateAllImages = async (itemList) => {
-    const MAX_CONCURRENT = 3;
-    const queue = [...itemList];
-    setGenProgress({ completed: 0, total: queue.length });
-    let completed = 0;
-
-    async function processNext() {
-      if (queue.length === 0) return;
-      const item = queue.shift();
-      try {
-        const result = await generateItemImage({
-          name: item.name,
-          description: item.description,
-          color: item.color,
-          category: item.category,
-        });
-        setItems(prev => prev.map(i =>
-          i.id === item.id ? { ...i, imageUrl: result.imageUrl, imageStatus: "ready" } : i
-        ));
-      } catch (err) {
-        console.error(`Image generation failed for ${item.name}:`, err);
-        setItems(prev => prev.map(i =>
-          i.id === item.id ? { ...i, imageStatus: "error" } : i
-        ));
-      } finally {
-        completed++;
-        setGenProgress({ completed, total: itemList.length });
-        await processNext();
-      }
-    }
-
-    const workers = Array(Math.min(MAX_CONCURRENT, queue.length))
-      .fill(null)
-      .map(() => processNext());
-    await Promise.all(workers);
-  };
-
-  const activeItems = items.filter(i => !i.removed);
-  const allGenDone = genProgress.total > 0 && genProgress.completed >= genProgress.total;
-
-  const handleImport = async () => {
-    const toAdd = activeItems.map(item => ({
-      label: CATEGORY_TO_LABEL[item.category] || item.category,
-      name: item.name,
-      color: item.color || "#E8E8E8",
-      accent: item.accent_color || "#D8D8D8",
-      emoji: item.emoji || "👕",
-      images: item.imageUrl ? [item.imageUrl] : [],
-      category: item.category,
-    }));
-    await onBulkAdd(toAdd);
-    onClose();
-  };
-
-  const startEdit = (item) => {
-    setEditingId(item.id);
-    setEditName(item.name);
-    setEditCategory(item.category);
-  };
-
-  const saveEdit = () => {
-    setItems(prev => prev.map(i =>
-      i.id === editingId ? { ...i, name: editName, category: editCategory } : i
-    ));
-    setEditingId(null);
-  };
-
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, zIndex: 1000,
-        background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        animation: "fadeIn 0.2s ease",
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: "#fff", borderRadius: 24, width: "92vw", maxWidth: 480,
-          maxHeight: "85vh", display: "flex", flexDirection: "column",
-          animation: "scaleIn 0.25s ease", position: "relative", overflow: "hidden",
-        }}
-      >
-        {/* Header */}
-        <div style={{ padding: "20px 20px 0", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 17 }}>Import from Photo</span>
-          <button onClick={onClose} style={{
-            width: 32, height: 32, borderRadius: 16, border: "none", background: "#F3F2F0",
-            fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-          }}>✕</button>
-        </div>
-
-        {/* Progress bar during generation */}
-        {phase === "review" && genProgress.total > 0 && !allGenDone && (
-          <div style={{ padding: "12px 20px 0", flexShrink: 0 }}>
-            <div style={{ fontSize: 12, color: "#888", fontFamily: "'DM Sans', sans-serif", marginBottom: 6 }}>
-              Generating images... {genProgress.completed} of {genProgress.total}
-            </div>
-            <div style={{ height: 3, background: "#F3F2F0", borderRadius: 2, overflow: "hidden" }}>
-              <div style={{
-                height: "100%", background: "#1A1A1A", borderRadius: 2,
-                width: `${(genProgress.completed / genProgress.total) * 100}%`,
-                transition: "width 0.3s ease",
-              }} />
-            </div>
-          </div>
-        )}
-
-        {/* Content area */}
-        <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
-          {/* Upload phase */}
-          {phase === "upload" && (
-            <div>
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-                onDragLeave={() => setIsDragOver(false)}
-                onDrop={(e) => { setIsDragOver(false); const f = getImageFileFromDrop(e); if (f) handleFileSelected(f); }}
-                style={{
-                  width: "100%", aspectRatio: "3/4", background: isDragOver ? "#f0f0ff" : "#F3F2F0",
-                  borderRadius: 16, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                  cursor: "pointer", border: isDragOver ? "2px dashed #667eea" : "2px dashed rgba(0,0,0,0.08)",
-                  transition: "all 0.15s ease", gap: 8, position: "relative",
-                }}
-              >
-                {isUploading ? (
-                  <>
-                    <div style={{
-                      width: 36, height: 36, border: "3px solid #eee", borderTopColor: "#1A1A1A",
-                      borderRadius: "50%", animation: "spin 0.8s linear infinite",
-                    }} />
-                    <span style={{ fontSize: 14, color: "#888", fontFamily: "'DM Sans', sans-serif" }}>Uploading...</span>
-                  </>
-                ) : previewUrl ? (
-                  <img src={previewUrl} alt="Preview" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 14 }} />
-                ) : (
-                  <>
-                    <span style={{ fontSize: 36 }}>📸</span>
-                    <span style={{ fontSize: 14, color: "#888", fontFamily: "'DM Sans', sans-serif", fontWeight: 500, textAlign: "center", padding: "0 20px" }}>
-                      Upload a photo of yourself wearing an outfit
-                    </span>
-                    <span style={{ fontSize: 12, color: "#bbb", fontFamily: "'DM Sans', sans-serif" }}>
-                      Tap or drop a photo
-                    </span>
-                  </>
-                )}
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={(e) => { const f = e.target.files[0]; if (f) handleFileSelected(f); e.target.value = ""; }}
-              />
-              {uploadError && (
-                <div style={{ color: "#c0392b", fontSize: 13, marginTop: 8, fontFamily: "'DM Sans', sans-serif" }}>{uploadError}</div>
-              )}
-              {analysisError && (
-                <div style={{ color: "#c0392b", fontSize: 13, marginTop: 8, fontFamily: "'DM Sans', sans-serif" }}>{analysisError}</div>
-              )}
-            </div>
-          )}
-
-          {/* Analyzing phase */}
-          {phase === "analyzing" && (
-            <div style={{ position: "relative" }}>
-              {previewUrl && (
-                <img src={previewUrl} alt="Outfit" style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover", borderRadius: 16, opacity: 0.5 }} />
-              )}
-              <div style={{
-                position: "absolute", inset: 0, display: "flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "center", gap: 12,
-              }}>
-                <div style={{
-                  width: 36, height: 36, border: "3px solid #eee", borderTopColor: "#1A1A1A",
-                  borderRadius: "50%", animation: "spin 0.8s linear infinite",
-                }} />
-                <span style={{ fontSize: 14, color: "#1A1A1A", fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>
-                  Identifying items in your outfit...
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Review phase — item grid */}
-          {phase === "review" && (
-            <div className="item-card-grid" style={{ gap: 12 }}>
-              {items.map((item) => {
-                if (item.removed) return null;
-                const isEditing = editingId === item.id;
-
-                return (
-                  <div key={item.id} style={{
-                    borderRadius: "var(--card-border-radius)", overflow: "hidden", background: "#fff",
-                    border: "1px solid rgba(0,0,0,0.06)", position: "relative",
-                  }}>
-                    {/* Image area */}
-                    <div style={{
-                      width: "100%", aspectRatio: "1/1", background: "#F3F2F0", position: "relative",
-                      display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
-                    }}>
-                      {item.imageStatus === "ready" && item.imageUrl ? (
-                        <img src={item.imageUrl} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                      ) : item.imageStatus === "error" ? (
-                        <div style={{ textAlign: "center" }}>
-                          <div style={{ fontSize: 32 }}>{item.emoji}</div>
-                          <div style={{ fontSize: 10, color: "#c0392b", fontFamily: "'DM Sans', sans-serif", marginTop: 4 }}>Image failed</div>
-                        </div>
-                      ) : (
-                        <div style={{
-                          width: "100%", height: "100%",
-                          background: "linear-gradient(90deg, #F3F2F0 25%, #E8E7E5 50%, #F3F2F0 75%)",
-                          backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite",
-                        }} />
-                      )}
-
-                      {/* Remove button */}
-                      <button
-                        onClick={() => setItems(prev => prev.map(i => i.id === item.id ? { ...i, removed: true } : i))}
-                        style={{
-                          position: "absolute", top: 6, right: 6, width: 24, height: 24, borderRadius: 12,
-                          background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", fontSize: 12,
-                          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                        }}
-                      >✕</button>
-                    </div>
-
-                    {/* Info area */}
-                    <div style={{ padding: 10 }}>
-                      {isEditing ? (
-                        <div>
-                          <input
-                            type="text" value={editName}
-                            onChange={(e) => setEditName(e.target.value)}
-                            style={{
-                              width: "100%", padding: "6px 8px", borderRadius: 8,
-                              border: "1px solid rgba(0,0,0,0.12)", fontSize: 13,
-                              fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box",
-                            }}
-                          />
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
-                            {CATEGORIES.map((cat) => (
-                              <button
-                                key={cat}
-                                onClick={() => setEditCategory(cat)}
-                                style={{
-                                  height: 26, padding: "0 10px", borderRadius: 13, fontSize: 11,
-                                  fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
-                                  border: editCategory === cat ? "none" : "1px solid rgba(0,0,0,0.08)",
-                                  background: editCategory === cat ? "#1A1A1A" : "#fff",
-                                  color: editCategory === cat ? "#fff" : "#555",
-                                  cursor: "pointer",
-                                }}
-                              >{cat}</button>
-                            ))}
-                          </div>
-                          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                            <button
-                              onClick={saveEdit}
-                              style={{
-                                flex: 1, height: 30, borderRadius: 8, border: "none",
-                                background: "#1A1A1A", color: "#fff", fontSize: 12,
-                                fontFamily: "'DM Sans', sans-serif", fontWeight: 600, cursor: "pointer",
-                              }}
-                            >Save</button>
-                            <button
-                              onClick={() => setEditingId(null)}
-                              style={{
-                                flex: 1, height: 30, borderRadius: 8,
-                                border: "1px solid rgba(0,0,0,0.08)", background: "#fff",
-                                color: "#555", fontSize: 12, fontFamily: "'DM Sans', sans-serif",
-                                fontWeight: 500, cursor: "pointer",
-                              }}
-                            >Cancel</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div onClick={() => startEdit(item)} style={{ cursor: "pointer" }}>
-                          <div style={{
-                            fontSize: 10, fontWeight: 600, textTransform: "uppercase",
-                            letterSpacing: "0.06em", color: "#aaa",
-                            fontFamily: "'DM Sans', sans-serif",
-                          }}>{CATEGORY_TO_LABEL[item.category] || item.category}</div>
-                          <div style={{
-                            fontSize: 13, fontWeight: 500, color: "#1A1A1A",
-                            fontFamily: "'DM Sans', sans-serif", marginTop: 2,
-                            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                          }}>{item.name}</div>
-                          <div style={{
-                            fontSize: 10, color: "#bbb", fontFamily: "'DM Sans', sans-serif", marginTop: 4,
-                          }}>Tap to edit</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Bottom action bar */}
-        {phase === "review" && (
-          <div style={{
-            padding: "12px 20px calc(12px + var(--safe-bottom))", flexShrink: 0,
-            borderTop: "1px solid rgba(0,0,0,0.06)",
-          }}>
-            <button
-              onClick={handleImport}
-              disabled={activeItems.length === 0}
-              style={{
-                width: "100%", height: 48, borderRadius: 14, border: "none",
-                background: activeItems.length > 0 ? "#1A1A1A" : "#EEEDEB",
-                color: activeItems.length > 0 ? "#fff" : "#ccc",
-                fontSize: 15, fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
-                cursor: activeItems.length > 0 ? "pointer" : "not-allowed",
-                transition: "all 0.15s ease",
-              }}
-              onPointerDown={(e) => { if (activeItems.length > 0) e.currentTarget.style.transform = "scale(0.97)"; }}
-              onPointerUp={(e) => e.currentTarget.style.transform = "scale(1)"}
-              onPointerLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
-            >
-              Add {activeItems.length} item{activeItems.length !== 1 ? "s" : ""} to Wardrobe
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisualizeClick, onViewVisualization }) {
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
@@ -2101,7 +2092,7 @@ function OutfitEmptyState({ onSwitchToChat }) {
   );
 }
 
-function WardrobeView({ wardrobeItems, onItemClick, onAddItemClick, onImportFromPhoto }) {
+function WardrobeView({ wardrobeItems, onItemClick, onAddItemClick }) {
   const [activeFilter, setActiveFilter] = useState("All");
 
   const categories = ["All", ...Object.keys(wardrobeItems)];
@@ -2159,7 +2150,25 @@ function WardrobeView({ wardrobeItems, onItemClick, onAddItemClick, onImportFrom
           padding: `0 var(--container-padding-x) calc(24px + var(--safe-bottom))`,
         }}
       >
-        {filteredEntries.map(([category, items], sectionIndex) => (
+        {/* Add to Wardrobe button — above category sections */}
+        <div onClick={onAddItemClick} style={{
+          width: "100%", padding: "14px 0", borderRadius: 14,
+          border: "2px dashed rgba(0,0,0,0.10)", background: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          gap: 8, cursor: "pointer", transition: "transform 0.15s ease", marginBottom: 8,
+        }}
+          onPointerDown={(e) => e.currentTarget.style.transform = "scale(0.98)"}
+          onPointerUp={(e) => e.currentTarget.style.transform = "scale(1)"}
+          onPointerLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+        >
+          <span style={{ fontSize: 18, color: "#bbb" }}>+</span>
+          <span style={{ fontSize: "var(--font-body)", color: "#999",
+            fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>
+            Add to Wardrobe
+          </span>
+        </div>
+
+        {filteredEntries.map(([category, items]) => (
           <div key={category} style={{ marginBottom: 24 }}>
             {activeFilter === "All" && (
               <div style={{
@@ -2178,55 +2187,6 @@ function WardrobeView({ wardrobeItems, onItemClick, onAddItemClick, onImportFrom
               </div>
             )}
             <div className="item-card-grid">
-              {sectionIndex === 0 && (
-                <>
-                  <AddItemCard onClick={onAddItemClick} />
-                  <div
-                    onClick={onImportFromPhoto}
-                    style={{
-                      borderRadius: "var(--card-border-radius)",
-                      overflow: "hidden",
-                      background: "#fff",
-                      border: "2px dashed rgba(0,0,0,0.10)",
-                      cursor: "pointer",
-                      transition: "transform 0.15s ease",
-                      display: "flex",
-                      flexDirection: "column",
-                    }}
-                    onPointerDown={(e) => e.currentTarget.style.transform = "scale(0.98)"}
-                    onPointerUp={(e) => e.currentTarget.style.transform = "scale(1)"}
-                    onPointerLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
-                  >
-                    <div style={{
-                      width: "100%",
-                      height: "var(--card-image-height)",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 8,
-                    }}>
-                      <div style={{
-                        width: 40, height: 40, borderRadius: 20, background: "#F3F2F0",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 20,
-                      }}>
-                        📸
-                      </div>
-                      <span style={{
-                        fontSize: "var(--font-body)", color: "#bbb",
-                        fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
-                        textAlign: "center", padding: "0 8px",
-                      }}>
-                        Import Outfit
-                      </span>
-                    </div>
-                    <div style={{ padding: "var(--space-card-padding)", visibility: "hidden" }}>
-                      <span style={{ fontSize: "var(--font-item-name)" }}>&nbsp;</span>
-                    </div>
-                  </div>
-                </>
-              )}
               {items.map((item, i) => (
                 <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />
               ))}
@@ -2239,6 +2199,15 @@ function WardrobeView({ wardrobeItems, onItemClick, onAddItemClick, onImportFrom
 }
 
 function TypingIndicator() {
+  const [messageIndex, setMessageIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMessageIndex(prev => (prev + 1) % TYPING_MESSAGES.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div style={{
       alignSelf: 'flex-start',
@@ -2252,19 +2221,20 @@ function TypingIndicator() {
         boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
         display: 'flex',
         alignItems: 'center',
-        gap: 6,
+        gap: 8,
         minHeight: 48,
       }}>
         <div style={{
           display: 'flex',
           gap: 4,
+          flexShrink: 0,
         }}>
           {[0, 1, 2].map(i => (
             <div
               key={i}
               style={{
-                width: 8,
-                height: 8,
+                width: 6,
+                height: 6,
                 borderRadius: '50%',
                 background: '#999',
                 animation: `typingDot 1.4s infinite ease-in-out`,
@@ -2273,6 +2243,17 @@ function TypingIndicator() {
             />
           ))}
         </div>
+        <span
+          key={messageIndex}
+          style={{
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: 14,
+            color: '#999',
+            animation: 'fadeInUp 0.3s ease',
+          }}
+        >
+          {TYPING_MESSAGES[messageIndex]}
+        </span>
       </div>
     </div>
   );
@@ -2419,14 +2400,14 @@ function ChatView({
                 Set location for weather-aware outfits
               </button>
             ) : null}
-            <span style={{ fontSize: 40 }}>🪞</span>
+            <span style={{ fontSize: 40 }}>{getGreeting().emoji}</span>
             <span style={{
               fontSize: "var(--font-title)",
               fontFamily: "'Instrument Serif', serif",
               fontWeight: 400,
               color: "#1A1A1A",
             }}>
-              What are we styling?
+              {getGreeting().text}
             </span>
             <span style={{
               fontSize: "var(--font-body)",
@@ -4341,7 +4322,6 @@ export default function OutfitRecommendations() {
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
   const [pendingImage, setPendingImage] = useState(null);
   const [addItemModalOpen, setAddItemModalOpen] = useState(false);
-  const [importPhotoModalOpen, setImportPhotoModalOpen] = useState(false);
   const [wardrobeItems, setWardrobeItems] = useState({});
   const [wardrobeFlat, setWardrobeFlat] = useState([]);
   const [chatHistory, setChatHistory] = useState([]);
@@ -4567,7 +4547,6 @@ export default function OutfitRecommendations() {
       setWardrobeItems(grouped);
       setWardrobeFlat(flat);
       setAddItemModalOpen(false);
-      setImportPhotoModalOpen(false);
     } catch (err) {
       console.error("Failed to bulk add wardrobe items:", err);
     }
@@ -5224,12 +5203,6 @@ export default function OutfitRecommendations() {
           onBulkAdd={handleBulkAddItems}
         />
       )}
-      {importPhotoModalOpen && (
-        <ImportFromPhotoModal
-          onClose={() => setImportPhotoModalOpen(false)}
-          onBulkAdd={handleBulkAddItems}
-        />
-      )}
       {vizModalOutfitId && vizGenerations[vizModalOutfitId] && (
         <OutfitVisualizationModal
           poses={vizGenerations[vizModalOutfitId].poses}
@@ -5385,7 +5358,6 @@ export default function OutfitRecommendations() {
           wardrobeItems={wardrobeItems}
           onItemClick={(item) => setLightboxItem(item)}
           onAddItemClick={() => setAddItemModalOpen(true)}
-          onImportFromPhoto={() => setImportPhotoModalOpen(true)}
         />
       ) : view === "outfit" ? (
         outfits.length > 0 ? (
