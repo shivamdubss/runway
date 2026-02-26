@@ -3057,20 +3057,44 @@ function StylePreferencesCard({ profile, onSave }) {
 function LocationCard({ profile, onSave }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(profile.location?.city || "");
+  const [isValidating, setIsValidating] = useState(false);
+  const [error, setError] = useState(null);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const city = draft.trim();
-    onSave({
-      ...profile,
-      location: city ? { city, source: "manual" } : null,
-      lastUpdated: new Date().toISOString(),
-    });
-    setIsEditing(false);
+    if (!city) {
+      onSave({ ...profile, location: null, lastUpdated: new Date().toISOString() });
+      setIsEditing(false);
+      setError(null);
+      return;
+    }
+
+    setIsValidating(true);
+    setError(null);
+    try {
+      const weather = await fetchWeatherForDisplay(city);
+      if (!weather) {
+        setError("Couldn't find that city. Try a different spelling or a nearby larger city.");
+        setIsValidating(false);
+        return;
+      }
+      onSave({
+        ...profile,
+        location: { city: weather.city, source: "manual" },
+        lastUpdated: new Date().toISOString(),
+      });
+      setIsEditing(false);
+    } catch {
+      setError("Couldn't verify city. Check your connection and try again.");
+    } finally {
+      setIsValidating(false);
+    }
   };
 
   const handleCancel = () => {
     setDraft(profile.location?.city || "");
     setIsEditing(false);
+    setError(null);
   };
 
   if (isEditing) {
@@ -3108,32 +3132,47 @@ function LocationCard({ profile, onSave }) {
           <input
             type="text"
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => { setDraft(e.target.value); setError(null); }}
             placeholder="e.g., New York"
+            disabled={isValidating}
             style={{
               width: "100%",
               padding: "12px 16px",
               borderRadius: 8,
-              border: "2px solid #E5E5E5",
+              border: `2px solid ${error ? "#D32F2F" : "#E5E5E5"}`,
               fontSize: "var(--font-body)",
               fontFamily: "'DM Sans', sans-serif",
               outline: "none",
+              opacity: isValidating ? 0.6 : 1,
             }}
           />
-          <span style={{
-            display: "block",
-            fontSize: "var(--font-caption)",
-            color: "#999",
-            marginTop: 6,
-            fontFamily: "'DM Sans', sans-serif",
-          }}>
-            Used to give you weather-aware outfit recommendations.
-          </span>
+          {error ? (
+            <span style={{
+              display: "block",
+              fontSize: "var(--font-caption)",
+              color: "#D32F2F",
+              marginTop: 6,
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              {error}
+            </span>
+          ) : (
+            <span style={{
+              display: "block",
+              fontSize: "var(--font-caption)",
+              color: "#999",
+              marginTop: 6,
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              Used to give you weather-aware outfit recommendations.
+            </span>
+          )}
         </div>
 
         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
           <button
             onClick={handleCancel}
+            disabled={isValidating}
             style={{
               flex: 1,
               padding: "10px 16px",
@@ -3143,7 +3182,7 @@ function LocationCard({ profile, onSave }) {
               color: "#666",
               fontSize: "var(--font-caption)",
               fontWeight: 600,
-              cursor: "pointer",
+              cursor: isValidating ? "not-allowed" : "pointer",
               fontFamily: "'DM Sans', sans-serif",
             }}
           >
@@ -3151,20 +3190,21 @@ function LocationCard({ profile, onSave }) {
           </button>
           <button
             onClick={handleSave}
+            disabled={isValidating}
             style={{
               flex: 1,
               padding: "10px 16px",
               borderRadius: 8,
               border: "none",
-              background: "#1A1A1A",
+              background: isValidating ? "#999" : "#1A1A1A",
               color: "#fff",
               fontSize: "var(--font-caption)",
               fontWeight: 600,
-              cursor: "pointer",
+              cursor: isValidating ? "not-allowed" : "pointer",
               fontFamily: "'DM Sans', sans-serif",
             }}
           >
-            Save
+            {isValidating ? "Verifying..." : "Save"}
           </button>
         </div>
       </div>

@@ -35,3 +35,7 @@ When mocking browser APIs (localStorage, fetch), use `vi.stubGlobal()`. When moc
 - `npm run build` — Production build
 - `npm test` — Run all tests
 - `npm run test:watch` — Tests in watch mode
+
+## Allowed auto-run commands
+
+- `npm test 2>&1`
