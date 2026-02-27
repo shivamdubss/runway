@@ -287,6 +287,49 @@ export async function fetchOutfitsForChat(chatId) {
       id: outfit.id,
       vibe: outfit.vibe,
       reasoning: outfit.reasoning,
+      saved: outfit.saved,
+      visualizationUrl: outfit.visualization_url || null,
+      visualizationUrls: outfit.visualization_urls || (outfit.visualization_url ? { front: outfit.visualization_url } : null),
+      items: (junctionRows || []).map(jr => toFrontendItem(jr.wardrobe_items)),
+    });
+  }
+  return results;
+}
+
+export async function toggleOutfitSaved(outfitId, currentSaved) {
+  const { data, error } = await supabase
+    .from('outfits')
+    .update({ saved: !currentSaved })
+    .eq('id', outfitId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchSavedOutfits() {
+  const { data: outfitRows, error: outfitErr } = await supabase
+    .from('outfits')
+    .select('*')
+    .eq('saved', true)
+    .order('created_at', { ascending: false });
+  if (outfitErr) throw outfitErr;
+  if (!outfitRows || !outfitRows.length) return [];
+
+  const results = [];
+  for (const outfit of outfitRows) {
+    const { data: junctionRows, error: jErr } = await supabase
+      .from('outfit_items')
+      .select('position, wardrobe_items(*)')
+      .eq('outfit_id', outfit.id)
+      .order('position', { ascending: true });
+    if (jErr) throw jErr;
+
+    results.push({
+      id: outfit.id,
+      vibe: outfit.vibe,
+      reasoning: outfit.reasoning,
+      saved: outfit.saved,
       visualizationUrl: outfit.visualization_url || null,
       visualizationUrls: outfit.visualization_urls || (outfit.visualization_url ? { front: outfit.visualization_url } : null),
       items: (junctionRows || []).map(jr => toFrontendItem(jr.wardrobe_items)),

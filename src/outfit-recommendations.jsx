@@ -2005,17 +2005,25 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
 }
 
 
-function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisualizeClick, onViewVisualization, onShare }) {
+function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisualizeClick, onViewVisualization, onShare, onToggleSaved }) {
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
   const [shareState, setShareState] = useState('idle'); // 'idle' | 'loading' | 'copied'
+  const [showToast, setShowToast] = useState(false);
 
   const handleShare = async () => {
     if (shareState === 'loading') return;
     setShareState('loading');
     try {
-      await onShare(outfit.id);
-      setShareState('copied');
-      setTimeout(() => setShareState('idle'), 2000);
+      const result = await onShare(outfit.id);
+      if (result === 'copied') {
+        setShareState('copied');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 2500);
+        setTimeout(() => setShareState('idle'), 2500);
+      } else {
+        // navigator.share was used (or some other share method)
+        setShareState('idle');
+      }
     } catch (e) {
       console.error('Share failed:', e);
       setShareState('idle');
@@ -2028,7 +2036,31 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
       flexShrink: 0,
       padding: `0 var(--container-padding-x)`,
       boxSizing: "border-box",
+      position: "relative",
     }}>
+      {/* Toast notification */}
+      {showToast && (
+        <div style={{
+          position: "absolute",
+          top: -44,
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: "#1A1A1A",
+          color: "#fff",
+          padding: "8px 16px",
+          borderRadius: 10,
+          fontSize: 13,
+          fontWeight: 500,
+          fontFamily: "'DM Sans', sans-serif",
+          whiteSpace: "nowrap",
+          zIndex: 100,
+          animation: "fadeInUp 0.2s ease",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        }}>
+          Link copied to clipboard
+        </div>
+      )}
+
       <div style={{
         display: "flex",
         gap: 8,
@@ -2083,13 +2115,41 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
           )}
         </div>
         <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSaved(outfit.id, outfit.saved);
+          }}
+          style={{
+            width: 44,
+            flexShrink: 0,
+            alignSelf: "stretch",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: outfit.saved ? "rgba(0,0,0,0.04)" : "transparent",
+            border: "1px solid rgba(0,0,0,0.1)",
+            borderRadius: 12,
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+            padding: 0,
+          }}
+          title={outfit.saved ? "Unsave outfit" : "Save outfit"}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24"
+            fill={outfit.saved ? "#1A1A1A" : "none"}
+            stroke={outfit.saved ? "#1A1A1A" : "#666"}
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+          </svg>
+        </button>
+        <button
           onClick={handleShare}
           disabled={shareState === 'loading'}
           style={{
             width: 44,
-            height: 44,
             flexShrink: 0,
-            alignSelf: "flex-start",
+            alignSelf: "stretch",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -2355,6 +2415,93 @@ function WardrobeView({ wardrobeItems, onItemClick, onAddItemClick }) {
             )}
             <div className="item-card-grid">
               {items.map((item, i) => (
+                <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SavedOutfitsView({ savedOutfits, onItemClick, onToggleSaved }) {
+  if (savedOutfits.length === 0) {
+    return (
+      <div style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "40px 24px",
+        textAlign: "center",
+      }}>
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 16 }}>
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+        </svg>
+        <p style={{
+          fontSize: "var(--font-body)",
+          color: "#999",
+          fontFamily: "'DM Sans', sans-serif",
+          lineHeight: 1.5,
+          maxWidth: 260,
+          margin: 0,
+        }}>
+          No saved outfits yet. Tap the bookmark icon on any outfit to save it here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div
+        className="outfit-scroll-panel"
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: `0 var(--container-padding-x) calc(24px + var(--safe-bottom))`,
+        }}
+      >
+        {savedOutfits.map((outfit) => (
+          <div key={outfit.id} style={{ marginBottom: 24 }}>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 10,
+            }}>
+              <span style={{
+                fontSize: "var(--font-body)",
+                fontWeight: 600,
+                color: "#1A1A1A",
+                fontFamily: "'DM Sans', sans-serif",
+              }}>
+                {outfit.vibe}
+              </span>
+              <button
+                onClick={() => onToggleSaved(outfit.id, true)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 4,
+                  display: "flex",
+                  alignItems: "center",
+                }}
+                title="Unsave outfit"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24"
+                  fill="#1A1A1A" stroke="#1A1A1A"
+                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                >
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                </svg>
+              </button>
+            </div>
+            <div className="item-card-grid">
+              {outfit.items.map((item, i) => (
                 <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />
               ))}
             </div>
@@ -4360,7 +4507,7 @@ function ProfileView({ profile, onSave }) {
   );
 }
 
-function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, chatHistory, onSelectChat, onToggleStar, onDeleteChat, onSignOut }) {
+function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, onOpenSaved, savedCount, chatHistory, onSelectChat, onToggleStar, onDeleteChat, onSignOut }) {
   const starredChats = chatHistory.filter((c) => c.starred);
   const recentChats = chatHistory.filter((c) => !c.starred);
 
@@ -4461,6 +4608,47 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, 
           >
             <span style={{ fontSize: 18 }}>🪞</span>
             Full Wardrobe
+          </button>
+        </div>
+
+        {/* Saved Outfits */}
+        <div style={{ padding: "0 16px 8px" }}>
+          <button
+            onClick={onOpenSaved}
+            style={{
+              width: "100%",
+              height: 44,
+              borderRadius: 12,
+              border: "1px solid rgba(0,0,0,0.08)",
+              background: "#fff",
+              color: "#1A1A1A",
+              fontSize: "var(--font-body)",
+              fontWeight: 600,
+              fontFamily: "'DM Sans', sans-serif",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              transition: "background 0.15s ease",
+            }}
+            onPointerDown={(e) => e.currentTarget.style.background = "#F3F2F0"}
+            onPointerUp={(e) => e.currentTarget.style.background = "#fff"}
+            onPointerLeave={(e) => e.currentTarget.style.background = "#fff"}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+            </svg>
+            Saved Outfits
+            {savedCount > 0 && (
+              <span style={{
+                fontSize: "var(--font-caption)",
+                color: "#999",
+                fontWeight: 400,
+              }}>
+                {savedCount}
+              </span>
+            )}
           </button>
         </div>
 
@@ -4599,6 +4787,7 @@ export default function OutfitRecommendations() {
   const [vizGenerations, setVizGenerations] = useState({});
   const [vizModalOutfitId, setVizModalOutfitId] = useState(null);
   const [weather, setWeather] = useState(null);
+  const [savedOutfits, setSavedOutfits] = useState([]);
   const chatSessionRef = useRef(0);
   const streamAbortRef = useRef(null);
 
@@ -4653,15 +4842,17 @@ export default function OutfitRecommendations() {
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const [grouped, flat, chats, dbProfile] = await Promise.all([
+        const [grouped, flat, chats, dbProfile, saved] = await Promise.all([
           db.fetchWardrobeItems(),
           db.fetchWardrobeItemsFlat(),
           db.fetchChats(),
           db.fetchProfile(),
+          db.fetchSavedOutfits(),
         ]);
         setWardrobeItems(grouped);
         setWardrobeFlat(flat);
         setChatHistory(chats);
+        setSavedOutfits(saved);
 
         if (dbProfile && Object.keys(dbProfile).length > 0) {
           setProfile(prev => ({ ...prev, ...dbProfile }));
@@ -5226,6 +5417,23 @@ export default function OutfitRecommendations() {
     }
   }, []);
 
+  const handleToggleOutfitSaved = useCallback(async (outfitId, currentSaved) => {
+    try {
+      await db.toggleOutfitSaved(outfitId, currentSaved);
+      setOutfits(prev => prev.map(o =>
+        o.id === outfitId ? { ...o, saved: !currentSaved } : o
+      ));
+      if (currentSaved) {
+        setSavedOutfits(prev => prev.filter(o => o.id !== outfitId));
+      } else {
+        const saved = await db.fetchSavedOutfits();
+        setSavedOutfits(saved);
+      }
+    } catch (err) {
+      console.error("Failed to toggle outfit saved:", err);
+    }
+  }, []);
+
   const handleDeleteChat = useCallback(async (chatId) => {
     try {
       await db.deleteChat(chatId);
@@ -5321,6 +5529,8 @@ export default function OutfitRecommendations() {
         onNewChat={handleNewChat}
         onOpenWardrobe={() => { setView("wardrobe"); setSidePanelOpen(false); }}
         onOpenProfile={() => { setView("profile"); setSidePanelOpen(false); }}
+        onOpenSaved={() => { setView("saved"); setSidePanelOpen(false); }}
+        savedCount={savedOutfits.length}
         chatHistory={chatHistory}
         onSelectChat={handleSelectChat}
         onToggleStar={handleToggleStar}
@@ -5372,10 +5582,10 @@ export default function OutfitRecommendations() {
             lineHeight: 1.1,
             flex: 1,
           }}>
-            {view === "wardrobe" ? "My Wardrobe" : view === "outfit" ? (outfits.length > 0 ? outfits[current].vibe : "Outfits") : view === "profile" ? "My Profile" : "Chat"}
+            {view === "wardrobe" ? "My Wardrobe" : view === "saved" ? "Saved Outfits" : view === "outfit" ? (outfits.length > 0 ? outfits[current].vibe : "Outfits") : view === "profile" ? "My Profile" : "Chat"}
           </h1>
 
-          {view !== "wardrobe" && view !== "profile" && (
+          {view !== "wardrobe" && view !== "profile" && view !== "saved" && (
             <div style={{
               display: "flex",
               background: "#F0EFED",
@@ -5504,13 +5714,33 @@ export default function OutfitRecommendations() {
                     onVisualizeClick={handleVisualizeOutfit}
                     onViewVisualization={(outfitId) => setVizModalOutfitId(outfitId)}
                     onShare={async (outfitId) => {
-                      const { shareUrl } = await shareOutfit(outfitId);
+                      const { shareToken } = await shareOutfit(outfitId);
+                      const shareUrl = `${window.location.origin}/s/${shareToken}`;
                       if (navigator.share) {
-                        await navigator.share({ title: 'Check out this outfit on Runway', url: shareUrl });
-                      } else {
-                        await navigator.clipboard.writeText(shareUrl);
+                        try {
+                          await navigator.share({ title: 'Check out this outfit on Runway', url: shareUrl });
+                          return 'shared';
+                        } catch (e) {
+                          if (e.name === 'AbortError') return 'shared'; // user cancelled
+                          // Fall through to clipboard
+                        }
                       }
+                      try {
+                        await navigator.clipboard.writeText(shareUrl);
+                      } catch {
+                        // Fallback for non-secure contexts
+                        const ta = document.createElement('textarea');
+                        ta.value = shareUrl;
+                        ta.style.position = 'fixed';
+                        ta.style.opacity = '0';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                      }
+                      return 'copied';
                     }}
+                    onToggleSaved={handleToggleOutfitSaved}
                   />
                 </div>
               ))}
@@ -5519,6 +5749,12 @@ export default function OutfitRecommendations() {
         ) : (
           <OutfitEmptyState onSwitchToChat={() => setView("chat")} />
         )
+      ) : view === "saved" ? (
+        <SavedOutfitsView
+          savedOutfits={savedOutfits}
+          onItemClick={(item) => setLightboxItem(item)}
+          onToggleSaved={handleToggleOutfitSaved}
+        />
       ) : view === "profile" ? (
         <ProfileView
           profile={profile}
