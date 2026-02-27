@@ -198,3 +198,25 @@ export function sendChatMessageStreaming({
     controller.abort();
   };
 }
+
+/**
+ * Generate a public share link for an outfit.
+ *
+ * @param {string} outfitId - The outfit UUID to share
+ * @returns {Promise<{shareToken: string, shareUrl: string}>}
+ */
+export async function shareOutfit(outfitId) {
+  const headers = await getAuthHeaders();
+  const response = await fetch('/api/share', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ outfitId }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Request failed with status ${response.status}`);
+  }
+
+  return response.json();
+}

@@ -76,12 +76,14 @@ CREATE TABLE outfits (
   vibe          TEXT NOT NULL,
   reasoning     TEXT,
   visualization_url TEXT,
+  share_token   TEXT UNIQUE,
   user_id       UUID DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_outfits_chat_id ON outfits (chat_id);
 CREATE INDEX idx_outfits_user_id ON outfits (user_id);
+CREATE UNIQUE INDEX idx_outfits_share_token ON outfits (share_token) WHERE share_token IS NOT NULL;
 
 -- ============================================================
 -- Table: outfit_items (junction table)

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { sendChatMessageStreaming } from "./lib/api";
+import { sendChatMessageStreaming, shareOutfit } from "./lib/api";
 import { uploadImage } from "./lib/upload";
 import { analyzeImage } from "./lib/analyze";
 import { analyzeOutfitPhoto, generateItemImage } from "./lib/import-from-photo";
@@ -170,11 +170,14 @@ function Lightbox({ item, onClose, onDelete, onEdit }) {
           position: "relative",
           width: "100%",
           maxWidth: "var(--lightbox-max-width)",
+          maxHeight: "calc(100dvh - 2 * var(--space-lightbox-padding))",
           borderRadius: 24,
           overflow: "hidden",
           background: "#fff",
           boxShadow: "0 24px 80px rgba(0,0,0,0.3)",
           animation: "scaleIn 0.25s ease",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         <button
@@ -202,6 +205,7 @@ function Lightbox({ item, onClose, onDelete, onEdit }) {
         <div style={{
           width: "100%",
           aspectRatio: "3 / 4",
+          maxHeight: "min(60dvh, calc(100dvh - 2 * var(--space-lightbox-padding) - 200px))",
           background: "#F3F2F0",
           display: "flex",
           alignItems: "center",
@@ -209,6 +213,7 @@ function Lightbox({ item, onClose, onDelete, onEdit }) {
           fontSize: "var(--font-lightbox-emoji)",
           overflow: "hidden",
           position: "relative",
+          flexShrink: 1,
         }}>
           {images.length > 0 ? (
             <>
@@ -268,7 +273,7 @@ function Lightbox({ item, onClose, onDelete, onEdit }) {
             <span>{item.emoji}</span>
           )}
         </div>
-        <div style={{ padding: "16px var(--container-padding-x) var(--container-padding-x)" }}>
+        <div style={{ padding: "16px var(--container-padding-x) var(--container-padding-x)", flexShrink: 0, overflowY: "auto" }}>
           {isEditing ? (
             <>
               <div style={{
@@ -2000,8 +2005,22 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
 }
 
 
-function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisualizeClick, onViewVisualization }) {
+function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisualizeClick, onViewVisualization, onShare }) {
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
+  const [shareState, setShareState] = useState('idle'); // 'idle' | 'loading' | 'copied'
+
+  const handleShare = async () => {
+    if (shareState === 'loading') return;
+    setShareState('loading');
+    try {
+      await onShare(outfit.id);
+      setShareState('copied');
+      setTimeout(() => setShareState('idle'), 2000);
+    } catch (e) {
+      console.error('Share failed:', e);
+      setShareState('idle');
+    }
+  };
 
   return (
     <div style={{
@@ -2010,53 +2029,101 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
       padding: `0 var(--container-padding-x)`,
       boxSizing: "border-box",
     }}>
-      <div
-        onClick={() => setReasoningExpanded(!reasoningExpanded)}
-        style={{
-          padding: "14px 16px",
-          background: reasoningExpanded ? "rgba(0,0,0,0.02)" : "transparent",
-          borderRadius: 12,
-          border: "1px solid rgba(0,0,0,0.1)",
-          cursor: "pointer",
-          transition: "all 0.25s ease",
-          marginBottom: 16,
-        }}
-      >
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}>
-          <span style={{
-            fontSize: "var(--font-item-name)",
-            fontWeight: 600,
-            color: "#666",
-            fontFamily: "'DM Sans', sans-serif",
+      <div style={{
+        display: "flex",
+        gap: 8,
+        marginBottom: 16,
+      }}>
+        <div
+          onClick={() => setReasoningExpanded(!reasoningExpanded)}
+          style={{
+            flex: 1,
+            padding: "14px 16px",
+            background: reasoningExpanded ? "rgba(0,0,0,0.02)" : "transparent",
+            borderRadius: 12,
+            border: "1px solid rgba(0,0,0,0.1)",
+            cursor: "pointer",
+            transition: "all 0.25s ease",
+          }}
+        >
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
           }}>
-            Why this works
-          </span>
-          <span style={{
-            fontSize: "var(--font-item-name)",
-            color: "#888",
-            transform: reasoningExpanded ? "rotate(180deg)" : "rotate(0deg)",
-            transition: "transform 0.25s ease",
-            display: "inline-block",
-          }}>
-            ▾
-          </span>
+            <span style={{
+              fontSize: "var(--font-item-name)",
+              fontWeight: 600,
+              color: "#666",
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              Why this works
+            </span>
+            <span style={{
+              fontSize: "var(--font-item-name)",
+              color: "#888",
+              transform: reasoningExpanded ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.25s ease",
+              display: "inline-block",
+            }}>
+              ▾
+            </span>
+          </div>
+          {reasoningExpanded && (
+            <p style={{
+              fontSize: "var(--font-reasoning)",
+              lineHeight: 1.55,
+              color: "#777",
+              fontFamily: "'DM Sans', sans-serif",
+              marginTop: 8,
+              marginBottom: 0,
+            }}>
+              {outfit.reasoning}
+            </p>
+          )}
         </div>
-        {reasoningExpanded && (
-          <p style={{
-            fontSize: "var(--font-reasoning)",
-            lineHeight: 1.55,
-            color: "#777",
-            fontFamily: "'DM Sans', sans-serif",
-            marginTop: 8,
-            marginBottom: 0,
-          }}>
-            {outfit.reasoning}
-          </p>
-        )}
+        <button
+          onClick={handleShare}
+          disabled={shareState === 'loading'}
+          style={{
+            width: 44,
+            height: 44,
+            flexShrink: 0,
+            alignSelf: "flex-start",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: shareState === 'copied' ? "rgba(0,0,0,0.04)" : "transparent",
+            border: "1px solid rgba(0,0,0,0.1)",
+            borderRadius: 12,
+            cursor: shareState === 'loading' ? "wait" : "pointer",
+            transition: "all 0.2s ease",
+            padding: 0,
+          }}
+          title={shareState === 'copied' ? "Link copied!" : "Share outfit"}
+        >
+          {shareState === 'copied' ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          ) : shareState === 'loading' ? (
+            <span style={{
+              width: 16,
+              height: 16,
+              borderRadius: "50%",
+              border: "2px solid #D8D8D8",
+              borderTopColor: "#8A8A8A",
+              animation: "spin 0.8s linear infinite",
+              display: "block",
+            }} />
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+              <polyline points="16 6 12 2 8 6" />
+              <line x1="12" y1="2" x2="12" y2="15" />
+            </svg>
+          )}
+        </button>
       </div>
 
       <div className="item-card-grid">
@@ -5436,6 +5503,14 @@ export default function OutfitRecommendations() {
                     vizStatus={vizGenerations[outfit.id]?.status}
                     onVisualizeClick={handleVisualizeOutfit}
                     onViewVisualization={(outfitId) => setVizModalOutfitId(outfitId)}
+                    onShare={async (outfitId) => {
+                      const { shareUrl } = await shareOutfit(outfitId);
+                      if (navigator.share) {
+                        await navigator.share({ title: 'Check out this outfit on Runway', url: shareUrl });
+                      } else {
+                        await navigator.clipboard.writeText(shareUrl);
+                      }
+                    }}
                   />
                 </div>
               ))}
