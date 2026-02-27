@@ -6,7 +6,7 @@ import { analyzeOutfitPhoto, generateItemImage } from "./lib/import-from-photo";
 import * as db from "./lib/db";
 import { generateVisualization, generateMultiPoseVisualization, getCachedVisualization, setCachedVisualization, clearVisualizationCache } from "./lib/visualization";
 import { useAuth } from "./lib/auth";
-import { fetchWeatherForDisplay, weatherIconToEmoji } from "./lib/weather";
+import { fetchWeatherForDisplay, weatherIconToEmoji, searchCities } from "./lib/weather";
 
 // Inject CSS animations for streaming states
 const style = document.createElement('style');
@@ -452,7 +452,7 @@ function VizCarouselSlot({ poseData, loadingMessage }) {
         width: "100%",
         height: 400,
         borderRadius: 16,
-        background: "#F3F2F0",
+        background: "#fff",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -495,7 +495,7 @@ function VizCarouselSlot({ poseData, loadingMessage }) {
         width: "100%",
         height: 400,
         borderRadius: 16,
-        background: "#F3F2F0",
+        background: "#fff",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -527,7 +527,7 @@ function VizCarouselSlot({ poseData, loadingMessage }) {
         objectFit: "contain",
         display: "block",
         borderRadius: 16,
-        background: "#F3F2F0",
+        background: "#fff",
       }}
     />
   );
@@ -850,6 +850,8 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
   const [mode, setMode] = useState("single");
 
   // --- Single-item state ---
+  const [phase, setPhase] = useState("capture"); // "capture" | "analyzing" | "confirm"
+  const [isEditingName, setIsEditingName] = useState(false);
   const [itemName, setItemName] = useState("");
   const [category, setCategory] = useState("Tops");
   const [images, setImages] = useState([]); // [{previewUrl, uploadedUrl}]
@@ -906,6 +908,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
     if (!file) return;
     setAnalysisError(null);
     setUploadError(null);
+    setPhase("analyzing");
 
     const previewUrl = URL.createObjectURL(file);
     setImages([{ previewUrl, uploadedUrl: null }]);
@@ -920,6 +923,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
       setUploadError("Failed to upload image. Please try again.");
       URL.revokeObjectURL(previewUrl);
       setImages([]);
+      setPhase("capture");
       return;
     } finally {
       setIsUploading(false);
@@ -935,9 +939,11 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
       setAiEmoji(result.emoji);
     } catch (err) {
       console.error("Image analysis failed:", err);
-      setAnalysisError("Could not analyze image. You can still add the item manually.");
+      setAnalysisError("Could not analyze image. Add details manually.");
+      setIsEditingName(true);
     } finally {
       setIsAnalyzing(false);
+      setPhase("confirm");
     }
   };
 
@@ -1447,7 +1453,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
                         Upload a photo of yourself wearing an outfit
                       </span>
                       <span style={{ fontSize: 12, color: "#bbb", fontFamily: "'DM Sans', sans-serif" }}>
-                        Tap or drop a photo
+                        Take or choose a photo
                       </span>
                     </>
                   )}
@@ -1631,136 +1637,204 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
   const primaryPreview = images[0]?.previewUrl || null;
   const isWorking = isUploading || isAnalyzing;
 
-  return (
-    <div
+  // Shared modal overlay + card wrapper
+  const modalOverlay = {
+    position: "fixed", inset: 0, zIndex: 100,
+    background: "rgba(0,0,0,0.6)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+    padding: "var(--space-lightbox-padding)", animation: "fadeIn 0.2s ease",
+  };
+  const modalCard = {
+    position: "relative", width: "100%", maxWidth: "var(--lightbox-max-width)",
+    borderRadius: 24, overflow: "hidden", background: "#fff",
+    boxShadow: "0 24px 80px rgba(0,0,0,0.3)", animation: "scaleIn 0.25s ease",
+  };
+
+  // Hidden file inputs (shared across phases)
+  const fileInputs = (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const files = Array.from(e.target.files || []);
+          if (files.length > 1) {
+            handleBulkFilesSelected(files);
+          } else if (files.length === 1) {
+            handleFileSelected(files[0]);
+          }
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={extraFileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleExtraFileSelected(file);
+          e.target.value = "";
+        }}
+      />
+    </>
+  );
+
+  const closeButton = (
+    <button
       onClick={onClose}
       style={{
-        position: "fixed", inset: 0, zIndex: 100,
-        background: "rgba(0,0,0,0.6)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
-        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        padding: "var(--space-lightbox-padding)", animation: "fadeIn 0.2s ease",
+        position: "absolute", top: 12, right: 12, zIndex: 1,
+        width: "var(--lightbox-close-size)", height: "var(--lightbox-close-size)",
+        borderRadius: "calc(var(--lightbox-close-size) / 2)",
+        border: "none", background: "rgba(0,0,0,0.4)", color: "#fff",
+        fontSize: "var(--font-icon)", cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center",
       }}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          position: "relative", width: "100%", maxWidth: "var(--lightbox-max-width)",
-          borderRadius: 24, overflow: "hidden", background: "#fff",
-          boxShadow: "0 24px 80px rgba(0,0,0,0.3)", animation: "scaleIn 0.25s ease",
-        }}
-      >
-        <button
-          onClick={onClose}
-          style={{
-            position: "absolute", top: 12, right: 12, zIndex: 1,
-            width: "var(--lightbox-close-size)", height: "var(--lightbox-close-size)",
-            borderRadius: "calc(var(--lightbox-close-size) / 2)",
-            border: "none", background: "rgba(0,0,0,0.4)", color: "#fff",
-            fontSize: "var(--font-icon)", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-        >
-          ✕
-        </button>
+      ✕
+    </button>
+  );
 
-        {/* Main file input (supports multi-select) */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const files = Array.from(e.target.files || []);
-            if (files.length > 1) {
-              handleBulkFilesSelected(files);
-            } else if (files.length === 1) {
-              handleFileSelected(files[0]);
-            }
-            e.target.value = "";
-          }}
-        />
+  // --- PHASE: Capture ---
+  if (phase === "capture") {
+    return (
+      <div onClick={onClose} style={modalOverlay}>
+        <div onClick={(e) => e.stopPropagation()} style={modalCard}>
+          {closeButton}
+          {fileInputs}
 
-        {/* Extra photo input (single) */}
-        <input
-          ref={extraFileInputRef}
-          type="file"
-          accept="image/*"
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleExtraFileSelected(file);
-            e.target.value = "";
-          }}
-        />
+          {/* Photo area */}
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={(e) => {
+              setIsDragOver(false);
+              const file = getImageFileFromDrop(e);
+              if (file) handleFileSelected(file);
+            }}
+            style={{
+              width: "100%", aspectRatio: "4 / 3",
+              background: isDragOver ? "#E8E6E2" : "#F3F2F0",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", gap: 8, position: "relative", overflow: "hidden",
+              border: isDragOver ? "2px dashed #999" : "2px dashed transparent",
+              transition: "background 0.15s ease, border-color 0.15s ease",
+            }}
+          >
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            <span style={{
+              fontSize: "var(--font-body)", color: "#bbb", fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
+            }}>
+              Take or choose a photo
+            </span>
+            <span style={{
+              fontSize: 12, color: "#ccc", fontFamily: "'DM Sans', sans-serif",
+            }}>
+              Select multiple for bulk add
+            </span>
+          </div>
 
-        <div
-          onClick={() => { if (!primaryPreview) fileInputRef.current?.click(); }}
-          onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-          onDragLeave={() => setIsDragOver(false)}
-          onDrop={(e) => {
-            setIsDragOver(false);
-            const file = getImageFileFromDrop(e);
-            if (file) handleFileSelected(file);
-          }}
-          style={{
+          {/* Upload error */}
+          {uploadError && (
+            <div style={{ padding: "8px var(--container-padding-x)", fontSize: "var(--font-body)", color: "#c0392b", fontFamily: "'DM Sans', sans-serif" }}>
+              {uploadError}
+            </div>
+          )}
+
+          {/* Import from outfit photo — separate card */}
+          <div style={{ padding: "12px var(--container-padding-x) var(--container-padding-x)" }}>
+            <button
+              onClick={() => setMode("import")}
+              style={{
+                width: "100%", padding: "14px 16px", borderRadius: 16,
+                border: "1px solid rgba(0,0,0,0.08)", background: "#F9F8F7",
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 12,
+                transition: "all 0.15s ease", textAlign: "left",
+              }}
+            >
+              <span style={{ fontSize: 24, flexShrink: 0 }}>📸</span>
+              <div>
+                <div style={{
+                  fontSize: "var(--font-body)", fontWeight: 600, color: "#333",
+                  fontFamily: "'DM Sans', sans-serif",
+                }}>
+                  Import from outfit photo
+                </div>
+                <div style={{
+                  fontSize: 12, color: "#999", fontFamily: "'DM Sans', sans-serif", marginTop: 2,
+                }}>
+                  Snap a full outfit, we'll detect each item
+                </div>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- PHASE: Analyzing ---
+  if (phase === "analyzing") {
+    return (
+      <div onClick={onClose} style={modalOverlay}>
+        <div onClick={(e) => e.stopPropagation()} style={modalCard}>
+          {closeButton}
+          {fileInputs}
+
+          <div style={{
             width: "100%", aspectRatio: "4 / 3",
-            background: isDragOver ? "#E8E6E2" : "#F3F2F0",
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            cursor: primaryPreview ? "default" : "pointer",
-            gap: 8, position: "relative", overflow: "hidden",
-            border: isDragOver ? "2px dashed #999" : "2px dashed transparent",
-            transition: "background 0.15s ease, border-color 0.15s ease",
-          }}
-        >
-          {primaryPreview ? (
-            <>
+            position: "relative", overflow: "hidden",
+          }}>
+            {primaryPreview && (
               <img src={primaryPreview} alt="Preview" style={{
                 width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0,
               }} />
-              {isWorking && (
-                <div style={{
-                  position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "#fff", fontSize: "var(--font-body)", fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
-                }}>
-                  {isUploading ? "Uploading..." : "Analyzing..."}
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
-                <circle cx="12" cy="13" r="4"/>
-              </svg>
-              <span style={{
-                fontSize: "var(--font-body)", color: "#bbb", fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
-              }}>
-                Tap or drop photos
-              </span>
-              {/* Divider + import option */}
+            )}
+            <div style={{
+              position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12,
+            }}>
               <div style={{
-                display: "flex", alignItems: "center", gap: 12, width: "70%", marginTop: 8,
+                width: 32, height: 32, borderRadius: 16,
+                border: "3px solid rgba(255,255,255,0.3)", borderTopColor: "#fff",
+                animation: "spin 0.8s linear infinite",
+              }} />
+              <span style={{
+                color: "#fff", fontSize: "var(--font-body)", fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
               }}>
-                <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,0.08)" }} />
-                <span style={{ fontSize: 12, color: "#bbb", fontFamily: "'DM Sans', sans-serif" }}>or</span>
-                <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,0.08)" }} />
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); setMode("import"); }}
-                style={{
-                  marginTop: 4, padding: "8px 18px", borderRadius: 20,
-                  border: "1px solid rgba(0,0,0,0.1)", background: "#fff",
-                  fontSize: 13, fontWeight: 500, fontFamily: "'DM Sans', sans-serif",
-                  color: "#555", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <span style={{ fontSize: 16 }}>📸</span>
-                Import from outfit photo
-              </button>
-            </>
+                {isUploading ? "Uploading..." : "Analyzing..."}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- PHASE: Confirm ---
+  return (
+    <div onClick={onClose} style={modalOverlay}>
+      <div onClick={(e) => e.stopPropagation()} style={modalCard}>
+        {closeButton}
+        {fileInputs}
+
+        {/* Photo preview */}
+        <div style={{
+          width: "100%", aspectRatio: "4 / 3",
+          position: "relative", overflow: "hidden", background: "#F3F2F0",
+        }}>
+          {primaryPreview && (
+            <img src={primaryPreview} alt="Preview" style={{
+              width: "100%", height: "100%", objectFit: "cover",
+            }} />
           )}
         </div>
 
@@ -1791,24 +1865,22 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
                 )}
               </div>
             ))}
-            {/* + Add photo button */}
-            {!isWorking && (
-              <div
-                onClick={() => extraFileInputRef.current?.click()}
-                style={{
-                  width: 48, height: 48, borderRadius: 8, flexShrink: 0,
-                  border: "1px dashed rgba(0,0,0,0.15)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  cursor: "pointer", fontSize: 20, color: "#bbb",
-                }}
-              >
-                +
-              </div>
-            )}
+            <div
+              onClick={() => extraFileInputRef.current?.click()}
+              style={{
+                width: 48, height: 48, borderRadius: 8, flexShrink: 0,
+                border: "1px dashed rgba(0,0,0,0.15)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", fontSize: 20, color: "#bbb",
+              }}
+            >
+              +
+            </div>
           </div>
         )}
 
         <div style={{ padding: "16px var(--container-padding-x) var(--container-padding-x)" }}>
+          {/* Error messages */}
           {uploadError && (
             <div style={{ padding: "8px 0", fontSize: "var(--font-body)", color: "#c0392b", fontFamily: "'DM Sans', sans-serif" }}>
               {uploadError}
@@ -1819,21 +1891,51 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
               {analysisError}
             </div>
           )}
-          <input
-            type="text"
-            value={itemName}
-            onChange={(e) => setItemName(e.target.value)}
-            placeholder="Item name"
-            className="chat-input"
-            style={{
-              width: "100%", height: "var(--input-height)",
-              borderRadius: "calc(var(--input-height) / 2)",
-              border: "1px solid rgba(0,0,0,0.09)", background: "#fff", color: "#333",
-              fontSize: "var(--font-chat)", padding: "0 var(--container-padding-x)",
-              fontFamily: "'DM Sans', sans-serif", marginBottom: 12, boxSizing: "border-box",
-            }}
-          />
 
+          {/* AI result: emoji + name (tap to edit) */}
+          {isEditingName ? (
+            <input
+              type="text"
+              value={itemName}
+              onChange={(e) => setItemName(e.target.value)}
+              onBlur={() => { if (itemName.trim()) setIsEditingName(false); }}
+              autoFocus
+              placeholder="Item name"
+              className="chat-input"
+              style={{
+                width: "100%", height: "var(--input-height)",
+                borderRadius: "calc(var(--input-height) / 2)",
+                border: "1px solid rgba(0,0,0,0.09)", background: "#fff", color: "#333",
+                fontSize: "var(--font-chat)", padding: "0 var(--container-padding-x)",
+                fontFamily: "'DM Sans', sans-serif", marginBottom: 12, boxSizing: "border-box",
+              }}
+            />
+          ) : (
+            <div
+              onClick={() => setIsEditingName(true)}
+              style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "8px 0", marginBottom: 12, cursor: "pointer",
+              }}
+            >
+              {aiEmoji && (
+                <span style={{ fontSize: 24, flexShrink: 0 }}>{aiEmoji}</span>
+              )}
+              <span style={{
+                fontSize: 17, fontWeight: 600, color: "#1A1A1A",
+                fontFamily: "'DM Sans', sans-serif", flex: 1,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {itemName || "Untitled item"}
+              </span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </div>
+          )}
+
+          {/* Category pills */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
             {CATEGORIES.map((cat) => {
               const isActive = category === cat;
@@ -1857,9 +1959,10 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
             })}
           </div>
 
+          {/* Add to Wardrobe button */}
           <button
             onClick={async () => {
-              if (!itemName.trim() || isWorking) return;
+              if (!itemName.trim()) return;
 
               const uploadedImages = images.filter(img => img.uploadedUrl).map(img => img.uploadedUrl);
               onAdd({
@@ -1873,22 +1976,22 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
                 category: category,
               });
             }}
-            disabled={!itemName.trim() || isWorking}
+            disabled={!itemName.trim()}
             style={{
               width: "100%", height: 48, borderRadius: 14, border: "none",
-              background: (itemName.trim() && !isWorking) ? "#1A1A1A" : "#EEEDEB",
-              color: (itemName.trim() && !isWorking) ? "#fff" : "#ccc",
+              background: itemName.trim() ? "#1A1A1A" : "#EEEDEB",
+              color: itemName.trim() ? "#fff" : "#ccc",
               fontSize: "var(--font-body)", fontWeight: 600,
               fontFamily: "'DM Sans', sans-serif",
-              cursor: (itemName.trim() && !isWorking) ? "pointer" : "default",
+              cursor: itemName.trim() ? "pointer" : "default",
               display: "flex", alignItems: "center", justifyContent: "center",
               gap: 8, transition: "all 0.15s ease",
             }}
-            onPointerDown={(e) => { if (itemName.trim() && !isWorking) e.currentTarget.style.transform = "scale(0.97)"; }}
+            onPointerDown={(e) => { if (itemName.trim()) e.currentTarget.style.transform = "scale(0.97)"; }}
             onPointerUp={(e) => e.currentTarget.style.transform = "scale(1)"}
             onPointerLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
           >
-            {isUploading ? "Uploading..." : isAnalyzing ? "Analyzing..." : "Add to Wardrobe"}
+            Add to Wardrobe
           </button>
         </div>
       </div>
@@ -3476,46 +3579,111 @@ function StylePreferencesCard({ profile, onSave }) {
 
 function LocationCard({ profile, onSave }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState(profile.location?.city || "");
-  const [isValidating, setIsValidating] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedCity, setSelectedCity] = useState(null);
   const [error, setError] = useState(null);
+  const debounceRef = useRef(null);
+  const dropdownRef = useRef(null);
 
-  const handleSave = async () => {
-    const city = draft.trim();
-    if (!city) {
+  const displayCity = profile.location?.country
+    ? `${profile.location.city}, ${profile.location.country}`
+    : profile.location?.city || "";
+
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setDraft(value);
+    setSelectedCity(null);
+    setError(null);
+    setHighlightedIndex(-1);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (value.trim().length < 2) {
+      setSuggestions([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      const results = await searchCities(value);
+      setSuggestions(results);
+      setShowDropdown(results.length > 0);
+    }, 300);
+  };
+
+  const handleSelect = (city) => {
+    const display = city.country ? `${city.name}, ${city.country}` : city.name;
+    setDraft(display);
+    setSelectedCity(city);
+    setSuggestions([]);
+    setShowDropdown(false);
+    setError(null);
+  };
+
+  const handleKeyDown = (e) => {
+    if (!showDropdown || suggestions.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex(i => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex(i => Math.max(i - 1, 0));
+    } else if (e.key === "Enter" && highlightedIndex >= 0) {
+      e.preventDefault();
+      handleSelect(suggestions[highlightedIndex]);
+    } else if (e.key === "Escape") {
+      setShowDropdown(false);
+    }
+  };
+
+  const handleSave = () => {
+    if (!draft.trim()) {
       onSave({ ...profile, location: null, lastUpdated: new Date().toISOString() });
       setIsEditing(false);
       setError(null);
       return;
     }
-
-    setIsValidating(true);
-    setError(null);
-    try {
-      const weather = await fetchWeatherForDisplay(city);
-      if (!weather) {
-        setError("Couldn't find that city. Try a different spelling or a nearby larger city.");
-        setIsValidating(false);
-        return;
-      }
-      onSave({
-        ...profile,
-        location: { city: weather.city, source: "manual" },
-        lastUpdated: new Date().toISOString(),
-      });
-      setIsEditing(false);
-    } catch {
-      setError("Couldn't verify city. Check your connection and try again.");
-    } finally {
-      setIsValidating(false);
+    if (!selectedCity) {
+      setError("Please select a city from the suggestions.");
+      return;
     }
+    onSave({
+      ...profile,
+      location: { city: selectedCity.name, country: selectedCity.country, source: "manual" },
+      lastUpdated: new Date().toISOString(),
+    });
+    setIsEditing(false);
   };
 
   const handleCancel = () => {
-    setDraft(profile.location?.city || "");
+    setDraft(displayCity);
+    setSelectedCity(null);
+    setSuggestions([]);
+    setShowDropdown(false);
     setIsEditing(false);
     setError(null);
   };
+
+  const startEditing = () => {
+    setDraft(displayCity);
+    setSelectedCity(profile.location?.city ? { name: profile.location.city, country: profile.location.country || "" } : null);
+    setIsEditing(true);
+  };
+
+  useEffect(() => {
+    if (!showDropdown) return;
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showDropdown]);
 
   if (isEditing) {
     return (
@@ -3536,7 +3704,7 @@ function LocationCard({ profile, onSave }) {
           Location
         </h3>
 
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16, position: "relative" }} ref={dropdownRef}>
           <label style={{
             display: "block",
             fontSize: "var(--font-caption)",
@@ -3552,9 +3720,10 @@ function LocationCard({ profile, onSave }) {
           <input
             type="text"
             value={draft}
-            onChange={(e) => { setDraft(e.target.value); setError(null); }}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
             placeholder="e.g., New York"
-            disabled={isValidating}
+            autoComplete="off"
             style={{
               width: "100%",
               padding: "12px 16px",
@@ -3563,9 +3732,46 @@ function LocationCard({ profile, onSave }) {
               fontSize: "var(--font-body)",
               fontFamily: "'DM Sans', sans-serif",
               outline: "none",
-              opacity: isValidating ? 0.6 : 1,
             }}
           />
+          {showDropdown && suggestions.length > 0 && (
+            <ul style={{
+              position: "absolute",
+              top: "100%",
+              left: 0,
+              right: 0,
+              background: "#fff",
+              border: "1px solid #E5E5E5",
+              borderRadius: 8,
+              marginTop: 4,
+              padding: 0,
+              listStyle: "none",
+              zIndex: 10,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+              overflow: "hidden",
+            }}>
+              {suggestions.map((city, i) => {
+                const label = [city.name, city.admin1, city.country].filter(Boolean).join(", ");
+                return (
+                  <li
+                    key={`${city.name}-${city.admin1}-${city.country}`}
+                    onMouseDown={() => handleSelect(city)}
+                    onMouseEnter={() => setHighlightedIndex(i)}
+                    style={{
+                      padding: "10px 16px",
+                      cursor: "pointer",
+                      fontSize: "var(--font-body)",
+                      fontFamily: "'DM Sans', sans-serif",
+                      background: i === highlightedIndex ? "#F5F5F5" : "#fff",
+                      color: "#333",
+                    }}
+                  >
+                    {label}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
           {error ? (
             <span style={{
               display: "block",
@@ -3592,7 +3798,6 @@ function LocationCard({ profile, onSave }) {
         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
           <button
             onClick={handleCancel}
-            disabled={isValidating}
             style={{
               flex: 1,
               padding: "10px 16px",
@@ -3602,7 +3807,7 @@ function LocationCard({ profile, onSave }) {
               color: "#666",
               fontSize: "var(--font-caption)",
               fontWeight: 600,
-              cursor: isValidating ? "not-allowed" : "pointer",
+              cursor: "pointer",
               fontFamily: "'DM Sans', sans-serif",
             }}
           >
@@ -3610,21 +3815,20 @@ function LocationCard({ profile, onSave }) {
           </button>
           <button
             onClick={handleSave}
-            disabled={isValidating}
             style={{
               flex: 1,
               padding: "10px 16px",
               borderRadius: 8,
               border: "none",
-              background: isValidating ? "#999" : "#1A1A1A",
+              background: "#1A1A1A",
               color: "#fff",
               fontSize: "var(--font-caption)",
               fontWeight: 600,
-              cursor: isValidating ? "not-allowed" : "pointer",
+              cursor: "pointer",
               fontFamily: "'DM Sans', sans-serif",
             }}
           >
-            {isValidating ? "Verifying..." : "Save"}
+            Save
           </button>
         </div>
       </div>
@@ -3654,7 +3858,7 @@ function LocationCard({ profile, onSave }) {
           Location
         </h3>
         <button
-          onClick={() => setIsEditing(true)}
+          onClick={startEditing}
           style={{
             padding: "4px 12px",
             borderRadius: 6,
@@ -3677,7 +3881,7 @@ function LocationCard({ profile, onSave }) {
         lineHeight: 1.6,
       }}>
         {profile.location?.city ? (
-          <div><strong>City:</strong> {profile.location.city}</div>
+          <div><strong>City:</strong> {displayCity}</div>
         ) : (
           <div style={{ color: "#999" }}>Not set — add your city for weather-aware outfits</div>
         )}

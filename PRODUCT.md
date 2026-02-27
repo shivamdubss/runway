@@ -1,0 +1,269 @@
+# Runway — Product Features Document
+
+## Product Overview
+
+Runway is an AI-powered personal styling assistant. Users upload their real wardrobe, describe an occasion or mood, and receive curated outfit recommendations drawn from clothes they actually own. They can then visualize those outfits on themselves using a virtual try-on feature.
+
+**Core value proposition:** Outfit recommendations grounded in your real wardrobe, not aspirational shopping lists.
+
+**Target user:** Anyone who has clothes but struggles to put outfits together — whether for a specific event, a change in weather, or just day-to-day decision fatigue.
+
+**Platform:** Mobile-first responsive web app (works on all screen sizes).
+
+---
+
+## User Journey
+
+```
+Sign in (Google OAuth)
+    |
+    v
+Chat screen with time-of-day greeting + quick-start chips
+    |
+    +---> Tap a chip or type a message (e.g., "date night outfit")
+    |         |
+    |         v
+    |     AI streams a response with up to 3 outfit recommendations
+    |     Each outfit shows: item grid, vibe label, "why this works" reasoning
+    |         |
+    |         v
+    |     Tap "See this on you" to generate a virtual try-on visualization
+    |     (requires reference photo in profile)
+    |
+    +---> Open side panel --> Wardrobe --> Add items (single, bulk, or from photo)
+    |
+    +---> Open side panel --> Profile --> Set location, body info, style prefs
+    |
+    +---> Open side panel --> Chat history --> Switch between past conversations
+```
+
+---
+
+## Feature Inventory
+
+### 1. Authentication
+
+- **Method:** Google OAuth via Supabase Auth
+- **Flow:** Landing screen with "Sign in with Google" button. Loading state while authenticating. Error display on failure.
+- **Session:** JWT-based. All API calls require a Bearer token. Row-level security on all database tables ensures users only see their own data.
+
+---
+
+### 2. Chat-Based Outfit Recommendations
+
+The primary interface. Users describe what they need; the AI responds with outfit suggestions built from their wardrobe.
+
+#### Greeting & Empty State
+- Time-of-day greeting: "Good morning — what are we styling?" / "Good afternoon — what are we wearing?" / "Good evening — what's the occasion?"
+- If location is set, a weather chip shows current temp, condition emoji, and city name.
+- If location is not set, a link prompts: "Set location for weather-aware outfits."
+
+#### Quick-Start Chips
+Six preset occasion shortcuts displayed below the greeting:
+- Today, Dinner party, Date night, Job interview, Weekend brunch, Wedding guest
+- Tapping a chip sends that occasion as the first message.
+
+#### Message Input
+- Text field with send button (disabled when empty or while AI is generating).
+- Image attachment button: select from device or drag-and-drop an image onto the chat area. One image per message. Preview with remove option before sending.
+
+#### AI Response Streaming
+- Server-Sent Events deliver tokens in real-time.
+- A typing indicator shows animated dots with rotating messages: "Raiding your closet...", "Mixing patterns (tastefully)...", "Checking if those shoes match...", "Consulting the fashion gods...", "Channeling your inner stylist..."
+- Messages render incrementally with a blinking cursor.
+
+#### System Prompt Context
+The AI receives:
+- The user's full wardrobe (item names, categories, colors).
+- User profile (body type, size, gender/style preference, preferred styles, color preferences, style context notes).
+- Current weather data (temp, feels-like, high/low, wind, humidity, condition) if location is set.
+
+#### Item Resolution
+The AI references wardrobe items by name. The client resolves names to full item objects using case-insensitive matching with emoji/non-ASCII stripping. Unresolved items are silently dropped; outfits with zero resolved items are filtered out.
+
+---
+
+### 3. Outfit Results
+
+Each AI response can include up to 3 outfit recommendations. These appear in the Outfits view.
+
+#### Outfit Card
+- **Vibe label:** Short style descriptor (e.g., "Casual Friday", "Elevated Date Night").
+- **"Why this works" section:** Collapsible reasoning from the AI explaining the styling logic. Expandable with a chevron toggle.
+- **Item grid:** All items in the outfit displayed as cards (image/emoji, category label, item name). Tapping any item opens the Lightbox.
+
+#### Empty State
+When no outfits exist: "Your outfits will appear here. Start a conversation and I'll curate looks from your wardrobe." with a "Start styling" button.
+
+---
+
+### 4. Virtual Try-On Visualization
+
+Users can see AI-generated images of an outfit rendered onto their reference photo.
+
+#### Prerequisites
+- A reference photo must be uploaded in the user's profile.
+- Without one, the button shows "Add photo in profile to visualize" (disabled).
+
+#### Generation Flow
+1. User taps "See this on you" on an outfit card.
+2. System validates reference photo is accessible (HEAD request).
+3. OpenAI Image Edit API generates the visualization at 1024x1536px.
+4. Result is uploaded to Vercel Blob and displayed.
+
+#### Three-Pose System
+Each visualization supports three poses generated in parallel:
+- **Front View:** Full-body, straight-on. Face and body preserved pixel-identical; only clothing changes.
+- **3/4 Angle:** 30-50 degree three-quarter turn showing side silhouette and garment drape.
+- **Seated:** Natural seated position showing how fabric bunches and drapes.
+
+Users navigate between poses with arrow buttons and dot indicators.
+
+#### States
+- **Idle:** "See this on you" button.
+- **Generating:** Spinner with "Generating visualization..."
+- **Ready:** Purple gradient button "View visualization" opens the modal with pose carousel.
+- **Error:** "Retry visualization" button.
+
+#### Caching & Persistence
+- Visualizations are cached in localStorage with a 7-day TTL.
+- LRU eviction keeps only the 15 most recent entries.
+- Visualizations also persist to the database, surviving chat switches.
+- Changing the reference photo clears the visualization cache.
+
+---
+
+### 5. Wardrobe Management
+
+Users build a digital wardrobe of their real clothing items. Three methods to add items:
+
+#### Method 1: Single Item
+1. Upload one or more photos (drag-and-drop or file picker).
+2. AI automatically analyzes the image and extracts: name, category, primary color (hex), accent color (hex), emoji.
+3. User can override any AI-detected field.
+4. Category selector: Tops, Layers, Bottoms, Shoes, Accessories.
+5. Multiple photos per item supported (primary image + additional angles).
+
+#### Method 2: Bulk Import
+1. Upload multiple images at once.
+2. Each image is analyzed sequentially with a progress bar ("3 of 5").
+3. User reviews each item: edit name, select category, skip, or next.
+4. "Save all as-is" option to skip individual review.
+
+#### Method 3: Import from Outfit Photo
+1. Upload a full-body photo of an outfit being worn.
+2. AI identifies individual items (up to 10) using high-detail vision analysis.
+3. For each detected item, a standalone product photo is generated (1024x1024, white background, flat-lay style).
+4. User reviews detected items in a grid: edit name, change category, remove items.
+5. "Add X items to Wardrobe" to save.
+
+#### Wardrobe View
+- Grid layout organized by category.
+- Category filter pills at top: All, Tops, Layers, Bottoms, Shoes, Accessories.
+- Responsive columns: 1 (mobile), 2 (tablet), 3 (desktop).
+- "+ Add to Wardrobe" button at the top.
+- Each card shows: image (or emoji fallback), category label, item name, multi-image badge if applicable.
+
+#### Item Detail (Lightbox)
+- Full-screen modal with backdrop blur.
+- Large 3:4 image with arrow navigation and dot indicators for multi-image items.
+- Category label, item name, edit button, delete button.
+- Edit mode: change name and category, save/cancel.
+
+---
+
+### 6. User Profile
+
+Accessible from the side panel. An "incomplete" warning banner appears until height, body type, and preferred styles are all set.
+
+#### Reference Photo
+- Upload a full-body photo used for virtual try-on visualizations.
+- Accepted formats: JPEG, PNG, WebP, HEIC, HEIF. Max 10MB.
+- Replace or remove after upload.
+
+#### Location
+- Set a city name for weather-aware recommendations.
+- Validated against OpenWeatherMap API before saving.
+- Weather data cached for 30 minutes on the client.
+
+#### Body & Fit
+- Height (in cm).
+- Body type: Pear, Apple, Hourglass, Rectangle, Inverted Triangle.
+- Size preference: XS through XXL.
+
+#### Style Preferences
+- Gender/style preference: Women's, Men's, Unisex/All, Prefer not to say.
+- Preferred styles (multi-select): Classic, Minimalist, Bohemian, Edgy, Romantic, Sporty, Professional, Casual.
+- Color preferences (multi-select): Neutrals, Pastels, Bold/Bright, Monochrome, Earth Tones, Jewel Tones.
+
+#### Style Context
+- Free-text notes field for additional context about style, occasions, or preferences.
+
+---
+
+### 7. Chat History & Navigation
+
+#### Side Panel
+- Slides in from the left via hamburger menu.
+- Contains: "New Chat" button, "Full Wardrobe" button, chat history (starred and recents), "My Profile" button, "Sign Out" button.
+
+#### Chat History
+- **Starred section:** Bookmarked conversations pinned at top.
+- **Recents section:** Chronological list of past conversations.
+- Each entry shows: title, subtitle preview, relative timestamp ("2h ago", "Yesterday").
+- Kebab menu (three dots) per chat: Star/Unstar, Delete.
+
+---
+
+## Data Model
+
+| Table | Purpose | Key Fields |
+|-------|---------|------------|
+| `profiles` | User profile data | `id` (user FK), `data` (JSONB — body, style, location, reference photo) |
+| `wardrobe_items` | Individual clothing items | `name`, `category`, `label`, `color`, `accent_color`, `emoji`, `image_urls` (JSONB array) |
+| `chats` | Conversation sessions | `title`, `subtitle`, `starred`, `user_id` |
+| `messages` | Messages within a chat | `chat_id` (FK), `role` (user/assistant/system), `content`, `image_url` |
+| `outfits` | Generated outfit recommendations | `chat_id` (FK), `vibe`, `reasoning`, `visualization_url` |
+| `outfit_items` | Junction: outfit ↔ wardrobe item | `outfit_id` (FK), `wardrobe_item_id` (FK), `position` |
+
+All tables use row-level security scoped to the authenticated user.
+
+---
+
+## External Integrations
+
+| Service | What It Does | Models/APIs Used |
+|---------|-------------|-----------------|
+| **OpenAI** | Chat recommendations, image analysis, visualization generation, item photo generation | GPT-5.2 (chat + vision), GPT Image 1.5 (generation + editing) |
+| **OpenWeatherMap** | Current weather by city for recommendation context | Current Weather API (imperial units) |
+| **Supabase** | Database (PostgreSQL), authentication (Google OAuth, JWT), row-level security | Supabase JS client, service role key for server-side |
+| **Vercel Blob** | Cloud storage for all uploaded and generated images | Blob upload API |
+
+---
+
+## Technical Architecture (Brief)
+
+- **Frontend:** React 18 + Vite. Single-page app with four views (Chat, Outfits, Wardrobe, Profile) plus modals/panels. No router — view state managed in component.
+- **Backend:** Vercel serverless functions (production) / Express dev server (local). Seven API endpoints.
+- **Key API endpoints:**
+  - `POST /api/chat` — Single-shot outfit recommendations
+  - `POST /api/chat/stream` — Streaming recommendations via SSE
+  - `POST /api/upload` — Image upload to Vercel Blob
+  - `POST /api/analyze-image` — AI analysis of a single clothing item image
+  - `POST /api/analyze-outfit-photo` — AI detection of all items in a full-body photo
+  - `POST /api/generate-outfit-visualization` — Virtual try-on image generation (60s timeout)
+  - `POST /api/generate-item-image` — Standalone product photo generation
+
+---
+
+## Current Limitations & Known Constraints
+
+- **One image per chat message.** Users cannot attach multiple images in a single message.
+- **10-item cap on outfit photo analysis.** The import-from-photo feature detects a maximum of 10 items per photo.
+- **No offline support.** All features require an internet connection.
+- **No sharing or multi-user.** Outfits and wardrobes are private to each user. No social features, sharing links, or collaborative styling.
+- **No undo for wardrobe deletion.** Removing an item from the wardrobe is permanent.
+- **Weather is city-level only.** No GPS/geolocation — users must manually type a city name.
+- **Single reference photo.** Users can only have one reference photo at a time for virtual try-on.
+- **No outfit saving/favoriting.** Outfits are tied to the chat that generated them. There is no standalone "saved outfits" collection outside of chat history.
+- **English only.** All UI text and AI prompts are in English.

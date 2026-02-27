@@ -52,6 +52,29 @@ export async function fetchWeatherForDisplay(city) {
 }
 
 /**
+ * Search cities using Open-Meteo Geocoding API (free, no key required).
+ *
+ * @param {string} query - Partial city name (minimum 2 characters)
+ * @returns {Promise<Array<{name: string, country: string, admin1: string}>>}
+ */
+export async function searchCities(query) {
+  if (!query || query.trim().length < 2) return [];
+  try {
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query.trim())}&count=5&language=en&format=json`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.results || []).map(r => ({
+      name: r.name,
+      country: r.country || '',
+      admin1: r.admin1 || '',
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Map OpenWeatherMap icon code to a weather emoji.
  */
 export function weatherIconToEmoji(icon) {
