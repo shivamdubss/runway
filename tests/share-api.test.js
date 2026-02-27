@@ -13,7 +13,7 @@ vi.mock('../api/_lib/supabase.js', () => ({
   getServerSupabase: () => mockSupabase,
 }));
 
-const { default: handler } = await import('../api/share.js');
+const { default: handler } = await import('../api/share/index.js');
 
 function mockReq(overrides = {}) {
   return {

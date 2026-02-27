@@ -1,6 +1,6 @@
 import { randomBytes } from 'crypto';
-import { verifyAuth } from './_lib/auth.js';
-import { getServerSupabase } from './_lib/supabase.js';
+import { verifyAuth } from '../_lib/auth.js';
+import { getServerSupabase } from '../_lib/supabase.js';
 
 function generateShareToken() {
   return randomBytes(9).toString('base64url').slice(0, 12);
