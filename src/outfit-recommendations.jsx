@@ -2144,7 +2144,10 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
           </svg>
         </button>
         <button
-          onClick={handleShare}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleShare();
+          }}
           disabled={shareState === 'loading'}
           style={{
             width: 44,
