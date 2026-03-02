@@ -77,6 +77,7 @@ CREATE TABLE outfits (
   vibe          TEXT NOT NULL,
   reasoning     TEXT,
   visualization_url TEXT,
+  visualization_urls JSONB,
   share_token   TEXT UNIQUE,
   saved         BOOLEAN NOT NULL DEFAULT FALSE,
   user_id       UUID DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE,

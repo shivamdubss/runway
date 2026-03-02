@@ -19,6 +19,7 @@ import { requireAuth } from './middleware/auth.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
+const distDir = join(__dirname, '..', 'dist');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -37,13 +38,13 @@ app.post('/api/analyze-outfit-photo', requireAuth, handleAnalyzeOutfitPhoto);
 app.post('/api/generate-item-image', requireAuth, handleGenerateItemImage);
 app.post('/api/share', requireAuth, handleShare);
 app.get('/api/share/:token', handleShareLookup);
+app.get('/api/share-lookup', handleShareLookup);
 
 // Serve static Vite build output
-app.use(express.static(join(__dirname, '..', 'dist')));
+app.use(express.static(distDir));
 
-// SPA fallback (Express 5 catch-all route)
-app.get('/*', (req, res) => {
-  res.sendFile(join(__dirname, '..', 'dist', 'index.html'));
+app.get('/s/:token', (req, res) => {
+  res.sendFile(join(distDir, 'index.html'));
 });
 
 app.listen(PORT, () => {

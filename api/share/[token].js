@@ -1,18 +1,24 @@
 import { getServerSupabase } from '../_lib/supabase.js';
 
+const SHARE_TOKEN_PATTERN = /^[a-zA-Z0-9_-]{12}$/;
+
+function getShareToken(req) {
+  return req.query?.token || req.params?.token;
+}
+
 /**
  * GET /api/share/[token]
  *
  * Public (no auth required). Returns outfit data for a shared outfit.
  * Response: { vibe, reasoning, visualizationUrls, items[] }
  */
-export default async function handler(req, res) {
+export async function handleShareLookup(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { token } = req.query;
-  if (!token || typeof token !== 'string' || !/^[a-zA-Z0-9_-]{12}$/.test(token)) {
+  const token = getShareToken(req);
+  if (!token || typeof token !== 'string' || !SHARE_TOKEN_PATTERN.test(token)) {
     return res.status(400).json({ error: 'Invalid share token' });
   }
 
@@ -22,9 +28,14 @@ export default async function handler(req, res) {
     .from('outfits')
     .select('id, vibe, reasoning, visualization_url, visualization_urls')
     .eq('share_token', token)
-    .single();
+    .maybeSingle();
 
-  if (outfitErr || !outfit) {
+  if (outfitErr) {
+    console.error('Failed to load shared outfit', outfitErr);
+    return res.status(500).json({ error: 'Failed to load shared outfit' });
+  }
+
+  if (!outfit) {
     return res.status(404).json({ error: 'Shared outfit not found' });
   }
 
@@ -35,11 +46,13 @@ export default async function handler(req, res) {
     .order('position', { ascending: true });
 
   if (jErr) {
+    console.error('Failed to load shared outfit items', jErr);
     return res.status(500).json({ error: 'Failed to load outfit items' });
   }
 
   const items = (junctionRows || []).map(jr => {
-    const row = jr.wardrobe_items;
+    const row = Array.isArray(jr.wardrobe_items) ? jr.wardrobe_items[0] : jr.wardrobe_items;
+    if (!row) return null;
     const images = Array.isArray(row.image_urls) && row.image_urls.length > 0
       ? row.image_urls : [];
     return {
@@ -52,7 +65,7 @@ export default async function handler(req, res) {
       images,
       image: images[0] || null,
     };
-  });
+  }).filter(Boolean);
 
   return res.json({
     vibe: outfit.vibe,
@@ -60,4 +73,8 @@ export default async function handler(req, res) {
     visualizationUrls: outfit.visualization_urls || (outfit.visualization_url ? { front: outfit.visualization_url } : null),
     items,
   });
+}
+
+export default async function handler(req, res) {
+  return handleShareLookup(req, res);
 }

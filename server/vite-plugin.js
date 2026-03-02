@@ -33,6 +33,7 @@ export function apiPlugin() {
       app.post('/api/generate-outfit-visualization', requireAuth, handleGenerateOutfitVisualization);
       app.post('/api/share', requireAuth, handleShare);
       app.get('/api/share/:token', handleShareLookup);
+      app.get('/api/share-lookup', handleShareLookup);
       server.middlewares.use(app);
     },
   };

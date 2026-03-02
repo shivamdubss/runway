@@ -6,7 +6,7 @@ export default function SharedOutfitPage({ token }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch(`/api/share/${token}`)
+    fetch(`/api/share-lookup?token=${encodeURIComponent(token)}`)
       .then(res => {
         if (!res.ok) throw new Error('Outfit not found');
         return res.json();

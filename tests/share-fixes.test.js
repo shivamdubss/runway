@@ -12,19 +12,31 @@ describe('Vercel SPA rewrite for share routes', () => {
     expect(Array.isArray(vercelConfig.rewrites)).toBe(true);
   });
 
-  it('rewrites non-API routes to index.html', () => {
-    const spaRewrite = vercelConfig.rewrites.find(r => r.destination === '/index.html');
-    expect(spaRewrite).toBeDefined();
+  it('rewrites share routes to index.html', () => {
+    expect(vercelConfig.rewrites).toContainEqual({
+      source: '/s/:token',
+      destination: '/index.html',
+    });
   });
 
-  it('source pattern excludes api/ paths via negative lookahead', () => {
-    const spaRewrite = vercelConfig.rewrites.find(r => r.destination === '/index.html');
-    // Vercel uses path-to-regexp (anchored match), so test with anchored regex
-    const pattern = new RegExp('^' + spaRewrite.source + '$');
-    expect(pattern.test('/api/share')).toBe(false);
-    expect(pattern.test('/api/chat')).toBe(false);
-    expect(pattern.test('/s/aB3kQ9mR2xYz')).toBe(true);
-    expect(pattern.test('/')).toBe(true);
+  it('does not rely on the negative-lookahead catch-all rewrite', () => {
+    expect(vercelConfig.rewrites.some(r => r.source.includes('(?!api/'))).toBe(false);
+  });
+});
+
+describe('Express share route fallback', () => {
+  const serverSource = readFileSync(resolve(__dirname, '..', 'server', 'index.js'), 'utf8');
+
+  it('serves index.html for /s/:token', () => {
+    expect(serverSource).toContain("app.get('/s/:token'");
+  });
+
+  it('does not use the invalid Express 5 wildcard fallback', () => {
+    expect(serverSource).not.toContain("app.get('/*'");
+  });
+
+  it('registers the query-string share lookup endpoint', () => {
+    expect(serverSource).toContain("app.get('/api/share-lookup', handleShareLookup);");
   });
 });
 

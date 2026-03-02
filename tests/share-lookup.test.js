@@ -7,12 +7,19 @@ vi.mock('../api/_lib/supabase.js', () => ({
   getServerSupabase: () => mockSupabase,
 }));
 
-const { default: handler } = await import('../api/share/[token].js');
+const { default: dynamicHandler } = await import('../api/share/[token].js');
+const { default: staticHandler } = await import('../api/share-lookup.js');
+
+const handlerCases = [
+  { name: 'GET /api/share/[token]', handler: dynamicHandler },
+  { name: 'GET /api/share-lookup', handler: staticHandler },
+];
 
 function mockReq(overrides = {}) {
   return {
     method: 'GET',
     query: {},
+    params: {},
     ...overrides,
   };
 }
@@ -31,7 +38,7 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('GET /api/share/[token]', () => {
+describe.each(handlerCases)('$name', ({ handler }) => {
   it('rejects non-GET methods', async () => {
     const res = mockRes();
     await handler(mockReq({ method: 'POST' }), res);
@@ -40,7 +47,7 @@ describe('GET /api/share/[token]', () => {
 
   it('returns 400 for missing token', async () => {
     const res = mockRes();
-    await handler(mockReq({ query: {} }), res);
+    await handler(mockReq({ query: {}, params: {} }), res);
     expect(res.statusCode).toBe(400);
   });
 
@@ -62,11 +69,24 @@ describe('GET /api/share/[token]', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('accepts token from route params as a fallback', async () => {
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }),
+      }),
+    });
+    const res = mockRes();
+    await handler(mockReq({ query: {}, params: { token: 'aB3kQ9mR2xYz' } }), res);
+    expect(res.statusCode).toBe(404);
+  });
+
   it('returns 404 for non-existent token', async () => {
     mockFrom.mockReturnValue({
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({ data: null, error: { message: 'not found' } }),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         }),
       }),
     });
@@ -75,9 +95,21 @@ describe('GET /api/share/[token]', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('returns 500 when the outfit query fails', async () => {
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: 'column missing' } }),
+        }),
+      }),
+    });
+    const res = mockRes();
+    await handler(mockReq({ query: { token: 'aB3kQ9mR2xYz' } }), res);
+    expect(res.statusCode).toBe(500);
+    expect(res.body.error).toBe('Failed to load shared outfit');
+  });
+
   it('returns outfit data with items for valid token', async () => {
-    // First call: outfits table
-    // Second call: outfit_items table
     let callCount = 0;
     mockFrom.mockImplementation(() => {
       callCount++;
@@ -85,7 +117,7 @@ describe('GET /api/share/[token]', () => {
         return {
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
+              maybeSingle: vi.fn().mockResolvedValue({
                 data: {
                   id: 'outfit-1',
                   vibe: 'Smart Casual',
@@ -139,7 +171,7 @@ describe('GET /api/share/[token]', () => {
     const res = mockRes();
     await handler(mockReq({ query: { token: 'aB3kQ9mR2xYz' } }), res);
 
-    expect(res.statusCode).toBeNull(); // 200 default
+    expect(res.statusCode).toBeNull();
     expect(res.body.vibe).toBe('Smart Casual');
     expect(res.body.reasoning).toBe('A versatile look');
     expect(res.body.visualizationUrls).toEqual({
