@@ -48,10 +48,6 @@ export function buildVisualizationPrompt(outfit, userProfile, pose = 'front') {
   if (userProfile && userProfile.style && userProfile.style.genderPreference) {
     contextParts.push(`Gender presentation: ${userProfile.style.genderPreference}.`);
   }
-  if (userProfile && userProfile.body && userProfile.body.bodyType) {
-    contextParts.push(`Body type: ${userProfile.body.bodyType}.`);
-  }
-
   const contextBlock = contextParts.length > 0
     ? `\nSubject context: ${contextParts.join(' ')}`
     : '';

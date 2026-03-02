@@ -41,11 +41,9 @@ describe('buildVisualizationPrompt', () => {
     const outfit = { items: [{ name: 'Dress' }], vibe: 'elegant' };
     const profile = {
       style: { genderPreference: 'feminine' },
-      body: { bodyType: 'hourglass' },
     };
     const result = buildVisualizationPrompt(outfit, profile);
     expect(result).toContain('Gender presentation: feminine');
-    expect(result).toContain('Body type: hourglass');
     expect(result).toContain('Subject context');
   });
 
@@ -201,12 +199,10 @@ describe('buildVisualizationPrompt – pose support', () => {
   it('includes user profile context in all poses', () => {
     const profile = {
       style: { genderPreference: 'feminine' },
-      body: { bodyType: 'athletic' },
     };
     for (const pose of ['front', 'angle', 'seated']) {
       const result = buildVisualizationPrompt(outfit, profile, pose);
       expect(result).toContain('Gender presentation: feminine');
-      expect(result).toContain('Body type: athletic');
     }
   });
 });

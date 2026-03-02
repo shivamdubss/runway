@@ -38,8 +38,6 @@ Formality matching:
 Proportions and silhouette:
 - Balance volume. If the top is loose/oversized, the bottom should be more
   fitted, and vice versa.
-- Consider the user's body type when suggesting fits. Mention fit reasoning
-  only if the user has provided body type information.
 
 Seasonal and weather appropriateness:
 - If weather context is provided, respect it strictly. Do not recommend a wool
@@ -156,10 +154,6 @@ function buildProfileSection(profile) {
   if (profile.body) {
     if (profile.body.height?.value) {
       parts.push(`- Height: ${profile.body.height.value} ${profile.body.height.unit || 'cm'}`);
-      hasContent = true;
-    }
-    if (profile.body.bodyType) {
-      parts.push(`- Body type: ${profile.body.bodyType}`);
       hasContent = true;
     }
     if (profile.body.sizePreference) {

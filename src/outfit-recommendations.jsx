@@ -112,7 +112,6 @@ const SAMPLE_PROFILE = {
   lastUpdated: "2024-02-11T14:30:00Z",
   body: {
     height: { value: 168, unit: "cm" },
-    bodyType: "hourglass",
     sizePreference: "M",
   },
   style: {
@@ -694,6 +693,33 @@ function OutfitVisualizationModal({ poses, outfit, onClose, onRegenerate }) {
           animation: "scaleIn 0.25s ease",
         }}
       >
+        {/* Regenerate button */}
+        <button
+          onClick={onRegenerate}
+          disabled={hasPendingPose}
+          style={{
+            position: "absolute",
+            top: 16,
+            left: 16,
+            zIndex: 10,
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            border: "none",
+            background: "rgba(0,0,0,0.5)",
+            color: "#fff",
+            fontSize: 18,
+            cursor: hasPendingPose ? "not-allowed" : "pointer",
+            opacity: hasPendingPose ? 0.5 : 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "all 0.2s ease",
+          }}
+        >
+          ↻
+        </button>
+
         {/* Close button */}
         <button
           onClick={onClose}
@@ -822,27 +848,6 @@ function OutfitVisualizationModal({ poses, outfit, onClose, onRegenerate }) {
           }}>
             {outfit?.vibe}
           </h3>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <button
-              onClick={onRegenerate}
-              disabled={hasPendingPose}
-              style={{
-                padding: "8px 20px",
-                borderRadius: 8,
-                border: "1px solid #E0E0E0",
-                background: "transparent",
-                color: hasPendingPose ? "#B5B5B5" : "#888",
-                fontSize: 13,
-                fontWeight: 500,
-                cursor: hasPendingPose ? "not-allowed" : "pointer",
-                opacity: hasPendingPose ? 0.7 : 1,
-                fontFamily: "'DM Sans', sans-serif",
-                transition: "all 0.2s ease",
-              }}
-            >
-              {hasPendingPose ? "Finishing queued poses..." : "Regenerate All"}
-            </button>
-          </div>
           <p style={{
             fontSize: 11,
             color: "#B0B0B0",
@@ -3386,75 +3391,9 @@ function MultiSelectPills({ options, selected, onChange, label }) {
   );
 }
 
-function BodyTypeSelector({ value, onChange }) {
-  const bodyTypes = [
-    { value: "pear", label: "Pear", emoji: "🍐" },
-    { value: "apple", label: "Apple", emoji: "🍎" },
-    { value: "hourglass", label: "Hourglass", emoji: "⏳" },
-    { value: "rectangle", label: "Rectangle", emoji: "▭" },
-    { value: "inverted-triangle", label: "Inverted Triangle", emoji: "🔻" },
-  ];
-
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <label style={{
-        display: "block",
-        fontSize: "var(--font-caption)",
-        fontWeight: 600,
-        textTransform: "uppercase",
-        letterSpacing: "0.08em",
-        color: "#999",
-        marginBottom: 10,
-        fontFamily: "'DM Sans', sans-serif",
-      }}>
-        Body Type
-      </label>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
-        gap: 12,
-      }}>
-        {bodyTypes.map((type) => (
-          <button
-            key={type.value}
-            onClick={() => onChange(type.value)}
-            style={{
-              padding: 16,
-              borderRadius: 12,
-              border: value === type.value ? "2px solid #1A1A1A" : "2px solid #E5E5E5",
-              background: value === type.value ? "#F9F9F9" : "#fff",
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-              textAlign: "center",
-            }}
-          >
-            <div style={{ fontSize: 32, marginBottom: 4 }}>{type.emoji}</div>
-            <div style={{
-              fontSize: "var(--font-caption)",
-              fontWeight: 500,
-              color: "#666",
-              fontFamily: "'DM Sans', sans-serif",
-            }}>
-              {type.label}
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function BodyFitCard({ profile, onSave }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(profile.body);
-
-  const bodyTypeLabels = {
-    "pear": "Pear",
-    "apple": "Apple",
-    "hourglass": "Hourglass",
-    "rectangle": "Rectangle",
-    "inverted-triangle": "Inverted Triangle",
-  };
 
   const handleSave = () => {
     onSave({ ...profile, body: draft, lastUpdated: new Date().toISOString() });
@@ -3517,11 +3456,6 @@ function BodyFitCard({ profile, onSave }) {
             }}
           />
         </div>
-
-        <BodyTypeSelector
-          value={draft.bodyType}
-          onChange={(type) => setDraft({ ...draft, bodyType: type })}
-        />
 
         <div style={{ marginBottom: 16 }}>
           <label style={{
@@ -3649,11 +3583,6 @@ function BodyFitCard({ profile, onSave }) {
           <div><strong>Height:</strong> {profile.body.height.value} cm</div>
         ) : (
           <div style={{ color: "#999" }}>Height: Not set</div>
-        )}
-        {profile.body.bodyType ? (
-          <div><strong>Body Type:</strong> {bodyTypeLabels[profile.body.bodyType]}</div>
-        ) : (
-          <div style={{ color: "#999" }}>Body Type: Not set</div>
         )}
         {profile.body.sizePreference ? (
           <div><strong>Size:</strong> {profile.body.sizePreference}</div>
@@ -4581,7 +4510,7 @@ function ReferencePhotoCard({ profile, onSave }) {
 }
 
 function ProfileView({ profile, onSave, focusLocation, onClearFocusLocation }) {
-  const isComplete = profile.body.height.value && profile.body.bodyType &&
+  const isComplete = profile.body.height.value &&
                      profile.style.preferredStyles.length > 0;
 
   return (
@@ -4671,90 +4600,87 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, 
           </button>
         </div>
 
-        {/* New Chat */}
-        <div style={{ padding: "20px 16px 0" }}>
+        {/* Sidebar nav items */}
+        <div style={{ padding: "16px 8px 8px", display: "flex", flexDirection: "column", gap: 2 }}>
           <button
             onClick={onNewChat}
             style={{
               width: "100%",
-              height: 44,
-              borderRadius: 12,
-              border: "1px solid rgba(0,0,0,0.08)",
-              background: "#fff",
+              height: 40,
+              borderRadius: 8,
+              border: "none",
+              background: "transparent",
               color: "#1A1A1A",
               fontSize: "var(--font-body)",
-              fontWeight: 600,
+              fontWeight: 500,
               fontFamily: "'DM Sans', sans-serif",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
+              justifyContent: "flex-start",
+              padding: "0 12px",
+              gap: 8,
               transition: "background 0.15s ease",
             }}
-            onPointerDown={(e) => e.currentTarget.style.background = "#F3F2F0"}
-            onPointerUp={(e) => e.currentTarget.style.background = "#fff"}
-            onPointerLeave={(e) => e.currentTarget.style.background = "#fff"}
+            onPointerDown={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.05)"}
+            onPointerUp={(e) => e.currentTarget.style.background = "transparent"}
+            onPointerLeave={(e) => e.currentTarget.style.background = "transparent"}
           >
             <span style={{ fontSize: 16, fontWeight: 300 }}>+</span>
             New Chat
           </button>
-        </div>
 
-        {/* Full Wardrobe CTA */}
-        <div style={{ padding: "10px 16px 8px" }}>
           <button
             onClick={onOpenWardrobe}
             style={{
               width: "100%",
-              height: 44,
-              borderRadius: 12,
-              border: "1px solid rgba(0,0,0,0.08)",
-              background: "#fff",
+              height: 40,
+              borderRadius: 8,
+              border: "none",
+              background: "transparent",
               color: "#1A1A1A",
               fontSize: "var(--font-body)",
-              fontWeight: 600,
+              fontWeight: 500,
               fontFamily: "'DM Sans', sans-serif",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
+              justifyContent: "flex-start",
+              padding: "0 12px",
               gap: 8,
               transition: "background 0.15s ease",
             }}
-            onPointerDown={(e) => e.currentTarget.style.background = "#F3F2F0"}
-            onPointerUp={(e) => e.currentTarget.style.background = "#fff"}
-            onPointerLeave={(e) => e.currentTarget.style.background = "#fff"}
+            onPointerDown={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.05)"}
+            onPointerUp={(e) => e.currentTarget.style.background = "transparent"}
+            onPointerLeave={(e) => e.currentTarget.style.background = "transparent"}
           >
             <span style={{ fontSize: 18 }}>🪞</span>
             Full Wardrobe
           </button>
-        </div>
 
-        {/* Saved Outfits */}
-        <div style={{ padding: "0 16px 8px" }}>
           <button
             onClick={onOpenSaved}
             style={{
               width: "100%",
-              height: 44,
-              borderRadius: 12,
-              border: "1px solid rgba(0,0,0,0.08)",
-              background: "#fff",
+              height: 40,
+              borderRadius: 8,
+              border: "none",
+              background: "transparent",
               color: "#1A1A1A",
               fontSize: "var(--font-body)",
-              fontWeight: 600,
+              fontWeight: 500,
               fontFamily: "'DM Sans', sans-serif",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
+              justifyContent: "flex-start",
+              padding: "0 12px",
               gap: 8,
               transition: "background 0.15s ease",
             }}
-            onPointerDown={(e) => e.currentTarget.style.background = "#F3F2F0"}
-            onPointerUp={(e) => e.currentTarget.style.background = "#fff"}
-            onPointerLeave={(e) => e.currentTarget.style.background = "#fff"}
+            onPointerDown={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.05)"}
+            onPointerUp={(e) => e.currentTarget.style.background = "transparent"}
+            onPointerLeave={(e) => e.currentTarget.style.background = "transparent"}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />

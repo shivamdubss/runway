@@ -77,7 +77,7 @@ describe('buildSystemPrompt weather integration', () => {
 
   it('places weather section after profile section', () => {
     const profile = {
-      body: { bodyType: 'athletic' },
+      body: { height: { value: 175, unit: 'cm' } },
       style: {},
       styleContext: {},
     };
