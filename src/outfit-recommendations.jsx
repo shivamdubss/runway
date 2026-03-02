@@ -2846,7 +2846,7 @@ function ChatView({
                     height: 48,
                     borderRadius: 14,
                     border: "none",
-                    background: "#1A1A1A",
+                    background: "#3F3A36",
                     color: "#fff",
                     fontSize: "var(--font-body)",
                     fontWeight: 600,
@@ -2861,15 +2861,15 @@ function ChatView({
                   }}
                   onPointerDown={(e) => {
                     e.currentTarget.style.transform = "scale(0.97)";
-                    e.currentTarget.style.background = "#333";
+                    e.currentTarget.style.background = "#4B4540";
                   }}
                   onPointerUp={(e) => {
                     e.currentTarget.style.transform = "scale(1)";
-                    e.currentTarget.style.background = "#1A1A1A";
+                    e.currentTarget.style.background = "#3F3A36";
                   }}
                   onPointerLeave={(e) => {
                     e.currentTarget.style.transform = "scale(1)";
-                    e.currentTarget.style.background = "#1A1A1A";
+                    e.currentTarget.style.background = "#3F3A36";
                   }}
                 >
                   <span style={{ fontSize: 16 }}>🪞</span>
