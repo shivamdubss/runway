@@ -61,6 +61,7 @@ CREATE TABLE messages (
   role          TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
   content       TEXT NOT NULL,
   image_url     TEXT,
+  metadata      JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

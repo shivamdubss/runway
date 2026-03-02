@@ -164,7 +164,7 @@ export async function fetchMessages(chatId) {
   return data;
 }
 
-export async function saveMessage({ chatId, role, content, imageUrl }) {
+export async function saveMessage({ chatId, role, content, imageUrl, metadata = {} }) {
   const { data, error } = await supabase
     .from('messages')
     .insert({
@@ -172,6 +172,7 @@ export async function saveMessage({ chatId, role, content, imageUrl }) {
       role,
       content,
       image_url: imageUrl || null,
+      metadata,
     })
     .select()
     .single();

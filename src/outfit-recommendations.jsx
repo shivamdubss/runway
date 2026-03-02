@@ -4,6 +4,12 @@ import { uploadImage } from "./lib/upload";
 import { analyzeImage } from "./lib/analyze";
 import { analyzeOutfitPhoto, generateItemImage } from "./lib/import-from-photo";
 import * as db from "./lib/db";
+import {
+  OUTFIT_NAV_CTA,
+  appendLegacyOutfitsCtaMessage,
+  buildAssistantMessageMetadata,
+  toChatUiMessage,
+} from "./lib/chat-message-meta";
 import { generateVisualization, generateMultiPoseVisualization, getCachedVisualization, setCachedVisualization, clearVisualizationCache } from "./lib/visualization";
 import { useAuth } from "./lib/auth";
 import { fetchWeatherForDisplay, weatherIconToEmoji, searchCities } from "./lib/weather";
@@ -2030,6 +2036,19 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
     }
   };
 
+  const actionButtonStyle = {
+    width: 44,
+    height: 44,
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "1px solid rgba(0,0,0,0.1)",
+    borderRadius: 12,
+    transition: "all 0.2s ease",
+    padding: 0,
+  };
+
   return (
     <div style={{
       width: "100%",
@@ -2065,11 +2084,13 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
         display: "flex",
         gap: 8,
         marginBottom: 16,
+        alignItems: "flex-start",
       }}>
         <div
           onClick={() => setReasoningExpanded(!reasoningExpanded)}
           style={{
             flex: 1,
+            minWidth: 0,
             padding: "14px 16px",
             background: reasoningExpanded ? "rgba(0,0,0,0.02)" : "transparent",
             borderRadius: 12,
@@ -2114,76 +2135,60 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
             </p>
           )}
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSaved(outfit.id, outfit.saved);
-          }}
-          style={{
-            width: 44,
-            flexShrink: 0,
-            alignSelf: "stretch",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: outfit.saved ? "rgba(0,0,0,0.04)" : "transparent",
-            border: "1px solid rgba(0,0,0,0.1)",
-            borderRadius: 12,
-            cursor: "pointer",
-            transition: "all 0.2s ease",
-            padding: 0,
-          }}
-          title={outfit.saved ? "Unsave outfit" : "Save outfit"}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24"
-            fill={outfit.saved ? "#1A1A1A" : "none"}
-            stroke={outfit.saved ? "#1A1A1A" : "#666"}
-            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSaved(outfit.id, outfit.saved);
+            }}
+            style={{
+              ...actionButtonStyle,
+              background: outfit.saved ? "rgba(0,0,0,0.04)" : "transparent",
+              cursor: "pointer",
+            }}
+            title={outfit.saved ? "Unsave outfit" : "Save outfit"}
           >
-            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-          </svg>
-        </button>
-        <button
-          onClick={handleShare}
-          disabled={shareState === 'loading'}
-          style={{
-            width: 44,
-            flexShrink: 0,
-            alignSelf: "stretch",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: shareState === 'copied' ? "rgba(0,0,0,0.04)" : "transparent",
-            border: "1px solid rgba(0,0,0,0.1)",
-            borderRadius: 12,
-            cursor: shareState === 'loading' ? "wait" : "pointer",
-            transition: "all 0.2s ease",
-            padding: 0,
-          }}
-          title={shareState === 'copied' ? "Link copied!" : "Share outfit"}
-        >
-          {shareState === 'copied' ? (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
+            <svg width="18" height="18" viewBox="0 0 24 24"
+              fill={outfit.saved ? "#1A1A1A" : "none"}
+              stroke={outfit.saved ? "#1A1A1A" : "#666"}
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            >
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
             </svg>
-          ) : shareState === 'loading' ? (
-            <span style={{
-              width: 16,
-              height: 16,
-              borderRadius: "50%",
-              border: "2px solid #D8D8D8",
-              borderTopColor: "#8A8A8A",
-              animation: "spin 0.8s linear infinite",
-              display: "block",
-            }} />
-          ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-              <polyline points="16 6 12 2 8 6" />
-              <line x1="12" y1="2" x2="12" y2="15" />
-            </svg>
-          )}
-        </button>
+          </button>
+          <button
+            onClick={handleShare}
+            disabled={shareState === 'loading'}
+            style={{
+              ...actionButtonStyle,
+              background: shareState === 'copied' ? "rgba(0,0,0,0.04)" : "transparent",
+              cursor: shareState === 'loading' ? "wait" : "pointer",
+            }}
+            title={shareState === 'copied' ? "Link copied!" : "Share outfit"}
+          >
+            {shareState === 'copied' ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : shareState === 'loading' ? (
+              <span style={{
+                width: 16,
+                height: 16,
+                borderRadius: "50%",
+                border: "2px solid #D8D8D8",
+                borderTopColor: "#8A8A8A",
+                animation: "spin 0.8s linear infinite",
+                display: "block",
+              }} />
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                <polyline points="16 6 12 2 8 6" />
+                <line x1="12" y1="2" x2="12" y2="15" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
 
       <div className="item-card-grid">
@@ -2790,46 +2795,48 @@ function ChatView({
                 maxWidth: "82%",
               }}
             >
-              <div style={{
-                padding: "var(--space-reasoning-padding)",
-                borderRadius: msg.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                background: msg.role === "user" ? "#1A1A1A" : "#fff",
-                color: msg.role === "user" ? "#fff" : "#333",
-                fontSize: "var(--font-chat)",
-                lineHeight: 1.5,
-                fontFamily: "'DM Sans', sans-serif",
-                border: msg.role === "user" ? "none" : "1px solid rgba(0,0,0,0.06)",
-                boxShadow: msg.role === "user" ? "none" : "0 1px 3px rgba(0,0,0,0.03)",
-                overflow: "hidden",
-              }}>
-                {msg.image && (
-                  <img
-                    src={msg.image}
-                    alt="Attached photo"
-                    style={{
-                      width: "100%",
-                      maxWidth: 240,
-                      borderRadius: 8,
-                      display: "block",
-                      marginBottom: msg.text ? 8 : 0,
-                    }}
-                  />
-                )}
-                <span>{msg.text}</span>
-                {msg.isStreaming && (
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      display: "inline-block",
-                      marginLeft: 2,
-                      opacity: 0.8,
-                      animation: "blink 1s step-end infinite",
-                    }}
-                  >
-                    |
-                  </span>
-                )}
-              </div>
+              {(msg.text || msg.image || msg.isStreaming) && (
+                <div style={{
+                  padding: "var(--space-reasoning-padding)",
+                  borderRadius: msg.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                  background: msg.role === "user" ? "#1A1A1A" : "#fff",
+                  color: msg.role === "user" ? "#fff" : "#333",
+                  fontSize: "var(--font-chat)",
+                  lineHeight: 1.5,
+                  fontFamily: "'DM Sans', sans-serif",
+                  border: msg.role === "user" ? "none" : "1px solid rgba(0,0,0,0.06)",
+                  boxShadow: msg.role === "user" ? "none" : "0 1px 3px rgba(0,0,0,0.03)",
+                  overflow: "hidden",
+                }}>
+                  {msg.image && (
+                    <img
+                      src={msg.image}
+                      alt="Attached photo"
+                      style={{
+                        width: "100%",
+                        maxWidth: 240,
+                        borderRadius: 8,
+                        display: "block",
+                        marginBottom: msg.text ? 8 : 0,
+                      }}
+                    />
+                  )}
+                  <span>{msg.text}</span>
+                  {msg.isStreaming && (
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        display: "inline-block",
+                        marginLeft: 2,
+                        opacity: 0.8,
+                        animation: "blink 1s step-end infinite",
+                      }}
+                    >
+                      |
+                    </span>
+                  )}
+                </div>
+              )}
               {msg.cta && (
                 <button
                   onClick={() => onCtaAction(msg.cta.action)}
@@ -5193,7 +5200,7 @@ export default function OutfitRecommendations() {
     }
 
     if (chatId) {
-      db.saveMessage({ chatId, role: "user", content: messageText, imageUrl }).catch(err =>
+      db.saveMessage({ chatId, role: "user", content: messageText, imageUrl, metadata: {} }).catch(err =>
         console.error("Failed to save user message:", err)
       );
     }
@@ -5249,26 +5256,63 @@ export default function OutfitRecommendations() {
       setIsWaitingForFirstToken(false);
 
       const finalAssistantMessage = result.message || streamedMessage.trim();
+      const assistantMessageMetadata = buildAssistantMessageMetadata({ outfits: result.outfits });
+      const assistantMessageCta = assistantMessageMetadata.cta || null;
 
       if (finalAssistantMessage) {
         if (hasStreamedToken) {
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === assistantMessageId
-                ? { ...msg, text: finalAssistantMessage }
+                ? {
+                  ...msg,
+                  text: finalAssistantMessage,
+                  ...(assistantMessageCta ? { cta: assistantMessageCta } : {}),
+                }
                 : msg
             )
           );
         } else {
           setMessages((prev) => [
             ...prev,
-            { id: assistantMessageId, role: "assistant", text: finalAssistantMessage },
+            {
+              id: assistantMessageId,
+              role: "assistant",
+              text: finalAssistantMessage,
+              ...(assistantMessageCta ? { cta: assistantMessageCta } : {}),
+            },
           ]);
         }
 
         if (chatId) {
-          db.saveMessage({ chatId, role: "assistant", content: finalAssistantMessage }).catch(err =>
+          db.saveMessage({
+            chatId,
+            role: "assistant",
+            content: finalAssistantMessage,
+            metadata: assistantMessageMetadata,
+          }).catch(err =>
             console.error("Failed to save assistant message:", err)
+          );
+        }
+      } else if (assistantMessageCta) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: assistantMessageId,
+            role: "assistant",
+            text: "",
+            cta: { ...OUTFIT_NAV_CTA },
+          },
+        ]);
+
+        if (chatId) {
+          db.saveMessage({
+            chatId,
+            role: "assistant",
+            content: "",
+            metadata: assistantMessageMetadata,
+          }).catch(err =>
+            console.error("Failed to save assistant CTA message:", err)
           );
         }
       }
@@ -5277,13 +5321,15 @@ export default function OutfitRecommendations() {
         setOutfits(result.outfits);
         setCurrent(0);
 
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMessageId
-              ? { ...msg, cta: { label: "View Outfits", action: "navigate_outfits" } }
-              : msg
-          )
-        );
+        if (assistantMessageCta) {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId
+                ? { ...msg, cta: { ...OUTFIT_NAV_CTA } }
+                : msg
+            )
+          );
+        }
 
         if (chatId) {
           db.saveOutfits({ chatId, outfits: result.outfits, wardrobeItems: wardrobeFlat })
@@ -5369,12 +5415,12 @@ export default function OutfitRecommendations() {
         db.fetchMessages(chatId),
         db.fetchOutfitsForChat(chatId),
       ]);
-      setMessages(dbMessages.map(m => ({
-        id: m.id,
-        role: m.role,
-        text: m.content,
-        image: m.image_url || null,
-      })));
+      const hydratedMessages = appendLegacyOutfitsCtaMessage({
+        chatId,
+        messages: dbMessages.map(toChatUiMessage),
+        outfits: chatOutfits,
+      });
+      setMessages(hydratedMessages);
       setOutfits(chatOutfits);
 
       const restoredViz = {};
