@@ -5286,9 +5286,13 @@ export default function OutfitRecommendations() {
         );
 
         if (chatId) {
-          db.saveOutfits({ chatId, outfits: result.outfits, wardrobeItems: wardrobeFlat }).catch(err =>
-            console.error("Failed to save outfits:", err)
-          );
+          db.saveOutfits({ chatId, outfits: result.outfits, wardrobeItems: wardrobeFlat })
+            .then(savedIds => {
+              setOutfits(prev => prev.map((o, i) =>
+                savedIds[i] ? { ...o, id: savedIds[i] } : o
+              ));
+            })
+            .catch(err => console.error("Failed to save outfits:", err));
           const subtitle = result.outfits.map(o => o.vibe).join(", ");
           db.updateChat(chatId, { subtitle }).then(() => {
             setChatHistory(prev => prev.map(c =>
