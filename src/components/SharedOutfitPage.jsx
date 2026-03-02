@@ -6,6 +6,19 @@ export default function SharedOutfitPage({ token }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = 'auto';
+    document.documentElement.style.overflow = 'auto';
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, []);
+
+  useEffect(() => {
     fetch(`/api/share-lookup?token=${encodeURIComponent(token)}`)
       .then(res => {
         if (!res.ok) throw new Error('Outfit not found');
@@ -85,8 +98,11 @@ export default function SharedOutfitPage({ token }) {
   return (
     <div style={{
       minHeight: '100dvh',
+      height: '100dvh',
       background: '#FAFAF8',
       fontFamily: "'DM Sans', sans-serif",
+      overflowY: 'auto',
+      WebkitOverflowScrolling: 'touch',
     }}>
       {/* Header */}
       <div style={{

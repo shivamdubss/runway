@@ -40,6 +40,24 @@ describe('Express share route fallback', () => {
   });
 });
 
+describe('Shared page scroll behavior', () => {
+  const sharedPageSource = readFileSync(
+    resolve(__dirname, '..', 'src', 'components', 'SharedOutfitPage.jsx'),
+    'utf8'
+  );
+
+  it('releases the global body scroll lock while mounted', () => {
+    expect(sharedPageSource).toContain("document.body.style.overflow = 'auto'");
+    expect(sharedPageSource).toContain("document.documentElement.style.overflow = 'auto'");
+  });
+
+  it('uses its own scrollable viewport container', () => {
+    expect(sharedPageSource).toContain("height: '100dvh'");
+    expect(sharedPageSource).toContain("overflowY: 'auto'");
+    expect(sharedPageSource).toContain("WebkitOverflowScrolling: 'touch'");
+  });
+});
+
 describe('saveOutfits return value is used to patch outfit IDs', () => {
   it('saveOutfits returns an array of saved IDs', async () => {
     // Verify the contract: saveOutfits returns savedIds array
