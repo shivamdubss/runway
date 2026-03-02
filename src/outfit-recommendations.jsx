@@ -2674,7 +2674,7 @@ function ChatView({
   const [isDragOver, setIsDragOver] = useState(false);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages]);
 
   return (
