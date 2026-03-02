@@ -10,60 +10,57 @@ export const config = {
 };
 
 /**
- * Parse multipart form data from request
+ * Extract file data from a multipart form body buffer.
  */
-async function parseMultipartForm(req) {
+function extractFileFromMultipart(buffer, contentTypeHeader) {
+  const boundaryMatch = contentTypeHeader.match(/boundary=(.+?)(?:;|$)/);
+  if (!boundaryMatch) {
+    throw new Error('No boundary found in content-type header');
+  }
+
+  const boundary = '--' + boundaryMatch[1];
+  const parts = buffer.toString('binary').split(boundary);
+
+  for (const part of parts) {
+    if (part.includes('Content-Disposition: form-data; name="image"')) {
+      const filenameMatch = part.match(/filename="(.+?)"/);
+      const filename = filenameMatch ? filenameMatch[1] : 'upload.jpg';
+
+      const typeMatch = part.match(/Content-Type: (.+?)\r?\n/);
+      const mimeType = typeMatch ? typeMatch[1].trim() : 'image/jpeg';
+
+      const dataStart = part.indexOf('\r\n\r\n') + 4;
+      const dataEnd = part.lastIndexOf('\r\n');
+
+      if (dataStart > 3 && dataEnd > dataStart) {
+        const binaryData = part.substring(dataStart, dataEnd);
+        const fileBuffer = Buffer.from(binaryData, 'binary');
+        return { buffer: fileBuffer, originalname: filename, mimetype: mimeType };
+      }
+    }
+  }
+
+  throw new Error('No image file found in multipart request');
+}
+
+function readStream(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-
+    const timeout = setTimeout(() => reject(new Error('Request body read timed out')), 10_000);
     req.on('data', chunk => chunks.push(chunk));
-    req.on('end', () => {
-      try {
-        const buffer = Buffer.concat(chunks);
-        const contentType = req.headers['content-type'] || '';
-        const boundaryMatch = contentType.match(/boundary=(.+?)(?:;|$)/);
-
-        if (!boundaryMatch) {
-          return reject(new Error('No boundary found in multipart form'));
-        }
-
-        const boundary = '--' + boundaryMatch[1];
-        const parts = buffer.toString('binary').split(boundary);
-
-        for (const part of parts) {
-          if (part.includes('Content-Disposition: form-data; name="image"')) {
-            // Extract filename
-            const filenameMatch = part.match(/filename="(.+?)"/);
-            const filename = filenameMatch ? filenameMatch[1] : 'upload.jpg';
-
-            // Extract content type
-            const typeMatch = part.match(/Content-Type: (.+?)\r?\n/);
-            const contentType = typeMatch ? typeMatch[1].trim() : 'image/jpeg';
-
-            // Extract binary data (after double newline)
-            const dataStart = part.indexOf('\r\n\r\n') + 4;
-            const dataEnd = part.lastIndexOf('\r\n');
-
-            if (dataStart > 3 && dataEnd > dataStart) {
-              const binaryData = part.substring(dataStart, dataEnd);
-              const fileBuffer = Buffer.from(binaryData, 'binary');
-
-              return resolve({
-                buffer: fileBuffer,
-                originalname: filename,
-                mimetype: contentType,
-              });
-            }
-          }
-        }
-
-        reject(new Error('No file found in request'));
-      } catch (error) {
-        reject(error);
-      }
-    });
-    req.on('error', reject);
+    req.on('end', () => { clearTimeout(timeout); resolve(Buffer.concat(chunks)); });
+    req.on('error', err => { clearTimeout(timeout); reject(err); });
   });
+}
+
+/**
+ * Parse multipart form data from request.
+ * Vercel pre-buffers the body into req.body even with bodyParser:false,
+ * so we check that first before falling back to streaming.
+ */
+async function parseMultipartForm(req) {
+  const rawBody = Buffer.isBuffer(req.body) ? req.body : await readStream(req);
+  return extractFileFromMultipart(rawBody, req.headers['content-type'] || '');
 }
 
 /**
@@ -79,18 +76,20 @@ export default async function handler(req, res) {
   const user = await verifyAuth(req, res);
   if (!user) return;
 
+  let file;
   try {
-    const file = await parseMultipartForm(req);
+    file = await parseMultipartForm(req);
+  } catch (parseError) {
+    console.error('[/api/upload] Parse error:', parseError?.message || parseError);
+    return res.status(400).json({ error: 'Failed to parse upload. Please try again.' });
+  }
 
-    if (!file) {
-      return res.status(400).json({ error: 'No image file provided' });
-    }
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
+  if (!allowedTypes.includes(file.mimetype)) {
+    return res.status(400).json({ error: 'Invalid file type. Allowed: JPEG, PNG, WebP, GIF, HEIC' });
+  }
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
-    if (!allowedTypes.includes(file.mimetype)) {
-      return res.status(400).json({ error: 'Invalid file type. Allowed: JPEG, PNG, WebP, GIF, HEIC' });
-    }
-
+  try {
     const ext = file.originalname.split('.').pop() || 'jpg';
     const filename = `runway/${randomUUID()}.${ext}`;
 
@@ -101,8 +100,10 @@ export default async function handler(req, res) {
     });
 
     return res.json({ url: blob.url });
-  } catch (error) {
-    console.error('[/api/upload] Error:', error?.message || error);
-    return res.status(500).json({ error: 'Failed to upload image' });
+  } catch (uploadError) {
+    console.error('[/api/upload] Blob upload error:', uploadError?.message || uploadError);
+    return res.status(500).json({ error: 'Failed to store image. Please try again.' });
   }
 }
+
+export { extractFileFromMultipart };
