@@ -1,11 +1,11 @@
 import { put } from '@vercel/blob';
 import { randomUUID } from 'crypto';
-import { getOpenAIClient } from './_lib/openai.js';
 import { verifyAuth } from './_lib/auth.js';
 
 const VALID_POSES = ['front', 'angle', 'seated'];
 const VISUALIZATION_OUTPUT_SIZE = '1024x1536';
 const VISUALIZATION_BLOB_PREFIX = 'runway/visualizations/v2';
+const OPENAI_IMAGE_EDITS_URL = 'https://api.openai.com/v1/images/edits';
 
 const POSE_CONFIGS = {
   front: {
@@ -73,40 +73,119 @@ The replacement garments must drape naturally on the existing body with physical
 }
 
 const OPENAI_TIMEOUT_MS = 50_000;
-const MAX_RETRIES = 0;
+const MAX_TRANSIENT_RETRIES = 1;
+const RETRY_BACKOFF_BASE_MS = 500;
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getHeader(headers, name) {
+  if (!headers) return null;
+  if (typeof headers.get === 'function') return headers.get(name);
+
+  const loweredName = name.toLowerCase();
+  return headers[name] ?? headers[loweredName] ?? null;
+}
+
+function parseRetryAfterSeconds(value) {
+  if (value == null || value === '') return null;
+
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return numeric;
+  }
+
+  const retryAt = Date.parse(value);
+  if (Number.isNaN(retryAt)) return null;
+
+  const secondsUntilRetry = Math.ceil((retryAt - Date.now()) / 1000);
+  return secondsUntilRetry > 0 ? secondsUntilRetry : null;
+}
+
+function buildRetryDelayMs(attempt) {
+  return (RETRY_BACKOFF_BASE_MS * Math.pow(2, attempt)) + Math.floor(Math.random() * 250);
+}
 
 /**
  * Fetch with retry for transient errors (429, 5xx).
  * Shares a single AbortController so the overall timeout spans all attempts.
  */
-async function fetchWithRetry(url, options, signal) {
+async function fetchWithRetry(url, options, signal, context = {}) {
   let lastError;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt <= MAX_TRANSIENT_RETRIES; attempt++) {
+    const startedAt = Date.now();
     try {
       const response = await fetch(url, { ...options, signal });
-      if (response.ok) return response;
+      const requestId = getHeader(response.headers, 'x-request-id');
+      const retryAfter = parseRetryAfterSeconds(getHeader(response.headers, 'retry-after'));
+      const elapsedMs = Date.now() - startedAt;
+      if (response.ok) {
+        console.log('[fetchWithRetry] OpenAI image edit completed', {
+          pose: context.pose,
+          attempt: attempt + 1,
+          elapsedMs,
+          status: response.status,
+          retryAfter,
+          requestId,
+        });
+        return response;
+      }
 
       const errBody = await response.json().catch(() => ({}));
       const errMsg = errBody.error?.message || `OpenAI API returned ${response.status}`;
       const err = new Error(errMsg);
       err.status = response.status;
+      err.code = errBody.error?.code;
+      err.retryAfter = retryAfter;
+      err.requestId = requestId;
 
-      // Only retry on 429 or 5xx
-      if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
-        const delay = Math.pow(2, attempt + 1) * 1000; // 2s
-        console.log(`[fetchWithRetry] Attempt ${attempt + 1} failed with ${response.status}, retrying in ${delay}ms`);
-        await new Promise(r => setTimeout(r, delay));
+      console.error('[fetchWithRetry] OpenAI image edit failed', {
+        pose: context.pose,
+        attempt: attempt + 1,
+        elapsedMs,
+        status: response.status,
+        retryAfter,
+        requestId,
+      });
+
+      if (response.status >= 500 && attempt < MAX_TRANSIENT_RETRIES) {
+        const delay = buildRetryDelayMs(attempt);
+        console.log('[fetchWithRetry] Retrying transient OpenAI failure', {
+          pose: context.pose,
+          attempt: attempt + 1,
+          delayMs: delay,
+          status: response.status,
+          requestId,
+        });
+        await sleep(delay);
         lastError = err;
         continue;
       }
       throw err;
     } catch (error) {
       if (error.name === 'AbortError') throw error;
-      // Network error — retry if attempts remain
-      if (!error.status && attempt < MAX_RETRIES) {
-        const delay = Math.pow(2, attempt + 1) * 1000;
-        console.log(`[fetchWithRetry] Network error, retrying in ${delay}ms`);
-        await new Promise(r => setTimeout(r, delay));
+
+      const elapsedMs = Date.now() - startedAt;
+      if (!error.status) {
+        console.error('[fetchWithRetry] Network error talking to OpenAI', {
+          pose: context.pose,
+          attempt: attempt + 1,
+          elapsedMs,
+          status: null,
+          retryAfter: null,
+          requestId: null,
+        });
+      }
+
+      if (!error.status && attempt < MAX_TRANSIENT_RETRIES) {
+        const delay = buildRetryDelayMs(attempt);
+        console.log('[fetchWithRetry] Retrying transient network failure', {
+          pose: context.pose,
+          attempt: attempt + 1,
+          delayMs: delay,
+        });
+        await sleep(delay);
         lastError = error;
         continue;
       }
@@ -120,10 +199,12 @@ async function fetchWithRetry(url, options, signal) {
  * Generate outfit visualization using OpenAI GPT Image 1.5
  */
 async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProfile, pose = 'front' }) {
-  const openai = getOpenAIClient();
   const prompt = buildVisualizationPrompt(outfit, userProfile, pose);
 
-  console.log('[generateOutfitVisualization] Generating with prompt:', prompt);
+  console.log('[generateOutfitVisualization] Starting visualization request', {
+    pose,
+    promptLength: prompt.length,
+  });
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
@@ -132,7 +213,7 @@ async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProf
     // Call OpenAI Image Edit API with GPT Image 1.5
     // Use fetch directly — the SDK's images.edit sends multipart/form-data
     // which doesn't support the newer images[] JSON format
-    const apiResponse = await fetchWithRetry('https://api.openai.com/v1/images/edits', {
+    const apiResponse = await fetchWithRetry(OPENAI_IMAGE_EDITS_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
@@ -146,7 +227,7 @@ async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProf
         size: VISUALIZATION_OUTPUT_SIZE,
         input_fidelity: "low"
       })
-    }, controller.signal);
+    }, controller.signal, { pose });
 
     const response = await apiResponse.json();
 
@@ -168,16 +249,21 @@ async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProf
       }
     );
 
-    console.log('[generateOutfitVisualization] Successfully generated and uploaded:', blob.url);
+    console.log('[generateOutfitVisualization] Successfully generated and uploaded', {
+      pose,
+      blobUrl: blob.url,
+    });
 
     return blob.url;
   } catch (error) {
-    console.error('[generateOutfitVisualization] Error:', error);
-    console.error('[generateOutfitVisualization] Error details:', {
+    console.error('[generateOutfitVisualization] Failed to generate visualization', {
+      pose,
       message: error.message,
-      status: error.status,
-      code: error.code,
-      type: error.type
+      status: error.status ?? null,
+      code: error.code ?? null,
+      retryAfter: error.retryAfter ?? null,
+      requestId: error.requestId ?? null,
+      type: error.type ?? null,
     });
 
     if (error.name === 'AbortError') {
@@ -188,10 +274,12 @@ async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProf
     }
 
     // Re-throw with more context
-    if (error.status === 429 || error.code === 'rate_limit_exceeded') {
+    if (error.status === 429 || error.code === 'rate_limit_exceeded' || error.code === 'rate_limit') {
       const rateLimitError = new Error('Rate limit exceeded');
       rateLimitError.status = 429;
       rateLimitError.code = 'rate_limit';
+      rateLimitError.retryAfter = error.retryAfter;
+      rateLimitError.requestId = error.requestId;
       throw rateLimitError;
     }
 
@@ -206,6 +294,8 @@ async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProf
     const enhancedError = new Error(error.message || 'Failed to generate visualization');
     enhancedError.status = error.status;
     enhancedError.code = error.code;
+    enhancedError.retryAfter = error.retryAfter;
+    enhancedError.requestId = error.requestId;
     throw enhancedError;
   } finally {
     clearTimeout(timeoutId);
@@ -300,7 +390,7 @@ export default async function handler(req, res) {
         success: false,
         error: 'rate_limit',
         message: 'Rate limit exceeded. Please try again in a moment.',
-        retryAfter: 30
+        retryAfter: error.retryAfter || 30
       });
     }
 

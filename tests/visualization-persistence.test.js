@@ -41,10 +41,15 @@ beforeEach(() => {
 });
 
 const {
+  __resetVisualizationSchedulerForTests,
   generateMultiPoseVisualization,
   getCachedVisualization,
   setCachedVisualization,
 } = await import('../src/lib/visualization.js');
+
+beforeEach(() => {
+  __resetVisualizationSchedulerForTests({ minStartIntervalMs: 0 });
+});
 
 // Helpers to simulate the onPoseComplete callback pattern used in the component
 function createMockDb() {

@@ -10,8 +10,15 @@ import {
   buildAssistantMessageMetadata,
   toChatUiMessage,
 } from "./lib/chat-message-meta";
-import { generateVisualization, generateMultiPoseVisualization, getCachedVisualization, setCachedVisualization, clearVisualizationCache } from "./lib/visualization";
+import {
+  cancelQueuedVisualizationTasks,
+  generateMultiPoseVisualization,
+  getCachedVisualization,
+  setCachedVisualization,
+  clearVisualizationCache,
+} from "./lib/visualization";
 import { useAuth } from "./lib/auth";
+import { isMobileShareDevice, shareOutfitLink } from "./lib/share";
 import { fetchWeatherForDisplay, weatherIconToEmoji, searchCities } from "./lib/weather";
 
 // Inject CSS animations for streaming states
@@ -456,6 +463,42 @@ function Lightbox({ item, onClose, onDelete, onEdit }) {
 const POSE_ORDER = ['front', 'angle', 'seated'];
 const POSE_LABELS = { front: 'Front View', angle: '3/4 Angle', seated: 'Seated' };
 
+function makePoseEntry(status, imageUrl = null, error = null) {
+  return { status, imageUrl, error };
+}
+
+function buildQueuedPoseEntries() {
+  return {
+    front: makePoseEntry('queued'),
+    angle: makePoseEntry('queued'),
+    seated: makePoseEntry('queued'),
+  };
+}
+
+function buildReadyPoseEntries(poses) {
+  return {
+    front: makePoseEntry('ready', poses.front),
+    angle: makePoseEntry(poses.angle ? 'ready' : 'idle', poses.angle),
+    seated: makePoseEntry(poses.seated ? 'ready' : 'idle', poses.seated),
+  };
+}
+
+function deriveVisualizationStatus(poses) {
+  const frontStatus = poses?.front?.status;
+  if (frontStatus === 'ready') return 'ready';
+  if (frontStatus === 'error') return 'error';
+  if (POSE_ORDER.some(pose => poses?.[pose]?.status === 'generating')) return 'generating';
+  if (POSE_ORDER.some(pose => poses?.[pose]?.status === 'queued')) return 'queued';
+  return 'idle';
+}
+
+function hasPendingVisualizationPose(poses) {
+  return POSE_ORDER.some(pose => {
+    const status = poses?.[pose]?.status;
+    return status === 'queued' || status === 'generating';
+  });
+}
+
 function VizCarouselSlot({ poseData, loadingMessage }) {
   if (!poseData || poseData.status === 'idle') {
     return (
@@ -470,6 +513,49 @@ function VizCarouselSlot({ poseData, loadingMessage }) {
       }}>
         <p style={{ fontSize: 14, color: "#aaa", fontFamily: "'DM Sans', sans-serif" }}>
           Not generated
+        </p>
+      </div>
+    );
+  }
+
+  if (poseData.status === 'queued') {
+    return (
+      <div style={{ textAlign: "center" }}>
+        <div style={{
+          width: "100%",
+          height: 400,
+          borderRadius: 16,
+          marginBottom: 12,
+          background: "linear-gradient(135deg, #f7f5f0 0%, #efebe1 100%)",
+          border: "1px solid #E9E3D8",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}>
+          <div style={{
+            width: 52,
+            height: 52,
+            borderRadius: 26,
+            background: "rgba(255,255,255,0.8)",
+            color: "#9A8F77",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 24,
+            fontFamily: "'DM Sans', sans-serif",
+            fontWeight: 600,
+          }}>
+            …
+          </div>
+        </div>
+        <p style={{
+          fontSize: 14,
+          color: "#7A7468",
+          fontFamily: "'DM Sans', sans-serif",
+          fontWeight: 500,
+          margin: 0,
+        }}>
+          Queued to avoid rate limits...
         </p>
       </div>
     );
@@ -575,10 +661,7 @@ function OutfitVisualizationModal({ poses, outfit, onClose, onRegenerate }) {
 
     return () => clearInterval(interval);
   }, [poses]);
-
-  // If all poses are idle or missing, treat as full-loading (initial state)
-  const allGenerating = poses && POSE_ORDER.every(p => poses[p]?.status === 'generating');
-  const frontFailed = poses?.front?.status === 'error';
+  const hasPendingPose = hasPendingVisualizationPose(poses);
 
   return (
     <div
@@ -742,20 +825,22 @@ function OutfitVisualizationModal({ poses, outfit, onClose, onRegenerate }) {
           <div style={{ display: "flex", justifyContent: "center" }}>
             <button
               onClick={onRegenerate}
+              disabled={hasPendingPose}
               style={{
                 padding: "8px 20px",
                 borderRadius: 8,
                 border: "1px solid #E0E0E0",
                 background: "transparent",
-                color: "#888",
+                color: hasPendingPose ? "#B5B5B5" : "#888",
                 fontSize: 13,
                 fontWeight: 500,
-                cursor: "pointer",
+                cursor: hasPendingPose ? "not-allowed" : "pointer",
+                opacity: hasPendingPose ? 0.7 : 1,
                 fontFamily: "'DM Sans', sans-serif",
                 transition: "all 0.2s ease",
               }}
             >
-              Regenerate All
+              {hasPendingPose ? "Finishing queued poses..." : "Regenerate All"}
             </button>
           </div>
         </div>
@@ -2015,6 +2100,10 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
   const [shareState, setShareState] = useState('idle'); // 'idle' | 'loading' | 'copied'
   const [showToast, setShowToast] = useState(false);
+  const prefersNativeShare = isMobileShareDevice();
+  const shareButtonLabel = shareState === 'copied'
+    ? 'Link copied!'
+    : prefersNativeShare ? 'Share outfit' : 'Copy outfit link';
 
   const handleShare = async () => {
     if (shareState === 'loading') return;
@@ -2164,7 +2253,8 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
               background: shareState === 'copied' ? "rgba(0,0,0,0.04)" : "transparent",
               cursor: shareState === 'loading' ? "wait" : "pointer",
             }}
-            title={shareState === 'copied' ? "Link copied!" : "Share outfit"}
+            title={shareButtonLabel}
+            aria-label={shareButtonLabel}
           >
             {shareState === 'copied' ? (
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -2201,11 +2291,11 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
         onClick={() => {
           if (vizStatus === 'ready') {
             onViewVisualization(outfit.id);
-          } else if (vizStatus !== 'generating') {
+          } else if (vizStatus !== 'generating' && vizStatus !== 'queued') {
             onVisualizeClick(outfit);
           }
         }}
-        disabled={!hasReferencePhoto || vizStatus === 'generating'}
+        disabled={!hasReferencePhoto || vizStatus === 'generating' || vizStatus === 'queued'}
         style={{
           width: "100%",
           padding: "12px 20px",
@@ -2223,9 +2313,9 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
           fontSize: "var(--font-body)",
           fontFamily: "'DM Sans', sans-serif",
           fontWeight: vizStatus === 'ready' ? 600 : 500,
-          cursor: hasReferencePhoto && vizStatus !== 'generating' ? "pointer" : "not-allowed",
+          cursor: hasReferencePhoto && vizStatus !== 'generating' && vizStatus !== 'queued' ? "pointer" : "not-allowed",
           transition: "all 0.2s ease",
-          opacity: vizStatus === 'generating' ? 0.6 : 1,
+          opacity: vizStatus === 'generating' || vizStatus === 'queued' ? 0.6 : 1,
           letterSpacing: "0.01em",
         }}
       >
@@ -2250,6 +2340,8 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
               }}
             />
           </span>
+        ) : vizStatus === 'queued' ? (
+          <span>Queued to avoid rate limits...</span>
         ) : vizStatus === 'ready' ? (
           <span>View visualization</span>
         ) : vizStatus === 'error' ? (
@@ -4597,11 +4689,11 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, 
             onClick={onOpenWardrobe}
             style={{
               width: "100%",
-              height: 48,
-              borderRadius: 14,
-              border: "none",
-              background: "#1A1A1A",
-              color: "#fff",
+              height: 44,
+              borderRadius: 12,
+              border: "1px solid rgba(0,0,0,0.08)",
+              background: "#fff",
+              color: "#1A1A1A",
               fontSize: "var(--font-body)",
               fontWeight: 600,
               fontFamily: "'DM Sans', sans-serif",
@@ -4610,8 +4702,11 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, 
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
-              transition: "opacity 0.2s ease",
+              transition: "background 0.15s ease",
             }}
+            onPointerDown={(e) => e.currentTarget.style.background = "#F3F2F0"}
+            onPointerUp={(e) => e.currentTarget.style.background = "#fff"}
+            onPointerLeave={(e) => e.currentTarget.style.background = "#fff"}
           >
             <span style={{ fontSize: 18 }}>🪞</span>
             Full Wardrobe
@@ -4822,7 +4917,7 @@ export default function OutfitRecommendations() {
     setVizGenerations(prev => {
       const cleaned = {};
       for (const [id, entry] of Object.entries(prev)) {
-        if (outfitIds.has(id) || entry.status === 'generating') {
+        if (outfitIds.has(id) || entry.status === 'generating' || entry.status === 'queued') {
           cleaned[id] = entry;
         }
       }
@@ -4992,8 +5087,61 @@ export default function OutfitRecommendations() {
     }
   }, []);
 
-  const makePoseEntry = (status, imageUrl = null, error = null) => ({ status, imageUrl, error });
   const isCurrentVisualizationUrl = (url) => typeof url === "string" && url.includes("/visualizations/v2/");
+
+  const updateVisualizationPose = useCallback((outfitId, pose, nextPoseEntry) => {
+    setVizGenerations(prev => {
+      const current = prev[outfitId];
+      if (!current) return prev;
+
+      const updatedPoses = { ...current.poses, [pose]: nextPoseEntry };
+      return {
+        ...prev,
+        [outfitId]: {
+          ...current,
+          status: deriveVisualizationStatus(updatedPoses),
+          poses: updatedPoses,
+        }
+      };
+    });
+  }, []);
+
+  const startVisualizationSequence = useCallback(async (outfit) => {
+    const referencePhotoUrl = profile.referencePhoto?.url;
+    if (!referencePhotoUrl) return;
+
+    cancelQueuedVisualizationTasks(outfit.id);
+    setVizGenerations(prev => ({
+      ...prev,
+      [outfit.id]: {
+        status: 'queued',
+        poses: buildQueuedPoseEntries(),
+        outfit,
+      }
+    }));
+
+    const completedUrls = {};
+
+    await generateMultiPoseVisualization({
+      referencePhotoUrl,
+      outfit,
+      userProfile: profile,
+      onPoseStart: (pose) => {
+        updateVisualizationPose(outfit.id, pose, makePoseEntry('generating'));
+      },
+      onPoseComplete: (pose, result) => {
+        if (result.imageUrl) {
+          completedUrls[pose] = result.imageUrl;
+          setCachedVisualization(outfit.id, referencePhotoUrl, completedUrls);
+          db.saveVisualizationUrls(outfit.id, completedUrls).catch(err =>
+            console.error("Failed to save visualization URLs:", err)
+          );
+        }
+
+        updateVisualizationPose(outfit.id, pose, result);
+      }
+    });
+  }, [profile, updateVisualizationPose]);
 
   const handleVisualizeOutfit = useCallback(async (outfit) => {
     if (!profile.referencePhoto) {
@@ -5008,11 +5156,7 @@ export default function OutfitRecommendations() {
         ...prev,
         [outfit.id]: {
           status: 'ready',
-          poses: {
-            front:  makePoseEntry('ready', cachedPoses.front),
-            angle:  makePoseEntry(cachedPoses.angle ? 'ready' : 'idle', cachedPoses.angle),
-            seated: makePoseEntry(cachedPoses.seated ? 'ready' : 'idle', cachedPoses.seated),
-          },
+          poses: buildReadyPoseEntries(cachedPoses),
           outfit
         }
       }));
@@ -5020,8 +5164,8 @@ export default function OutfitRecommendations() {
       return;
     }
 
-    // Already generating — do nothing
-    if (vizGenerations[outfit.id]?.status === 'generating') return;
+    // Already queued or generating — do nothing
+    if (vizGenerations[outfit.id]?.status === 'generating' || vizGenerations[outfit.id]?.status === 'queued') return;
 
     // Already ready — open modal
     if (vizGenerations[outfit.id]?.status === 'ready') {
@@ -5029,117 +5173,17 @@ export default function OutfitRecommendations() {
       return;
     }
 
-    // Start parallel generation of all 3 poses
-    setVizGenerations(prev => ({
-      ...prev,
-      [outfit.id]: {
-        status: 'generating',
-        poses: {
-          front:  makePoseEntry('generating'),
-          angle:  makePoseEntry('generating'),
-          seated: makePoseEntry('generating'),
-        },
-        outfit
-      }
-    }));
-
-    // Closure-scoped accumulator so persistence survives chat switches
-    const completedUrls = {};
-
-    await generateMultiPoseVisualization({
-      referencePhotoUrl: profile.referencePhoto.url,
-      outfit,
-      userProfile: profile,
-      onPoseComplete: (pose, result) => {
-        // Always persist regardless of which chat is active
-        if (result.imageUrl) {
-          completedUrls[pose] = result.imageUrl;
-          setCachedVisualization(outfit.id, profile.referencePhoto.url, completedUrls);
-          db.saveVisualizationUrls(outfit.id, completedUrls).catch(err =>
-            console.error("Failed to save visualization URLs:", err)
-          );
-        }
-
-        // Update React state only if this outfit is still in vizGenerations
-        setVizGenerations(prev => {
-          const current = prev[outfit.id];
-          if (!current) return prev;
-
-          const updatedPoses = { ...current.poses, [pose]: result };
-
-          // Derive top-level status: 'ready' once front is done, 'error' only if front failed
-          const frontDone = updatedPoses.front.status === 'ready' || updatedPoses.front.status === 'error';
-          let topStatus = 'generating';
-          if (frontDone) {
-            topStatus = updatedPoses.front.status === 'ready' ? 'ready' : 'error';
-          }
-
-          return {
-            ...prev,
-            [outfit.id]: { ...current, status: topStatus, poses: updatedPoses }
-          };
-        });
-      }
-    });
-  }, [profile, vizGenerations]);
+    await startVisualizationSequence(outfit);
+  }, [profile, startVisualizationSequence, vizGenerations]);
 
   const handleRegenerateVisualization = useCallback(async (outfitId) => {
     const genEntry = vizGenerations[outfitId];
     if (!genEntry?.outfit) return;
-    const outfit = genEntry.outfit;
+    if (hasPendingVisualizationPose(genEntry.poses)) return;
 
-    // Reset all poses to generating
-    setVizGenerations(prev => ({
-      ...prev,
-      [outfitId]: {
-        status: 'generating',
-        poses: {
-          front:  makePoseEntry('generating'),
-          angle:  makePoseEntry('generating'),
-          seated: makePoseEntry('generating'),
-        },
-        outfit
-      }
-    }));
-
-    // Closure-scoped accumulator so persistence survives chat switches
-    const completedUrls = {};
-
-    await generateMultiPoseVisualization({
-      referencePhotoUrl: profile.referencePhoto.url,
-      outfit,
-      userProfile: profile,
-      onPoseComplete: (pose, result) => {
-        // Always persist regardless of which chat is active
-        if (result.imageUrl) {
-          completedUrls[pose] = result.imageUrl;
-          setCachedVisualization(outfit.id, profile.referencePhoto.url, completedUrls);
-          db.saveVisualizationUrls(outfit.id, completedUrls).catch(err =>
-            console.error("Failed to save visualization URLs:", err)
-          );
-        }
-
-        // Update React state only if this outfit is still in vizGenerations
-        setVizGenerations(prev => {
-          const current = prev[outfitId];
-          if (!current) return prev;
-
-          const updatedPoses = { ...current.poses, [pose]: result };
-
-          const frontDone = updatedPoses.front.status === 'ready' || updatedPoses.front.status === 'error';
-          let topStatus = 'generating';
-          if (frontDone) {
-            topStatus = updatedPoses.front.status === 'ready' ? 'ready' : 'error';
-          }
-
-          return {
-            ...prev,
-            [outfitId]: { ...current, status: topStatus, poses: updatedPoses }
-          };
-        });
-      }
-    });
-  }, [vizGenerations, profile]);
+    cancelQueuedVisualizationTasks(outfitId);
+    await startVisualizationSequence(genEntry.outfit);
+  }, [startVisualizationSequence, vizGenerations]);
 
   const allWardrobeItems = wardrobeFlat;
 
@@ -5434,11 +5478,7 @@ export default function OutfitRecommendations() {
         if (compatibleUrls?.front) {
           restoredViz[outfit.id] = {
             status: 'ready',
-            poses: {
-              front:  makePoseEntry('ready', compatibleUrls.front),
-              angle:  makePoseEntry(compatibleUrls.angle ? 'ready' : 'idle', compatibleUrls.angle),
-              seated: makePoseEntry(compatibleUrls.seated ? 'ready' : 'idle', compatibleUrls.seated),
-            },
+            poses: buildReadyPoseEntries(compatibleUrls),
             outfit,
           };
         }
@@ -5766,29 +5806,10 @@ export default function OutfitRecommendations() {
                     onShare={async (outfitId) => {
                       const { shareToken } = await shareOutfit(outfitId);
                       const shareUrl = `${window.location.origin}/s/${shareToken}`;
-                      if (navigator.share) {
-                        try {
-                          await navigator.share({ title: 'Check out this outfit on Runway', url: shareUrl });
-                          return 'shared';
-                        } catch (e) {
-                          if (e.name === 'AbortError') return 'shared'; // user cancelled
-                          // Fall through to clipboard
-                        }
-                      }
-                      try {
-                        await navigator.clipboard.writeText(shareUrl);
-                      } catch {
-                        // Fallback for non-secure contexts
-                        const ta = document.createElement('textarea');
-                        ta.value = shareUrl;
-                        ta.style.position = 'fixed';
-                        ta.style.opacity = '0';
-                        document.body.appendChild(ta);
-                        ta.select();
-                        document.execCommand('copy');
-                        document.body.removeChild(ta);
-                      }
-                      return 'copied';
+                      return shareOutfitLink({
+                        url: shareUrl,
+                        title: 'Check out this outfit on Runway',
+                      });
                     }}
                     onToggleSaved={handleToggleOutfitSaved}
                   />

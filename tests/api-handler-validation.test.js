@@ -137,7 +137,7 @@ describe('API handler validation', () => {
         return Promise.resolve({ ok: true });
       }
       openAICallCount++;
-      // OpenAI returns 429 — with MAX_RETRIES=0, no retry occurs
+      // OpenAI returns 429 — 429s are never retried upstream
       return Promise.resolve({
         ok: false,
         status: 429,
@@ -151,6 +151,66 @@ describe('API handler validation', () => {
     expect(res.body.error).toBe('rate_limit');
     expect(res.body.retryAfter).toBe(30);
     expect(openAICallCount).toBe(1);
+  });
+
+  it('propagates Retry-After from upstream 429 responses', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (url === validBody.referencePhotoUrl) {
+        return Promise.resolve({ ok: true });
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 429,
+        headers: {
+          get(name) {
+            return name.toLowerCase() === 'retry-after' ? '12' : null;
+          }
+        },
+        json: () => Promise.resolve({ error: { message: 'Rate limit exceeded' } })
+      });
+    });
+
+    const res = mockRes();
+    await handler(mockReq({ body: validBody }), res);
+    expect(res.statusCode).toBe(429);
+    expect(res.body.retryAfter).toBe(12);
+  });
+
+  it('retries one transient 5xx error and then surfaces the final failure', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(Math, 'random').mockReturnValue(0);
+
+      let openAICallCount = 0;
+      globalThis.fetch = vi.fn((url) => {
+        if (url === validBody.referencePhotoUrl) {
+          return Promise.resolve({ ok: true });
+        }
+        openAICallCount++;
+        return Promise.resolve({
+          ok: false,
+          status: 503,
+          headers: {
+            get() {
+              return null;
+            }
+          },
+          json: () => Promise.resolve({ error: { message: 'Temporary upstream failure' } })
+        });
+      });
+
+      const res = mockRes();
+      const handlerPromise = handler(mockReq({ body: validBody }), res);
+      await vi.advanceTimersByTimeAsync(600);
+      await handlerPromise;
+
+      expect(openAICallCount).toBe(2);
+      expect(res.statusCode).toBe(500);
+      expect(res.body.error).toBe('api_error');
+      expect(res.body.message).toContain('Temporary upstream failure');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('returns 500 on non-retryable OpenAI error (e.g., 400)', async () => {
