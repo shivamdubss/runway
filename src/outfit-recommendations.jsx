@@ -799,24 +799,12 @@ function OutfitVisualizationModal({ poses, outfit, onClose, onRegenerate }) {
           )}
         </div>
 
-        {/* Pose label + dots */}
+        {/* Navigation dots */}
         <div style={{
           display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 8,
+          justifyContent: "center",
           padding: "12px 20px 0",
         }}>
-          <span style={{
-            fontSize: 13,
-            fontWeight: 600,
-            color: "#888",
-            fontFamily: "'DM Sans', sans-serif",
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-          }}>
-            {POSE_LABELS[POSE_ORDER[activeIdx]]}
-          </span>
           <div style={{ display: "flex", gap: 8 }}>
             {POSE_ORDER.map((pose, i) => (
               <button
@@ -839,20 +827,11 @@ function OutfitVisualizationModal({ poses, outfit, onClose, onRegenerate }) {
 
         {/* Footer */}
         <div style={{ padding: "12px 24px 20px" }}>
-          <h3 style={{
-            fontSize: 18,
-            fontWeight: 600,
-            color: "#1A1A1A",
-            marginBottom: 12,
-            fontFamily: "'DM Sans', sans-serif",
-          }}>
-            {outfit?.vibe}
-          </h3>
           <p style={{
             fontSize: 11,
             color: "#B0B0B0",
             textAlign: "center",
-            marginTop: 8,
+            marginTop: 0,
             marginBottom: 0,
             fontFamily: "'DM Sans', sans-serif",
           }}>
@@ -4626,7 +4605,11 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, 
             onPointerUp={(e) => e.currentTarget.style.background = "transparent"}
             onPointerLeave={(e) => e.currentTarget.style.background = "transparent"}
           >
-            <span style={{ fontSize: 16, fontWeight: 300 }}>+</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              <line x1="12" y1="8" x2="12" y2="14" />
+              <line x1="9" y1="11" x2="15" y2="11" />
+            </svg>
             New Chat
           </button>
 
@@ -4654,7 +4637,13 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, 
             onPointerUp={(e) => e.currentTarget.style.background = "transparent"}
             onPointerLeave={(e) => e.currentTarget.style.background = "transparent"}
           >
-            <span style={{ fontSize: 18 }}>🪞</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 4h16v16H4z" />
+              <path d="M9 4v16" />
+              <path d="M15 4v16" />
+              <path d="M4 9h16" />
+              <path d="M4 15h16" />
+            </svg>
             Full Wardrobe
           </button>
 
@@ -4682,7 +4671,7 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, 
             onPointerUp={(e) => e.currentTarget.style.background = "transparent"}
             onPointerLeave={(e) => e.currentTarget.style.background = "transparent"}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
             </svg>
             Saved Outfits
