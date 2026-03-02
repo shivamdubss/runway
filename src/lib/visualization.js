@@ -318,7 +318,7 @@ export async function generateVisualization({ referencePhotoUrl, outfit, userPro
     return response.json();
   } catch (error) {
     if (error.name === 'AbortError') {
-      throw new Error('Visualization request timed out. Please try again.');
+      throw new Error('This is taking longer than usual. Please try again.');
     }
     throw error;
   } finally {

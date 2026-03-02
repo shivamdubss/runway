@@ -512,7 +512,7 @@ function VizCarouselSlot({ poseData, loadingMessage }) {
         justifyContent: "center",
       }}>
         <p style={{ fontSize: 14, color: "#aaa", fontFamily: "'DM Sans', sans-serif" }}>
-          Not generated
+          Tap "See this on you" to try it on
         </p>
       </div>
     );
@@ -555,7 +555,7 @@ function VizCarouselSlot({ poseData, loadingMessage }) {
           fontWeight: 500,
           margin: 0,
         }}>
-          Queued to avoid rate limits...
+          You're next in line...
         </p>
       </div>
     );
@@ -608,7 +608,7 @@ function VizCarouselSlot({ poseData, loadingMessage }) {
           textAlign: "center",
           margin: 0,
         }}>
-          {poseData.error || 'Failed to generate'}
+          {poseData.error || 'Something went wrong — give it another try'}
         </p>
       </div>
     );
@@ -633,16 +633,16 @@ function VizCarouselSlot({ poseData, loadingMessage }) {
 function OutfitVisualizationModal({ poses, outfit, onClose, onRegenerate }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [loadingMessages, setLoadingMessages] = useState({
-    front: "Analyzing outfit...",
-    angle: "Preparing angle view...",
-    seated: "Preparing seated view...",
+    front: "Styling your look...",
+    angle: "Styling your look...",
+    seated: "Styling your look...",
   });
 
   useEffect(() => {
     const messagesByPose = {
-      front: ["Analyzing outfit...", "Preparing your photo...", "Generating front view...", "Almost there..."],
-      angle: ["Preparing angle view...", "Adjusting perspective...", "Generating 3/4 view...", "Almost there..."],
-      seated: ["Preparing seated view...", "Setting up pose...", "Generating seated view...", "Almost there..."],
+      front: ["Styling your look...", "Getting you ready...", "Putting it all together...", "Almost there..."],
+      angle: ["Styling your look...", "Finding your best angle...", "Putting it all together...", "Almost there..."],
+      seated: ["Styling your look...", "Trying a new pose...", "Putting it all together...", "Almost there..."],
     };
     const indices = { front: 0, angle: 0, seated: 0 };
 
@@ -2322,7 +2322,7 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
         {vizStatus === 'generating' ? (
           <span
             role="status"
-            aria-label="Generating visualization"
+            aria-label="Creating your look"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -2341,15 +2341,15 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
             />
           </span>
         ) : vizStatus === 'queued' ? (
-          <span>Queued to avoid rate limits...</span>
+          <span>Hang tight...</span>
         ) : vizStatus === 'ready' ? (
-          <span>View visualization</span>
+          <span>View your look</span>
         ) : vizStatus === 'error' ? (
-          <span>Retry visualization</span>
+          <span>Try again</span>
         ) : hasReferencePhoto ? (
           <span>See this on you 😎</span>
         ) : (
-          <span>Add photo in profile to visualize</span>
+          <span>Add a photo to try things on</span>
         )}
       </button>
     </div>

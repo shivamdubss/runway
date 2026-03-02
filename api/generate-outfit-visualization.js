@@ -346,14 +346,14 @@ export default async function handler(req, res) {
         return res.status(400).json({
           success: false,
           error: 'reference_photo_inaccessible',
-          message: 'Reference photo is no longer accessible. Please re-upload your photo.'
+          message: 'We can\'t find your photo anymore. Please re-upload it in your profile.'
         });
       }
     } catch {
       return res.status(400).json({
         success: false,
         error: 'reference_photo_inaccessible',
-        message: 'Could not reach reference photo URL. Please re-upload your photo.'
+        message: 'We had trouble loading your photo. Please try re-uploading it.'
       });
     }
 
@@ -381,7 +381,7 @@ export default async function handler(req, res) {
       return res.status(504).json({
         success: false,
         error: 'timeout',
-        message: 'Visualization generation timed out. Please try again.'
+        message: 'This is taking longer than usual. Please try again.'
       });
     }
 
@@ -389,7 +389,7 @@ export default async function handler(req, res) {
       return res.status(429).json({
         success: false,
         error: 'rate_limit',
-        message: 'Rate limit exceeded. Please try again in a moment.',
+        message: 'We\'re a little busy right now. Please try again in a moment.',
         retryAfter: error.retryAfter || 30
       });
     }
@@ -398,7 +398,7 @@ export default async function handler(req, res) {
       return res.status(500).json({
         success: false,
         error: 'configuration_error',
-        message: 'Invalid API key. Please check your OpenAI API key.'
+        message: 'Something went wrong on our end. Please try again later.'
       });
     }
 
@@ -406,7 +406,7 @@ export default async function handler(req, res) {
     return res.status(500).json({
       success: false,
       error: 'api_error',
-      message: `Failed to generate visualization: ${error.message || 'Unknown error'}`
+      message: 'Something went wrong. Please try again.'
     });
   }
 }

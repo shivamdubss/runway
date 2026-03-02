@@ -207,7 +207,7 @@ describe('API handler validation', () => {
       expect(openAICallCount).toBe(2);
       expect(res.statusCode).toBe(500);
       expect(res.body.error).toBe('api_error');
-      expect(res.body.message).toContain('Temporary upstream failure');
+      expect(res.body.message).toBe('Something went wrong. Please try again.');
     } finally {
       vi.useRealTimers();
     }
@@ -229,7 +229,7 @@ describe('API handler validation', () => {
     await handler(mockReq({ body: validBody }), res);
     expect(res.statusCode).toBe(500);
     expect(res.body.error).toBe('api_error');
-    expect(res.body.message).toContain('Invalid image format');
+    expect(res.body.message).toBe('Something went wrong. Please try again.');
   });
 
   it('returns 500 when OpenAI response has no b64_json', async () => {
@@ -246,7 +246,7 @@ describe('API handler validation', () => {
     const res = mockRes();
     await handler(mockReq({ body: validBody }), res);
     expect(res.statusCode).toBe(500);
-    expect(res.body.message).toContain('Invalid response from OpenAI API');
+    expect(res.body.message).toBe('Something went wrong. Please try again.');
   });
 });
 
