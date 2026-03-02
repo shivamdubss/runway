@@ -1,10 +1,13 @@
 import { supabase } from './supabase';
+import { compressImage } from './compress-image';
 
 export async function uploadImage(file) {
   const { data: { session } } = await supabase.auth.getSession();
 
+  const processedFile = await compressImage(file);
+
   const formData = new FormData();
-  formData.append('image', file);
+  formData.append('image', processedFile);
 
   const headers = {};
   if (session?.access_token) {
