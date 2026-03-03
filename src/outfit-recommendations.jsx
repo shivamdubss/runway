@@ -2963,7 +2963,9 @@ function ChatView({
             </div>
           </div>
         ) : (
-          messages.map((msg, i) => (
+          <>
+          <div style={{ flex: 1 }} />
+          {messages.map((msg, i) => (
             <div
               key={msg.id ?? i}
               style={{
@@ -3054,7 +3056,8 @@ function ChatView({
                 </button>
               )}
             </div>
-          ))
+          ))}
+          </>
         )}
         {isWaitingForFirstToken && <TypingIndicator />}
       </div>

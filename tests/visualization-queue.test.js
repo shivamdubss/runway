@@ -88,17 +88,20 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
+const { __resetApiQueueForTests } = await import('../src/lib/api-queue.js');
+
 const {
   __resetVisualizationSchedulerForTests,
   generateMultiPoseVisualization,
 } = await import('../src/lib/visualization.js');
 
 beforeEach(() => {
+  __resetApiQueueForTests({ maxConcurrent: 10 });
   __resetVisualizationSchedulerForTests({ minStartIntervalMs: 0 });
 });
 
 describe('visualization queue', () => {
-  it('fires all 3 poses in parallel for a single outfit', async () => {
+  it('fires 3 poses sequentially for a single outfit', async () => {
     const { fetchMock, resolvers, getMaxActive } = createControlledFetchMock();
     vi.stubGlobal('fetch', fetchMock);
 
@@ -108,13 +111,18 @@ describe('visualization queue', () => {
       userProfile: null,
     });
 
-    // All 3 poses fire concurrently
-    await waitForFetchCalls(fetchMock, 3);
-    expect(getMaxActive()).toBe(3);
+    // First pose fires
+    await waitForFetchCalls(fetchMock, 1);
+    expect(getMaxActive()).toBe(1);
 
-    // Resolve all 3
+    // Resolve first — second fires
     resolvers.shift()();
+    await waitForFetchCalls(fetchMock, 2);
+
+    // Resolve second — third fires
     resolvers.shift()();
+    await waitForFetchCalls(fetchMock, 3);
+
     resolvers.shift()();
     const results = await generation;
 
@@ -124,7 +132,7 @@ describe('visualization queue', () => {
   });
 
   it('queues full outfit jobs instead of interleaving poses across outfits', async () => {
-    const { fetchMock, resolvers, getMaxActive } = createControlledFetchMock();
+    const { fetchMock, resolvers } = createControlledFetchMock();
     vi.stubGlobal('fetch', fetchMock);
 
     const firstRun = generateMultiPoseVisualization({
@@ -138,20 +146,21 @@ describe('visualization queue', () => {
       userProfile: null,
     });
 
-    // First outfit fires 3 concurrent poses
+    // First outfit fires poses sequentially
+    await waitForFetchCalls(fetchMock, 1);
+    resolvers.shift()();
+    await waitForFetchCalls(fetchMock, 2);
+    resolvers.shift()();
     await waitForFetchCalls(fetchMock, 3);
-
-    // Resolve first outfit's 3 poses
-    resolvers.shift()();
-    resolvers.shift()();
     resolvers.shift()();
     await firstRun;
 
-    // Second outfit fires 3 concurrent poses
+    // Second outfit fires poses sequentially
+    await waitForFetchCalls(fetchMock, 4);
+    resolvers.shift()();
+    await waitForFetchCalls(fetchMock, 5);
+    resolvers.shift()();
     await waitForFetchCalls(fetchMock, 6);
-
-    resolvers.shift()();
-    resolvers.shift()();
     resolvers.shift()();
     await secondRun;
 
@@ -161,6 +170,7 @@ describe('visualization queue', () => {
   it('pauses dispatch after a 429 retryAfter before starting the next queued outfit', async () => {
     vi.useFakeTimers();
     try {
+      __resetApiQueueForTests({ maxConcurrent: 10 });
       __resetVisualizationSchedulerForTests({ minStartIntervalMs: 0 });
 
       let callCount = 0;
@@ -200,19 +210,29 @@ describe('visualization queue', () => {
         userProfile: null,
       });
 
-      // First outfit's 3 poses fire concurrently and all get 429
+      // Sequential: front pose attempt 1 fires immediately → 429
+      await flushAsyncWork();
+      expect(callCount).toBe(1);
+
+      // Advance 30s: front retry fires → 429, then angle attempt 1 fires immediately → 429
+      // (first attempt of a new pose doesn't wait for scheduler window)
+      await vi.advanceTimersByTimeAsync(30_000);
       await flushAsyncWork();
       expect(callCount).toBe(3);
 
-      // Advance 30s so the retries can fire (rateLimitedUntil = now + 30s)
+      // Advance 30s: angle retry fires → 429, then seated attempt 1 fires immediately → 429
       await vi.advanceTimersByTimeAsync(30_000);
       await flushAsyncWork();
-      // Retries fire (3 more) → also 429 → max retries exhausted → all error
+      expect(callCount).toBe(5);
+
+      // Advance 30s: seated retry fires → 429 → all poses exhausted
+      await vi.advanceTimersByTimeAsync(30_000);
+      await flushAsyncWork();
       expect(callCount).toBe(6);
 
       await firstRun;
 
-      // Second outfit waits for rateLimitedUntil (set by retry 429s at t=30s + 30s = 60s)
+      // Second outfit waits for rateLimitedUntil (set by last 429 at ~t=90s + 30s = ~t=120s)
       await vi.advanceTimersByTimeAsync(29_000);
       await flushAsyncWork();
       expect(callCount).toBe(6); // still hasn't started
@@ -236,7 +256,6 @@ describe('visualization queue', () => {
     vi.stubGlobal('fetch', vi.fn((url, opts) => {
       const body = JSON.parse(opts.body);
 
-      // All poses fail (both initial attempt and retry)
       if (body.pose === 'front') {
         return Promise.resolve({
           ok: false,
@@ -265,9 +284,9 @@ describe('visualization queue', () => {
     expect(results.angle.status).toBe('ready');
     expect(results.seated.status).toBe('ready');
 
-    // All 3 poses completed (order may vary due to parallelism)
+    // All 3 poses completed in order (sequential processing)
     expect(completions).toHaveLength(3);
-    expect(completions.map(c => c[0]).sort()).toEqual(['angle', 'front', 'seated']);
+    expect(completions.map(c => c[0])).toEqual(['front', 'angle', 'seated']);
   });
 
   it('keeps successful poses when one fails after retry', async () => {
@@ -307,6 +326,7 @@ describe('visualization queue', () => {
 
 describe('client-side auto-retry for poses', () => {
   beforeEach(() => {
+    __resetApiQueueForTests({ maxConcurrent: 10 });
     __resetVisualizationSchedulerForTests({ minStartIntervalMs: 0 });
   });
 

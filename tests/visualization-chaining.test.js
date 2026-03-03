@@ -46,12 +46,15 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
+const { __resetApiQueueForTests } = await import('../src/lib/api-queue.js');
+
 const {
   __resetVisualizationSchedulerForTests,
   generateMultiPoseVisualization,
 } = await import('../src/lib/visualization.js');
 
 beforeEach(() => {
+  __resetApiQueueForTests({ maxConcurrent: 10 });
   __resetVisualizationSchedulerForTests({ minStartIntervalMs: 0 });
 });
 

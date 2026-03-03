@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { enqueueApiCall } from './api-queue';
 
 async function getAuthHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
@@ -27,18 +28,20 @@ export async function analyzeOutfitPhoto(imageUrl) {
 }
 
 export async function generateItemImage(item) {
-  const headers = await getAuthHeaders();
+  return enqueueApiCall(async () => {
+    const headers = await getAuthHeaders();
 
-  const res = await fetch('/api/generate-item-image', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ item }),
+    const res = await fetch('/api/generate-item-image', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ item }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || body.message || `Image generation failed (${res.status})`);
+    }
+
+    return res.json();
   });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || body.message || `Image generation failed (${res.status})`);
-  }
-
-  return res.json();
 }

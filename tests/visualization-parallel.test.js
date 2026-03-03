@@ -62,6 +62,8 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
+const { __resetApiQueueForTests } = await import('../src/lib/api-queue.js');
+
 const {
   __resetVisualizationSchedulerForTests,
   generateMultiPoseVisualization,
@@ -69,11 +71,12 @@ const {
 } = await import('../src/lib/visualization.js');
 
 beforeEach(() => {
+  __resetApiQueueForTests({ maxConcurrent: 10 });
   __resetVisualizationSchedulerForTests({ minStartIntervalMs: 0 });
 });
 
-describe('fully parallel pose generation', () => {
-  it('fires all 3 poses concurrently (maxActive === 3)', async () => {
+describe('sequential pose generation', () => {
+  it('fires 3 poses sequentially (maxActive === 1)', async () => {
     let active = 0;
     let maxActive = 0;
     const resolvers = [];
@@ -92,14 +95,25 @@ describe('fully parallel pose generation', () => {
 
     const gen = generateMultiPoseVisualization({
       referencePhotoUrl: 'http://photo.jpg',
-      outfit: makeOutfit('parallel-check'),
+      outfit: makeOutfit('sequential-check'),
       userProfile: null,
     });
 
-    await waitForFetchCalls(globalThis.fetch, 3);
-    expect(maxActive).toBe(3);
+    // First pose fires
+    await waitForFetchCalls(globalThis.fetch, 1);
+    expect(maxActive).toBe(1);
 
-    resolvers.forEach(r => r());
+    // Resolve first — second fires
+    resolvers.shift()();
+    await waitForFetchCalls(globalThis.fetch, 2);
+    expect(maxActive).toBe(1);
+
+    // Resolve second — third fires
+    resolvers.shift()();
+    await waitForFetchCalls(globalThis.fetch, 3);
+    expect(maxActive).toBe(1);
+
+    resolvers.shift()();
     await gen;
   });
 
@@ -156,7 +170,7 @@ describe('fully parallel pose generation', () => {
     expect(results.seated.status).toBe('ready');
   });
 
-  it('onPoseStart fires for each pose', async () => {
+  it('onPoseStart fires for each pose in order', async () => {
     const starts = [];
 
     vi.stubGlobal('fetch', vi.fn((url, opts) => {
@@ -174,7 +188,7 @@ describe('fully parallel pose generation', () => {
       onPoseStart: (pose) => starts.push(pose),
     });
 
-    expect(starts.sort()).toEqual(['angle', 'front', 'seated']);
+    expect(starts).toEqual(['front', 'angle', 'seated']);
   });
 
   it('onPoseComplete fires for each pose with correct results', async () => {
@@ -196,15 +210,14 @@ describe('fully parallel pose generation', () => {
     });
 
     expect(completions).toHaveLength(3);
-    const sorted = completions.sort((a, b) => a.pose.localeCompare(b.pose));
-    expect(sorted).toEqual([
-      { pose: 'angle', status: 'ready' },
+    expect(completions).toEqual([
       { pose: 'front', status: 'ready' },
+      { pose: 'angle', status: 'ready' },
       { pose: 'seated', status: 'ready' },
     ]);
   });
 
-  it('cancellation finalizes all pending poses as idle', async () => {
+  it('cancellation of queued sequence prevents its execution', async () => {
     const resolvers = [];
 
     vi.stubGlobal('fetch', vi.fn(() => new Promise(resolve => {
@@ -214,25 +227,41 @@ describe('fully parallel pose generation', () => {
       }));
     })));
 
-    const gen = generateMultiPoseVisualization({
+    // Queue two outfits — first becomes active, second is pending
+    const gen1 = generateMultiPoseVisualization({
       referencePhotoUrl: 'http://photo.jpg',
-      outfit: makeOutfit('cancel-test'),
+      outfit: makeOutfit('active-outfit'),
+      userProfile: null,
+    });
+    const gen2 = generateMultiPoseVisualization({
+      referencePhotoUrl: 'http://photo.jpg',
+      outfit: makeOutfit('cancel-target'),
       userProfile: null,
     });
 
+    // Cancel the pending second outfit before it starts
+    cancelQueuedVisualizationTasks('cancel-target');
+    const cancelledResults = await gen2;
+
+    // Cancelled sequence resolves with empty results (no poses generated)
+    expect(cancelledResults.front).toBeUndefined();
+    expect(cancelledResults.angle).toBeUndefined();
+    expect(cancelledResults.seated).toBeUndefined();
+
+    // Complete the first outfit normally
+    await waitForFetchCalls(globalThis.fetch, 1);
+    resolvers.shift()();
+    await waitForFetchCalls(globalThis.fetch, 2);
+    resolvers.shift()();
     await waitForFetchCalls(globalThis.fetch, 3);
+    resolvers.shift()();
 
-    // Cancel before resolving any poses
-    cancelQueuedVisualizationTasks('cancel-test');
+    const results1 = await gen1;
+    expect(results1.front.status).toBe('ready');
+    expect(results1.angle.status).toBe('ready');
+    expect(results1.seated.status).toBe('ready');
 
-    // Resolve the in-flight fetches so the promises settle
-    resolvers.forEach(r => r());
-    const results = await gen;
-
-    // Cancelled sequences finalize remaining poses as idle
-    // (some may have completed before cancellation was detected)
-    const statuses = [results.front.status, results.angle.status, results.seated.status];
-    // At least some should be idle or ready (depends on timing)
-    expect(statuses.every(s => s === 'idle' || s === 'ready')).toBe(true);
+    // Only first outfit's 3 poses were fetched
+    expect(globalThis.fetch).toHaveBeenCalledTimes(3);
   });
 });

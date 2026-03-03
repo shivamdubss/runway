@@ -2,13 +2,14 @@
  * Client-side service for outfit visualization generation
  */
 import { supabase } from './supabase';
+import { enqueueApiCall } from './api-queue';
 
 const POSE_ORDER = ['front', 'angle', 'seated'];
 const VISUALIZATION_CACHE_PREFIX = 'viz_';
 const VISUALIZATION_CACHE_VERSION = 'v2';
 const CLIENT_TIMEOUT_MS = 62_000;
 const VISUALIZATION_MAX_CONCURRENT = 1;
-const VISUALIZATION_MIN_START_INTERVAL_MS = 12_500;
+const VISUALIZATION_MIN_START_INTERVAL_MS = 5_000;
 const POSE_RETRY_MAX = 1;
 
 const pendingSequences = [];
@@ -97,9 +98,9 @@ async function runVisualizationSequence(sequence) {
       return;
     }
 
-    // Fire all 3 poses in parallel — each uses the preprocessed reference directly
-    const parallelPromises = POSE_ORDER.map(async (pose) => {
-      if (sequence.cancelled) return;
+    // Process poses sequentially — front first (visible to user), then angle, seated
+    for (const pose of POSE_ORDER) {
+      if (sequence.cancelled) break;
 
       if (sequence.onPoseStart) {
         sequence.onPoseStart(pose);
@@ -112,12 +113,14 @@ async function runVisualizationSequence(sequence) {
         }
 
         try {
-          const result = await generateVisualization({
-            referencePhotoUrl: sequence.referencePhotoUrl,
-            outfit: sequence.outfit,
-            userProfile: sequence.userProfile,
-            pose,
-          });
+          const result = await enqueueApiCall(() =>
+            generateVisualization({
+              referencePhotoUrl: sequence.referencePhotoUrl,
+              outfit: sequence.outfit,
+              userProfile: sequence.userProfile,
+              pose,
+            })
+          );
           sequence.results[pose] = makePoseResult('ready', result.imageUrl);
           break;
         } catch (error) {
@@ -134,9 +137,7 @@ async function runVisualizationSequence(sequence) {
       if (sequence.onPoseComplete) {
         sequence.onPoseComplete(pose, sequence.results[pose]);
       }
-    });
-
-    await Promise.allSettled(parallelPromises);
+    }
 
     if (sequence.cancelled) {
       finalizeRemainingPoses(sequence, 'idle');
