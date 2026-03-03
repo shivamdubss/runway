@@ -68,7 +68,7 @@ Style direction: ${outfit.vibe || 'casual'}, photorealistic editorial look.${con
 The replacement garments must drape naturally on the existing body with physically correct wrinkles, shadows, and fabric weight. Match the scene lighting on the new clothing surfaces exactly.${faceGuardBlock}`.trim();
 }
 
-const OPENAI_TIMEOUT_MS = 50_000;
+const OPENAI_TIMEOUT_MS = 55_000;
 const MAX_TRANSIENT_RETRIES = 2;
 const RETRY_BACKOFF_BASE_MS = 500;
 const MAX_429_RETRY_WAIT_MS = 15_000;

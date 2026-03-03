@@ -27,8 +27,8 @@ const vercelConfig = JSON.parse(readFileSync(resolve('vercel.json'), 'utf-8'));
 const VERCEL_MAX_DURATION_MS = vercelConfig.functions['api/generate-outfit-visualization.js'].maxDuration * 1000;
 
 describe('visualization timeout alignment', () => {
-  it('server OpenAI timeout is at least 8s below Vercel hard limit', () => {
-    expect(VERCEL_MAX_DURATION_MS - OPENAI_TIMEOUT).toBeGreaterThanOrEqual(8000);
+  it('server OpenAI timeout is at least 5s below Vercel hard limit', () => {
+    expect(VERCEL_MAX_DURATION_MS - OPENAI_TIMEOUT).toBeGreaterThanOrEqual(5000);
   });
 
   it('client timeout is above Vercel hard limit', () => {

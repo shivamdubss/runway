@@ -1,4 +1,4 @@
-const CACHE_KEY = 'runway_weather_cache';
+const CACHE_KEY = 'runway_weather_cache_metric';
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
