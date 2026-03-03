@@ -112,7 +112,9 @@ async function runVisualizationSequence(sequence) {
         }
 
         try {
-          const generateFn = sequence.stream !== false
+          // Use streaming on first attempt, fall back to non-streaming on retries
+          const useStreaming = sequence.stream !== false && retryAttempt === 0;
+          const generateFn = useStreaming
             ? generateVisualizationStreaming
             : generateVisualization;
 
@@ -121,7 +123,7 @@ async function runVisualizationSequence(sequence) {
             outfit: sequence.outfit,
             userProfile: sequence.userProfile,
             pose,
-            onPartialImage: sequence.stream !== false && sequence.onPartialImage
+            onPartialImage: useStreaming && sequence.onPartialImage
               ? (b64) => sequence.onPartialImage(pose, b64)
               : undefined,
           });
@@ -394,6 +396,14 @@ export async function generateVisualizationStreaming({
       error.code = errorData.error;
       error.retryAfter = parseRetryAfterSeconds(errorData.retryAfter);
       throw error;
+    }
+
+    // Check if the server actually returned SSE or fell back to JSON
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('text/event-stream')) {
+      const data = await response.json();
+      if (!data.imageUrl) throw new Error('No imageUrl in response');
+      return { imageUrl: data.imageUrl };
     }
 
     if (!response.body) {

@@ -85,7 +85,7 @@ describe('streaming mode', () => {
       }
       return Promise.resolve({
         ok: true,
-        headers: new Map(),
+        headers: new Map([['content-type', 'text/event-stream']]),
         body: createOpenAISSEBody([
           { type: 'image_generation.partial', data: [{ b64_json: 'partialdata' }] },
           { type: 'image_generation.completed', data: [{ b64_json: 'ZmluYWw=' }] },
@@ -135,7 +135,7 @@ describe('streaming mode', () => {
       }
       return Promise.resolve({
         ok: true,
-        headers: new Map(),
+        headers: new Map([['content-type', 'text/event-stream']]),
         body: createOpenAISSEBody([
           { type: 'image_generation.partial', data: [{ b64_json: 'cGFydGlhbDE=' }] },
           { type: 'image_generation.partial', data: [{ b64_json: 'cGFydGlhbDI=' }] },

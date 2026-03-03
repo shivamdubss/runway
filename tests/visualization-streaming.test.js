@@ -79,6 +79,7 @@ describe('generateVisualizationStreaming', () => {
 
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
       ok: true,
+      headers: new Headers({ 'content-type': 'text/event-stream' }),
       body: createSSEBody([
         { type: 'start', pose: 'front' },
         { type: 'partial_image', b64_json: 'partial1base64' },
@@ -102,6 +103,7 @@ describe('generateVisualizationStreaming', () => {
   it('handles error events by rejecting', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
       ok: true,
+      headers: new Headers({ 'content-type': 'text/event-stream' }),
       body: createSSEBody([
         { type: 'start', pose: 'front' },
         { type: 'error', message: 'Generation failed due to content policy' },
@@ -119,6 +121,7 @@ describe('generateVisualizationStreaming', () => {
   it('rejects when stream ends without a complete event', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
       ok: true,
+      headers: new Headers({ 'content-type': 'text/event-stream' }),
       body: createSSEBody([
         { type: 'start', pose: 'front' },
         { type: 'partial_image', b64_json: 'partial1base64' },
@@ -150,6 +153,7 @@ describe('generateVisualizationStreaming', () => {
   it('works without onPartialImage callback', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
       ok: true,
+      headers: new Headers({ 'content-type': 'text/event-stream' }),
       body: createSSEBody([
         { type: 'start', pose: 'front' },
         { type: 'partial_image', b64_json: 'partial1base64' },
@@ -176,6 +180,7 @@ describe('generateMultiPoseVisualization with streaming', () => {
       const body = JSON.parse(opts.body);
       return Promise.resolve({
         ok: true,
+        headers: new Headers({ 'content-type': 'text/event-stream' }),
         body: createSSEBody([
           { type: 'start', pose: body.pose },
           { type: 'partial_image', b64_json: `partial-${body.pose}` },

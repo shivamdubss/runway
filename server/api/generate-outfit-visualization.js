@@ -254,6 +254,31 @@ async function* generateOutfitVisualizationStreaming({ referencePhotoUrl, outfit
       }),
     }, controller.signal, { pose }, deadline);
 
+    // Check if OpenAI actually returned SSE or fell back to JSON
+    const responseContentType = getHeader(apiResponse.headers, 'content-type') || '';
+    if (!responseContentType.includes('text/event-stream')) {
+      const response = await apiResponse.json();
+      const b64 = response?.data?.[0]?.b64_json;
+      if (!b64) {
+        throw new Error('No image data in OpenAI response');
+      }
+
+      const generatedImageBuffer = Buffer.from(b64, 'base64');
+      const blob = await put(
+        `${VISUALIZATION_BLOB_PREFIX}/${randomUUID()}.png`,
+        generatedImageBuffer,
+        {
+          access: 'public',
+          token: process.env.runway_READ_WRITE_TOKEN,
+          contentType: 'image/png',
+        }
+      );
+
+      console.log('[generateOutfitVisualizationStreaming] OpenAI returned JSON, uploaded', { pose, blobUrl: blob.url });
+      yield { type: 'complete', blobUrl: blob.url };
+      return;
+    }
+
     const reader = apiResponse.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -368,6 +393,7 @@ export async function handleGenerateOutfitVisualization(req, res) {
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
       res.setHeader('X-Accel-Buffering', 'no');
+      if (typeof res.flushHeaders === 'function') res.flushHeaders();
 
       const sendEvent = (data) => {
         res.write(`data: ${JSON.stringify(data)}\n\n`);
