@@ -2733,6 +2733,7 @@ function ChatView({
   const chatMessagesRef = useRef(null);
   const isInitialMount = useRef(true);
   const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
   const canSend = !isGenerating && (inputValue.trim() || pendingImage);
   const [isDragOver, setIsDragOver] = useState(false);
 
@@ -2745,6 +2746,13 @@ function ChatView({
     });
     isInitialMount.current = false;
   }, [messages]);
+
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = ta.scrollHeight + "px";
+  }, [inputValue]);
 
   return (
     <div
@@ -3104,7 +3112,7 @@ function ChatView({
         <div style={{
           display: "flex",
           gap: 8,
-          alignItems: "center",
+          alignItems: "flex-end",
         }}>
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -3147,24 +3155,36 @@ function ChatView({
               <polyline points="21 15 16 10 5 21"/>
             </svg>
           </button>
-          <input
-            type="text"
+          <textarea
+            ref={textareaRef}
             className="chat-input"
             value={inputValue}
             disabled={isGenerating}
+            rows={1}
             onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") onSend(); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                onSend();
+              }
+            }}
             placeholder="Type a message..."
             style={{
               flex: 1,
-              height: "var(--input-height)",
-              borderRadius: "calc(var(--input-height) / 2)",
+              minHeight: "var(--input-height)",
+              maxHeight: 160,
+              overflowY: "auto",
+              borderRadius: 20,
               border: "1px solid rgba(0,0,0,0.09)",
               background: "#fff",
               color: "#333",
               fontSize: "var(--font-chat)",
-              padding: "0 var(--container-padding-x)",
+              padding: "12px var(--container-padding-x)",
               fontFamily: "'DM Sans', sans-serif",
+              resize: "none",
+              lineHeight: 1.5,
+              display: "block",
+              boxSizing: "border-box",
             }}
           />
           <button
