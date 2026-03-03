@@ -184,9 +184,30 @@ describe('buildVisualizationPrompt – pose support', () => {
   it('all poses contain face preservation and clothing replacement', () => {
     for (const pose of ['front', 'angle', 'seated']) {
       const result = buildVisualizationPrompt(outfit, null, pose);
-      expect(result).toContain("Keep the subject's face");
+      expect(result).toContain("subject's face");
       expect(result).toContain('Replace ONLY the clothing');
       expect(result).toContain('physically correct wrinkles');
+    }
+  });
+
+  it('angle and seated poses include CRITICAL face guard instruction', () => {
+    for (const pose of ['angle', 'seated']) {
+      const result = buildVisualizationPrompt(outfit, null, pose);
+      expect(result).toContain('CRITICAL: The face must be identical to the input');
+      expect(result).toContain('do not alter, regenerate, or reinterpret');
+    }
+  });
+
+  it('front pose does NOT include face guard instruction', () => {
+    const result = buildVisualizationPrompt(outfit, null, 'front');
+    expect(result).not.toContain('CRITICAL: The face must be identical');
+  });
+
+  it('angle and seated use stronger preservation language', () => {
+    for (const pose of ['angle', 'seated']) {
+      const result = buildVisualizationPrompt(outfit, null, pose);
+      expect(result).toContain('must remain exactly as shown');
+      expect(result).toContain('do not regenerate or reimagine');
     }
   });
 

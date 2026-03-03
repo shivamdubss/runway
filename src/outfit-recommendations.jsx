@@ -996,7 +996,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
       imageUrl = await uploadImage(file);
       setImages([{ previewUrl, uploadedUrl: imageUrl }]);
     } catch (err) {
-      console.error("Image upload failed:", err);
+      console.error("Image upload failed:", err, { name: file.name, type: file.type, size: file.size });
       setUploadError("Failed to upload image. Please try again.");
       URL.revokeObjectURL(previewUrl);
       setImages([]);
@@ -1015,7 +1015,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
       setAiAccent(result.accent_color);
       setAiEmoji(result.emoji);
     } catch (err) {
-      console.error("Image analysis failed:", err);
+      console.error("Image analysis failed:", err, { name: file.name, type: file.type, size: file.size });
       setAnalysisError("Could not analyze image. Add details manually.");
       setIsEditingName(true);
     } finally {
@@ -1034,7 +1034,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
       const url = await uploadImage(file);
       setImages(prev => prev.map(img => img.previewUrl === previewUrl ? { ...img, uploadedUrl: url } : img));
     } catch (err) {
-      console.error("Extra image upload failed:", err);
+      console.error("Extra image upload failed:", err, { name: file.name, type: file.type, size: file.size });
       // Remove the failed image
       URL.revokeObjectURL(previewUrl);
       setImages(prev => prev.filter(img => img.previewUrl !== previewUrl));
@@ -1063,6 +1063,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
             error: null,
           };
         } catch (err) {
+          console.error("Bulk upload failed for file:", err, { name: file.name, type: file.type, size: file.size });
           return {
             previewUrl,
             uploadedUrl: null,
@@ -4321,7 +4322,7 @@ function ReferencePhotoCard({ profile, onSave }) {
     setUploadError(null);
 
     try {
-      const url = await uploadImage(file);
+      const url = await uploadImage(file, { normalizeAspectRatio: true });
 
       const updatedProfile = {
         ...profile,

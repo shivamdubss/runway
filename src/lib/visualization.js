@@ -6,6 +6,7 @@ import { supabase } from './supabase';
 const POSE_ORDER = ['front', 'angle', 'seated'];
 const VISUALIZATION_CACHE_PREFIX = 'viz_';
 const VISUALIZATION_CACHE_VERSION = 'v2';
+const PREPROCESSED_CACHE_PREFIX = 'preproc_';
 const CLIENT_TIMEOUT_MS = 62_000;
 const VISUALIZATION_MAX_CONCURRENT = 1;
 const VISUALIZATION_MIN_START_INTERVAL_MS = 12_500;
@@ -85,6 +86,9 @@ function finalizeRemainingPoses(sequence, status = 'idle') {
 
 async function runVisualizationSequence(sequence) {
   try {
+    // Preprocess: remove background + studio backdrop before generating any poses
+    const preprocessedUrl = await ensurePreprocessedReference(sequence.referencePhotoUrl);
+
     for (const pose of POSE_ORDER) {
       if (sequence.cancelled) break;
 
@@ -95,9 +99,16 @@ async function runVisualizationSequence(sequence) {
         sequence.onPoseStart(pose);
       }
 
+      // Two-pass chaining: after front succeeds, use the generated front image
+      // as the reference for angle/seated to ensure consistent face and lighting
+      let refUrl = preprocessedUrl;
+      if (pose !== 'front' && sequence.results.front?.imageUrl) {
+        refUrl = sequence.results.front.imageUrl;
+      }
+
       try {
         const result = await generateVisualization({
-          referencePhotoUrl: sequence.referencePhotoUrl,
+          referencePhotoUrl: refUrl,
           outfit: sequence.outfit,
           userProfile: sequence.userProfile,
           pose,
@@ -277,6 +288,80 @@ function clearOldVisualizationCaches() {
     console.log(`[clearOldVisualizationCaches] Removed ${toRemove.length} old cached visualizations`);
   } catch (error) {
     console.error('[clearOldVisualizationCaches] Error:', error);
+  }
+}
+
+/**
+ * Get a cached preprocessed reference URL from localStorage, or null.
+ */
+export function getCachedPreprocessedUrl(referencePhotoUrl) {
+  const cacheKey = `${PREPROCESSED_CACHE_PREFIX}${hashString(referencePhotoUrl)}`;
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (!cached) return null;
+    const parsed = JSON.parse(cached);
+    if (Date.now() > parsed.expiresAt) {
+      localStorage.removeItem(cacheKey);
+      return null;
+    }
+    return parsed.preprocessedUrl || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Save a preprocessed reference URL to localStorage (30-day expiration).
+ */
+export function setCachedPreprocessedUrl(referencePhotoUrl, preprocessedUrl) {
+  const cacheKey = `${PREPROCESSED_CACHE_PREFIX}${hashString(referencePhotoUrl)}`;
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify({
+      preprocessedUrl,
+      expiresAt: Date.now() + (30 * 24 * 60 * 60 * 1000),
+    }));
+  } catch {
+    // Non-critical — preprocessing will just re-run next time
+  }
+}
+
+/**
+ * Ensure the reference photo has been preprocessed (background removed, studio backdrop).
+ * Returns the preprocessed URL (cached or freshly generated).
+ * Falls back to the original URL if preprocessing fails.
+ */
+export async function ensurePreprocessedReference(referencePhotoUrl) {
+  const cached = getCachedPreprocessedUrl(referencePhotoUrl);
+  if (cached) return cached;
+
+  const { data: { session } } = await supabase.auth.getSession();
+  const headers = { 'Content-Type': 'application/json' };
+  if (session?.access_token) {
+    headers['Authorization'] = `Bearer ${session.access_token}`;
+  }
+
+  try {
+    const response = await fetch('/api/preprocess-reference', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ referencePhotoUrl }),
+    });
+
+    if (!response.ok) {
+      console.warn('[ensurePreprocessedReference] Preprocessing failed, using original photo');
+      return referencePhotoUrl;
+    }
+
+    const { preprocessedUrl } = await response.json();
+    if (preprocessedUrl) {
+      setCachedPreprocessedUrl(referencePhotoUrl, preprocessedUrl);
+      return preprocessedUrl;
+    }
+
+    return referencePhotoUrl;
+  } catch (error) {
+    console.warn('[ensurePreprocessedReference] Preprocessing error, using original photo:', error.message);
+    return referencePhotoUrl;
   }
 }
 

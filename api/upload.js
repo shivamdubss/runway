@@ -80,12 +80,24 @@ export default async function handler(req, res) {
   try {
     file = await parseMultipartForm(req);
   } catch (parseError) {
-    console.error('[/api/upload] Parse error:', parseError?.message || parseError);
+    console.error('[/api/upload] Parse error:', {
+      error: parseError?.message || parseError,
+      contentType: req.headers['content-type'],
+      bodyType: typeof req.body,
+      bodyIsBuffer: Buffer.isBuffer(req.body),
+    });
     return res.status(400).json({ error: 'Failed to parse upload. Please try again.' });
   }
 
+  console.log('[/api/upload] File received:', {
+    name: file.originalname,
+    mimetype: file.mimetype,
+    size: file.buffer?.length,
+  });
+
   const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
   if (!allowedTypes.includes(file.mimetype)) {
+    console.warn('[/api/upload] Rejected file type:', file.mimetype);
     return res.status(400).json({ error: 'Invalid file type. Allowed: JPEG, PNG, WebP, GIF, HEIC' });
   }
 
@@ -101,7 +113,12 @@ export default async function handler(req, res) {
 
     return res.json({ url: blob.url });
   } catch (uploadError) {
-    console.error('[/api/upload] Blob upload error:', uploadError?.message || uploadError);
+    console.error('[/api/upload] Blob upload error:', {
+      error: uploadError?.message || uploadError,
+      hasToken: !!process.env.runway_READ_WRITE_TOKEN,
+      fileSize: file.buffer?.length,
+      mimetype: file.mimetype,
+    });
     return res.status(500).json({ error: 'Failed to store image. Please try again.' });
   }
 }

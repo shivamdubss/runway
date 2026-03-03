@@ -91,10 +91,13 @@ beforeEach(() => {
 const {
   __resetVisualizationSchedulerForTests,
   generateMultiPoseVisualization,
+  setCachedPreprocessedUrl,
 } = await import('../src/lib/visualization.js');
 
 beforeEach(() => {
   __resetVisualizationSchedulerForTests({ minStartIntervalMs: 0 });
+  // Pre-seed preprocessed cache so ensurePreprocessedReference skips the API call
+  setCachedPreprocessedUrl('http://photo.jpg', 'http://preprocessed.jpg');
 });
 
 describe('visualization queue', () => {

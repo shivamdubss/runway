@@ -13,14 +13,16 @@ const POSE_CONFIGS = {
     framing: 'Maintain the same camera distance and perspective as the input photo while preserving a full-body composition. Keep the subject fully visible from head to toe, including all footwear, with no crop, zoom, or truncation of limbs.',
   },
   angle: {
-    preservation: "Keep the subject's face, facial structure, skin tone, hair, and expression identical to the input photo. Preserve the subject's body proportions and build.",
+    preservation: "The subject's face, facial structure, skin tone, hair, and expression must remain exactly as shown in the input photo — do not regenerate or reimagine any facial features. Preserve the subject's body proportions and build exactly.",
     pose: "Transform the subject into a 30-50 degree three-quarter turn showing the side silhouette, with the head turned slightly toward the camera. The background should remain a clean, neutral environment consistent with the original scene lighting.",
     framing: "Full body visible from head to toe, including all footwear. This angle should clearly show how the garment drapes along the side of the body, back pocket placement, jacket vents, and how the hem sits at the side.",
+    faceGuard: "CRITICAL: The face must be identical to the input — do not alter, regenerate, or reinterpret any facial features, expression, or skin texture.",
   },
   seated: {
-    preservation: "Keep the subject's face, facial structure, skin tone, hair, and expression identical to the input photo. Preserve the subject's body proportions and build.",
+    preservation: "The subject's face, facial structure, skin tone, hair, and expression must remain exactly as shown in the input photo — do not regenerate or reimagine any facial features. Preserve the subject's body proportions and build exactly.",
     pose: "Transform the subject into a natural seated position on a simple, neutral stool or bench. Posture is relaxed and upright with a slight forward lean. Full torso and lap visible, legs visible to at least mid-calf. The background should remain a clean, neutral environment consistent with the original scene lighting.",
     framing: "For tops: show how fabric bunches, pulls, or gaps when seated. For bottoms: show how pants rise at the shin, how a skirt falls, and whether the waistband digs in.",
+    faceGuard: "CRITICAL: The face must be identical to the input — do not alter, regenerate, or reinterpret any facial features, expression, or skin texture.",
   },
 };
 
@@ -59,13 +61,14 @@ export function buildVisualizationPrompt(outfit, userProfile, pose = 'front') {
 
   const poseBlock = config.pose ? `\n\n${config.pose}` : '';
   const framingBlock = config.framing ? `\n\n${config.framing}` : '';
+  const faceGuardBlock = config.faceGuard ? `\n\n${config.faceGuard}` : '';
 
   return `Virtual try-on edit. ${config.preservation}${poseBlock}
 
 Replace ONLY the clothing with: ${items}.
 Style direction: ${outfit.vibe || 'casual'}, photorealistic editorial look.${contextBlock}${framingBlock}
 
-The replacement garments must drape naturally on the existing body with physically correct wrinkles, shadows, and fabric weight. Match the scene lighting on the new clothing surfaces exactly.`.trim();
+The replacement garments must drape naturally on the existing body with physically correct wrinkles, shadows, and fabric weight. Match the scene lighting on the new clothing surfaces exactly.${faceGuardBlock}`.trim();
 }
 
 const OPENAI_TIMEOUT_MS = 50_000;
@@ -221,7 +224,7 @@ async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProf
         prompt: prompt,
         n: 1,
         size: VISUALIZATION_OUTPUT_SIZE,
-        input_fidelity: "low"
+        input_fidelity: "high"
       })
     }, controller.signal, { pose });
 
