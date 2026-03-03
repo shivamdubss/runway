@@ -49,37 +49,28 @@ beforeEach(() => {
 const {
   __resetVisualizationSchedulerForTests,
   generateMultiPoseVisualization,
-  setCachedPreprocessedUrl,
 } = await import('../src/lib/visualization.js');
 
 beforeEach(() => {
   __resetVisualizationSchedulerForTests({ minStartIntervalMs: 0 });
-  // Pre-seed preprocessed cache
-  setCachedPreprocessedUrl('http://photo.jpg', 'http://preprocessed.jpg');
 });
 
 describe('two-pass chaining', () => {
-  it('uses preprocessed URL for front, then front output for angle and seated', async () => {
+  it('uses provided reference URL for all poses', async () => {
     const fetchCalls = [];
 
     vi.stubGlobal('fetch', vi.fn((url, opts) => {
       const body = JSON.parse(opts.body);
       fetchCalls.push({ url, referencePhotoUrl: body.referencePhotoUrl, pose: body.pose });
 
-      const imageUrl = body.pose === 'front'
-        ? 'http://generated-front.png'
-        : body.pose === 'angle'
-          ? 'http://generated-angle.png'
-          : 'http://generated-seated.png';
-
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ imageUrl }),
+        json: () => Promise.resolve({ imageUrl: `http://generated-${body.pose}.png` }),
       });
     }));
 
     const results = await generateMultiPoseVisualization({
-      referencePhotoUrl: 'http://photo.jpg',
+      referencePhotoUrl: 'http://preprocessed.jpg',
       outfit: {
         id: 'chain-test',
         items: [{ name: 'Shirt' }],
@@ -90,34 +81,26 @@ describe('two-pass chaining', () => {
 
     expect(fetchCalls).toHaveLength(3);
 
-    // Front pose uses preprocessed URL
-    expect(fetchCalls[0].referencePhotoUrl).toBe('http://preprocessed.jpg');
-    expect(fetchCalls[0].pose).toBe('front');
+    // All poses use the provided reference URL directly
+    for (const call of fetchCalls) {
+      expect(call.referencePhotoUrl).toBe('http://preprocessed.jpg');
+    }
 
-    // Angle pose uses the generated front image (chaining)
-    expect(fetchCalls[1].referencePhotoUrl).toBe('http://generated-front.png');
-    expect(fetchCalls[1].pose).toBe('angle');
-
-    // Seated pose also uses the generated front image (chaining)
-    expect(fetchCalls[2].referencePhotoUrl).toBe('http://generated-front.png');
-    expect(fetchCalls[2].pose).toBe('seated');
+    // All 3 poses present (order may vary since they run in parallel)
+    const poses = fetchCalls.map(c => c.pose).sort();
+    expect(poses).toEqual(['angle', 'front', 'seated']);
 
     expect(results.front.status).toBe('ready');
     expect(results.angle.status).toBe('ready');
     expect(results.seated.status).toBe('ready');
   });
 
-  it('falls back to preprocessed URL when front fails', async () => {
-    const fetchCalls = [];
-    let callCount = 0;
-
+  it('one pose failure does not affect others when running in parallel', async () => {
     vi.stubGlobal('fetch', vi.fn((url, opts) => {
       const body = JSON.parse(opts.body);
-      fetchCalls.push({ referencePhotoUrl: body.referencePhotoUrl, pose: body.pose });
-      callCount++;
 
-      // Front fails
-      if (callCount === 1) {
+      // Front fails (both attempts — POSE_RETRY_MAX = 1)
+      if (body.pose === 'front') {
         return Promise.resolve({
           ok: false,
           status: 500,
@@ -132,69 +115,22 @@ describe('two-pass chaining', () => {
     }));
 
     const results = await generateMultiPoseVisualization({
-      referencePhotoUrl: 'http://photo.jpg',
+      referencePhotoUrl: 'http://preprocessed.jpg',
       outfit: {
-        id: 'chain-fallback',
+        id: 'parallel-independent',
         items: [{ name: 'Shirt' }],
         vibe: 'casual',
       },
       userProfile: null,
     });
 
-    // When front fails, only 1 fetch call is made (remaining go idle)
-    expect(fetchCalls).toHaveLength(1);
+    // Front fails but angle and seated still succeed
     expect(results.front.status).toBe('error');
-    expect(results.angle.status).toBe('idle');
-    expect(results.seated.status).toBe('idle');
-  });
-});
-
-describe('preprocessing integration', () => {
-  it('calls preprocessing API when no cached preprocessed URL exists', async () => {
-    // Clear the pre-seeded cache
-    localStorageMock.clear();
-
-    const fetchCalls = [];
-
-    vi.stubGlobal('fetch', vi.fn((url, opts) => {
-      const body = JSON.parse(opts.body);
-      fetchCalls.push({ url, body });
-
-      // Preprocessing call
-      if (url === '/api/preprocess-reference') {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ preprocessedUrl: 'http://preprocessed-api.png' }),
-        });
-      }
-
-      // Visualization call
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ imageUrl: `http://generated-${body.pose}.png` }),
-      });
-    }));
-
-    const results = await generateMultiPoseVisualization({
-      referencePhotoUrl: 'http://photo.jpg',
-      outfit: {
-        id: 'preprocess-test',
-        items: [{ name: 'Shirt' }],
-        vibe: 'casual',
-      },
-      userProfile: null,
-    });
-
-    // First call should be preprocessing, then 3 pose generations
-    expect(fetchCalls).toHaveLength(4);
-    expect(fetchCalls[0].url).toBe('/api/preprocess-reference');
-    expect(fetchCalls[0].body.referencePhotoUrl).toBe('http://photo.jpg');
-    expect(results.front.status).toBe('ready');
+    expect(results.angle.status).toBe('ready');
+    expect(results.seated.status).toBe('ready');
   });
 
-  it('skips preprocessing API when cached preprocessed URL exists', async () => {
-    // Cache is pre-seeded in beforeEach
-
+  it('only makes visualization API calls (no preprocessing)', async () => {
     const fetchCalls = [];
 
     vi.stubGlobal('fetch', vi.fn((url, opts) => {
@@ -208,57 +144,17 @@ describe('preprocessing integration', () => {
     }));
 
     await generateMultiPoseVisualization({
-      referencePhotoUrl: 'http://photo.jpg',
+      referencePhotoUrl: 'http://preprocessed.jpg',
       outfit: {
-        id: 'cached-preprocess',
+        id: 'no-preprocess',
         items: [{ name: 'Shirt' }],
         vibe: 'casual',
       },
       userProfile: null,
     });
 
-    // No preprocessing call — only 3 pose generations
+    // Only 3 pose generation calls — no preprocessing call
     expect(fetchCalls).toHaveLength(3);
     expect(fetchCalls.every(c => c.url === '/api/generate-outfit-visualization')).toBe(true);
-  });
-
-  it('falls back to original URL when preprocessing fails', async () => {
-    localStorageMock.clear();
-
-    const fetchCalls = [];
-
-    vi.stubGlobal('fetch', vi.fn((url, opts) => {
-      const body = JSON.parse(opts.body);
-      fetchCalls.push({ url, referencePhotoUrl: body.referencePhotoUrl });
-
-      // Preprocessing fails
-      if (url === '/api/preprocess-reference') {
-        return Promise.resolve({
-          ok: false,
-          status: 500,
-          json: () => Promise.resolve({ error: 'preprocessing_error' }),
-        });
-      }
-
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ imageUrl: 'http://generated.png' }),
-      });
-    }));
-
-    const results = await generateMultiPoseVisualization({
-      referencePhotoUrl: 'http://photo.jpg',
-      outfit: {
-        id: 'preprocess-fail',
-        items: [{ name: 'Shirt' }],
-        vibe: 'casual',
-      },
-      userProfile: null,
-    });
-
-    // Preprocessing failed, front uses original URL
-    expect(fetchCalls[0].url).toBe('/api/preprocess-reference');
-    expect(fetchCalls[1].referencePhotoUrl).toBe('http://photo.jpg');
-    expect(results.front.status).toBe('ready');
   });
 });

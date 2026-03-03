@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { sendChatMessageStreaming, shareOutfit } from "./lib/api";
 import { uploadImage } from "./lib/upload";
+import { preprocessReferencePhotoClient } from "./lib/preprocess";
 import { analyzeImage } from "./lib/analyze";
 import { analyzeOutfitPhoto, generateItemImage } from "./lib/import-from-photo";
 import * as db from "./lib/db";
@@ -122,8 +123,12 @@ const SAMPLE_PROFILE = {
   styleContext: {
     notes: "",
   },
-  referencePhoto: null, // { url, uploadedAt }
+  referencePhoto: null, // { url, preprocessedUrl, uploadedAt }
 };
+
+function getVisualizationReferenceUrl(profile) {
+  return profile.referencePhoto?.preprocessedUrl || profile.referencePhoto?.url || null;
+}
 
 function Lightbox({ item, onClose, onDelete, onEdit }) {
   const [activeIdx, setActiveIdx] = useState(0);
@@ -462,8 +467,8 @@ function Lightbox({ item, onClose, onDelete, onEdit }) {
 const POSE_ORDER = ['front', 'angle', 'seated'];
 const POSE_LABELS = { front: 'Front View', angle: '3/4 Angle', seated: 'Seated' };
 
-function makePoseEntry(status, imageUrl = null, error = null) {
-  return { status, imageUrl, error };
+function makePoseEntry(status, imageUrl = null, error = null, partialImageUrl = null) {
+  return { status, imageUrl, error, partialImageUrl };
 }
 
 function buildQueuedPoseEntries() {
@@ -571,15 +576,34 @@ function VizCarouselSlot({ poseData, loadingMessage }) {
   if (poseData.status === 'generating') {
     return (
       <div style={{ textAlign: "center" }}>
-        <div className="shimmer-effect" style={{
-          width: "100%",
-          height: 400,
-          borderRadius: 16,
-          marginBottom: 12,
-          background: "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
-          backgroundSize: "200% 100%",
-          animation: "shimmer 1.5s infinite",
-        }} />
+        {poseData.partialImageUrl ? (
+          <img
+            src={poseData.partialImageUrl}
+            alt="Generating..."
+            style={{
+              width: "100%",
+              maxHeight: 520,
+              objectFit: "contain",
+              display: "block",
+              borderRadius: 16,
+              marginBottom: 12,
+              background: "#fff",
+              opacity: 0.85,
+              filter: "blur(2px)",
+              transition: "opacity 0.3s ease, filter 0.3s ease",
+            }}
+          />
+        ) : (
+          <div className="shimmer-effect" style={{
+            width: "100%",
+            height: 400,
+            borderRadius: 16,
+            marginBottom: 12,
+            background: "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
+            backgroundSize: "200% 100%",
+            animation: "shimmer 1.5s infinite",
+          }} />
+        )}
         <p style={{
           fontSize: 14,
           color: "#666",
@@ -4367,8 +4391,10 @@ function StyleContextCard({ profile, onSave }) {
 
 function ReferencePhotoCard({ profile, onSave }) {
   const [isUploading, setIsUploading] = useState(false);
+  const [isPreprocessing, setIsPreprocessing] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const fileInputRef = useRef(null);
+  const preprocessAbortRef = useRef(null);
 
   // Safety check
   if (!profile) {
@@ -4395,6 +4421,11 @@ function ReferencePhotoCard({ profile, onSave }) {
     setIsUploading(true);
     setUploadError(null);
 
+    // Abort any in-flight preprocessing from a previous upload
+    if (preprocessAbortRef.current) {
+      preprocessAbortRef.current.abort();
+    }
+
     try {
       const url = await uploadImage(file, { normalizeAspectRatio: true });
 
@@ -4402,7 +4433,8 @@ function ReferencePhotoCard({ profile, onSave }) {
         ...profile,
         referencePhoto: {
           url,
-          uploadedAt: new Date().toISOString()
+          uploadedAt: new Date().toISOString(),
+          preprocessedUrl: null,
         }
       };
 
@@ -4410,6 +4442,31 @@ function ReferencePhotoCard({ profile, onSave }) {
 
       // Clear visualization cache when photo changes
       clearVisualizationCache();
+
+      // Fire preprocessing in background (non-blocking)
+      setIsPreprocessing(true);
+      const abortController = new AbortController();
+      preprocessAbortRef.current = abortController;
+
+      preprocessReferencePhotoClient(url, { signal: abortController.signal })
+        .then(preprocessedUrl => {
+          if (!abortController.signal.aborted) {
+            onSave(prev => ({
+              ...prev,
+              referencePhoto: {
+                ...prev.referencePhoto,
+                preprocessedUrl,
+              }
+            }));
+            setIsPreprocessing(false);
+          }
+        })
+        .catch(err => {
+          if (!abortController.signal.aborted) {
+            console.warn('[ReferencePhotoCard] Preprocessing failed:', err.message);
+            setIsPreprocessing(false);
+          }
+        });
     } catch (error) {
       console.error('Failed to upload reference photo:', error);
       setUploadError('Failed to upload photo. Please try again.');
@@ -4419,6 +4476,10 @@ function ReferencePhotoCard({ profile, onSave }) {
   };
 
   const handleRemove = () => {
+    if (preprocessAbortRef.current) {
+      preprocessAbortRef.current.abort();
+    }
+    setIsPreprocessing(false);
     const updatedProfile = {
       ...profile,
       referencePhoto: null
@@ -4474,6 +4535,20 @@ function ReferencePhotoCard({ profile, onSave }) {
               display: "block"
             }}
           />
+          {isPreprocessing && (
+            <div style={{
+              padding: 8,
+              marginBottom: 8,
+              background: '#FFF8E1',
+              border: '1px solid #FFE082',
+              borderRadius: 8,
+              fontSize: 'var(--font-caption)',
+              color: '#F57F17',
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              Optimizing your photo for visualizations...
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
             <button
               onClick={() => fileInputRef.current && fileInputRef.current.click()}
@@ -4954,6 +5029,30 @@ export default function OutfitRecommendations() {
     );
   }, [profile, profileLoaded]);
 
+  // Migrate old profiles: trigger preprocessing if not yet done
+  useEffect(() => {
+    if (!profileLoaded) return;
+    if (!profile.referencePhoto?.url) return;
+    if (profile.referencePhoto.preprocessedUrl) return;
+
+    preprocessReferencePhotoClient(profile.referencePhoto.url)
+      .then(preprocessedUrl => {
+        setProfile(prev => {
+          if (!prev.referencePhoto?.url || prev.referencePhoto.preprocessedUrl) return prev;
+          return {
+            ...prev,
+            referencePhoto: {
+              ...prev.referencePhoto,
+              preprocessedUrl,
+            }
+          };
+        });
+      })
+      .catch(err => {
+        console.warn('[profile migration] Preprocessing failed:', err.message);
+      });
+  }, [profileLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const city = profile.location?.city;
     if (!city) { setWeather(null); return; }
@@ -5155,7 +5254,7 @@ export default function OutfitRecommendations() {
   }, []);
 
   const startVisualizationSequence = useCallback(async (outfit) => {
-    const referencePhotoUrl = profile.referencePhoto?.url;
+    const referencePhotoUrl = getVisualizationReferenceUrl(profile);
     if (!referencePhotoUrl) return;
 
     cancelQueuedVisualizationTasks(outfit.id);
@@ -5174,8 +5273,13 @@ export default function OutfitRecommendations() {
       referencePhotoUrl,
       outfit,
       userProfile: profile,
+      stream: true,
       onPoseStart: (pose) => {
         updateVisualizationPose(outfit.id, pose, makePoseEntry('generating'));
+      },
+      onPartialImage: (pose, b64) => {
+        const dataUrl = `data:image/png;base64,${b64}`;
+        updateVisualizationPose(outfit.id, pose, makePoseEntry('generating', null, null, dataUrl));
       },
       onPoseComplete: (pose, result) => {
         const resolvedId = vizIdRemapRef.current[outfit.id] ?? outfit.id;
@@ -5199,7 +5303,7 @@ export default function OutfitRecommendations() {
     }
 
     // Check cache first
-    const cachedPoses = getCachedVisualization(outfit.id, profile.referencePhoto.url);
+    const cachedPoses = getCachedVisualization(outfit.id, getVisualizationReferenceUrl(profile));
     if (cachedPoses?.front) {
       setVizGenerations(prev => ({
         ...prev,
@@ -5444,12 +5548,12 @@ export default function OutfitRecommendations() {
                 Object.assign(vizIdRemapRef.current, idMap);
                 setVizGenerations(prev => remapVizGenerationKeys(prev, idMap));
 
-                const referencePhotoUrl = profile.referencePhoto?.url;
-                if (referencePhotoUrl) {
+                const vizRefUrl = getVisualizationReferenceUrl(profile);
+                if (vizRefUrl) {
                   for (const [oldId, newId] of Object.entries(idMap)) {
-                    const cached = getCachedVisualization(oldId, referencePhotoUrl);
+                    const cached = getCachedVisualization(oldId, vizRefUrl);
                     if (cached) {
-                      setCachedVisualization(newId, referencePhotoUrl, cached);
+                      setCachedVisualization(newId, vizRefUrl, cached);
                     }
                   }
                 }

@@ -6,7 +6,6 @@ import { supabase } from './supabase';
 const POSE_ORDER = ['front', 'angle', 'seated'];
 const VISUALIZATION_CACHE_PREFIX = 'viz_';
 const VISUALIZATION_CACHE_VERSION = 'v2';
-const PREPROCESSED_CACHE_PREFIX = 'preproc_';
 const CLIENT_TIMEOUT_MS = 62_000;
 const VISUALIZATION_MAX_CONCURRENT = 1;
 const VISUALIZATION_MIN_START_INTERVAL_MS = 12_500;
@@ -87,42 +86,44 @@ function finalizeRemainingPoses(sequence, status = 'idle') {
 
 async function runVisualizationSequence(sequence) {
   try {
-    // Preprocess: remove background + studio backdrop before generating any poses
-    const preprocessedUrl = await ensurePreprocessedReference(sequence.referencePhotoUrl);
+    if (sequence.cancelled) {
+      finalizeRemainingPoses(sequence, 'idle');
+      return;
+    }
 
-    for (const pose of POSE_ORDER) {
-      if (sequence.cancelled) break;
+    await waitForSchedulerWindow();
+    if (sequence.cancelled) {
+      finalizeRemainingPoses(sequence, 'idle');
+      return;
+    }
 
-      await waitForSchedulerWindow();
-      if (sequence.cancelled) break;
+    // Fire all 3 poses in parallel — each uses the preprocessed reference directly
+    const parallelPromises = POSE_ORDER.map(async (pose) => {
+      if (sequence.cancelled) return;
 
       if (sequence.onPoseStart) {
         sequence.onPoseStart(pose);
       }
 
-      // Two-pass chaining: after front succeeds, use the generated front image
-      // as the reference for angle/seated to ensure consistent face and lighting
-      let refUrl = preprocessedUrl;
-      if (pose !== 'front' && sequence.results.front?.imageUrl) {
-        refUrl = sequence.results.front.imageUrl;
-      }
-
-      // Front poses are not retried here (front failure cancels the sequence);
-      // non-front poses get up to POSE_RETRY_MAX automatic retries
-      const maxRetries = pose === 'front' ? 0 : POSE_RETRY_MAX;
-
-      for (let retryAttempt = 0; retryAttempt <= maxRetries; retryAttempt++) {
+      for (let retryAttempt = 0; retryAttempt <= POSE_RETRY_MAX; retryAttempt++) {
         if (retryAttempt > 0) {
           await waitForSchedulerWindow();
           if (sequence.cancelled) break;
         }
 
         try {
-          const result = await generateVisualization({
-            referencePhotoUrl: refUrl,
+          const generateFn = sequence.stream !== false
+            ? generateVisualizationStreaming
+            : generateVisualization;
+
+          const result = await generateFn({
+            referencePhotoUrl: sequence.referencePhotoUrl,
             outfit: sequence.outfit,
             userProfile: sequence.userProfile,
             pose,
+            onPartialImage: sequence.stream !== false && sequence.onPartialImage
+              ? (b64) => sequence.onPartialImage(pose, b64)
+              : undefined,
           });
           sequence.results[pose] = makePoseResult('ready', result.imageUrl);
           break;
@@ -131,7 +132,7 @@ async function runVisualizationSequence(sequence) {
           if (retryAfterSeconds) {
             rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + retryAfterSeconds * 1000);
           }
-          if (retryAttempt >= maxRetries) {
+          if (retryAttempt >= POSE_RETRY_MAX) {
             sequence.results[pose] = makePoseResult('error', null, error.message || 'Failed to generate');
           }
         }
@@ -140,12 +141,9 @@ async function runVisualizationSequence(sequence) {
       if (sequence.onPoseComplete) {
         sequence.onPoseComplete(pose, sequence.results[pose]);
       }
+    });
 
-      if (pose === 'front' && sequence.results[pose].status === 'error') {
-        finalizeRemainingPoses(sequence, 'idle');
-        break;
-      }
-    }
+    await Promise.allSettled(parallelPromises);
 
     if (sequence.cancelled) {
       finalizeRemainingPoses(sequence, 'idle');
@@ -264,7 +262,9 @@ export function setCachedVisualization(outfitId, referencePhotoUrl, poses) {
 export function clearVisualizationCache() {
   try {
     const keys = Object.keys(localStorage);
-    const vizKeys = keys.filter(key => key.startsWith(VISUALIZATION_CACHE_PREFIX));
+    const vizKeys = keys.filter(key =>
+      key.startsWith(VISUALIZATION_CACHE_PREFIX) || key.startsWith('preproc_')
+    );
 
     vizKeys.forEach(key => {
       localStorage.removeItem(key);
@@ -303,80 +303,6 @@ function clearOldVisualizationCaches() {
     console.log(`[clearOldVisualizationCaches] Removed ${toRemove.length} old cached visualizations`);
   } catch (error) {
     console.error('[clearOldVisualizationCaches] Error:', error);
-  }
-}
-
-/**
- * Get a cached preprocessed reference URL from localStorage, or null.
- */
-export function getCachedPreprocessedUrl(referencePhotoUrl) {
-  const cacheKey = `${PREPROCESSED_CACHE_PREFIX}${hashString(referencePhotoUrl)}`;
-  try {
-    const cached = localStorage.getItem(cacheKey);
-    if (!cached) return null;
-    const parsed = JSON.parse(cached);
-    if (Date.now() > parsed.expiresAt) {
-      localStorage.removeItem(cacheKey);
-      return null;
-    }
-    return parsed.preprocessedUrl || null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Save a preprocessed reference URL to localStorage (30-day expiration).
- */
-export function setCachedPreprocessedUrl(referencePhotoUrl, preprocessedUrl) {
-  const cacheKey = `${PREPROCESSED_CACHE_PREFIX}${hashString(referencePhotoUrl)}`;
-  try {
-    localStorage.setItem(cacheKey, JSON.stringify({
-      preprocessedUrl,
-      expiresAt: Date.now() + (30 * 24 * 60 * 60 * 1000),
-    }));
-  } catch {
-    // Non-critical — preprocessing will just re-run next time
-  }
-}
-
-/**
- * Ensure the reference photo has been preprocessed (background removed, studio backdrop).
- * Returns the preprocessed URL (cached or freshly generated).
- * Falls back to the original URL if preprocessing fails.
- */
-export async function ensurePreprocessedReference(referencePhotoUrl) {
-  const cached = getCachedPreprocessedUrl(referencePhotoUrl);
-  if (cached) return cached;
-
-  const { data: { session } } = await supabase.auth.getSession();
-  const headers = { 'Content-Type': 'application/json' };
-  if (session?.access_token) {
-    headers['Authorization'] = `Bearer ${session.access_token}`;
-  }
-
-  try {
-    const response = await fetch('/api/preprocess-reference', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ referencePhotoUrl }),
-    });
-
-    if (!response.ok) {
-      console.warn('[ensurePreprocessedReference] Preprocessing failed, using original photo');
-      return referencePhotoUrl;
-    }
-
-    const { preprocessedUrl } = await response.json();
-    if (preprocessedUrl) {
-      setCachedPreprocessedUrl(referencePhotoUrl, preprocessedUrl);
-      return preprocessedUrl;
-    }
-
-    return referencePhotoUrl;
-  } catch (error) {
-    console.warn('[ensurePreprocessedReference] Preprocessing error, using original photo:', error.message);
-    return referencePhotoUrl;
   }
 }
 
@@ -427,8 +353,112 @@ export async function generateVisualization({ referencePhotoUrl, outfit, userPro
 }
 
 /**
+ * Generate outfit visualization via SSE streaming API for a single pose.
+ * Calls onPartialImage(base64) for each progressive partial image.
+ * Returns { imageUrl } when complete.
+ */
+export async function generateVisualizationStreaming({
+  referencePhotoUrl,
+  outfit,
+  userProfile,
+  pose = 'front',
+  onPartialImage,
+}) {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (session?.access_token) {
+    headers['Authorization'] = `Bearer ${session.access_token}`;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+
+  try {
+    const response = await fetch('/api/generate-outfit-visualization', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        referencePhotoUrl,
+        outfit,
+        userProfile,
+        pose,
+        stream: true,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const error = new Error(errorData.message || 'Failed to generate visualization');
+      error.code = errorData.error;
+      error.retryAfter = parseRetryAfterSeconds(errorData.retryAfter);
+      throw error;
+    }
+
+    if (!response.body) {
+      throw new Error('Streaming not supported');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalImageUrl = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop() || '';
+
+      for (const rawEvent of events) {
+        const dataLine = rawEvent
+          .split('\n')
+          .find(line => line.startsWith('data: '));
+        if (!dataLine) continue;
+
+        let event;
+        try {
+          event = JSON.parse(dataLine.slice(6));
+        } catch {
+          continue;
+        }
+
+        if (event.type === 'partial_image' && onPartialImage) {
+          onPartialImage(event.b64_json);
+        }
+
+        if (event.type === 'complete') {
+          finalImageUrl = event.imageUrl;
+        }
+
+        if (event.type === 'error') {
+          throw new Error(event.message || 'Streaming generation failed');
+        }
+      }
+    }
+
+    if (!finalImageUrl) {
+      throw new Error('Stream ended without completing');
+    }
+
+    return { imageUrl: finalImageUrl };
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('This is taking longer than usual. Please try again.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
  * Generate all 3 pose visualizations through a shared FIFO scheduler.
  * Calls onPoseComplete(pose, { status, imageUrl, error }) as each resolves.
+ * Calls onPartialImage(pose, base64) for progressive streaming previews.
  * Returns { front: { status, imageUrl, error }, angle: {...}, seated: {...} }.
  */
 export async function generateMultiPoseVisualization({
@@ -437,6 +467,8 @@ export async function generateMultiPoseVisualization({
   userProfile,
   onPoseStart,
   onPoseComplete,
+  onPartialImage,
+  stream = false,
 }) {
   const results = {};
   cancelQueuedVisualizationTasks(outfit.id);
@@ -449,6 +481,8 @@ export async function generateMultiPoseVisualization({
       userProfile,
       onPoseStart,
       onPoseComplete,
+      onPartialImage,
+      stream,
       results,
       cancelled: false,
       resolve,

@@ -222,15 +222,110 @@ async function fetchWithRetry(url, options, signal, context = {}, deadline = Inf
   throw lastError;
 }
 
+const DEFAULT_PARTIAL_IMAGES = 2;
+
+/**
+ * Generate outfit visualization with streaming partial images.
+ * Yields { type: 'partial', b64_json } and { type: 'complete', blobUrl }.
+ */
+async function* generateOutfitVisualizationStreaming({ referencePhotoUrl, outfit, userProfile, pose = 'front' }) {
+  const prompt = buildVisualizationPrompt(outfit, userProfile, pose);
+
+  const controller = new AbortController();
+  const deadline = Date.now() + OPENAI_TIMEOUT_MS;
+  const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+
+  try {
+    const apiResponse = await fetchWithRetry(OPENAI_IMAGE_EDITS_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-image-1.5',
+        images: [{ image_url: referencePhotoUrl }],
+        prompt,
+        n: 1,
+        size: VISUALIZATION_OUTPUT_SIZE,
+        input_fidelity: 'high',
+        stream: true,
+        partial_images: DEFAULT_PARTIAL_IMAGES,
+      }),
+    }, controller.signal, { pose }, deadline);
+
+    const reader = apiResponse.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalB64 = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const payload = line.slice(6).trim();
+        if (payload === '[DONE]') continue;
+
+        let event;
+        try {
+          event = JSON.parse(payload);
+        } catch {
+          continue;
+        }
+
+        if (event.data?.[0]?.b64_json) {
+          finalB64 = event.data[0].b64_json;
+          if (event.type !== 'image_generation.completed') {
+            yield { type: 'partial', b64_json: event.data[0].b64_json };
+          }
+        }
+      }
+    }
+
+    if (!finalB64) {
+      throw new Error('No image data received from OpenAI streaming response');
+    }
+
+    const generatedImageBuffer = Buffer.from(finalB64, 'base64');
+    const blob = await put(
+      `${VISUALIZATION_BLOB_PREFIX}/${randomUUID()}.png`,
+      generatedImageBuffer,
+      {
+        access: 'public',
+        token: process.env.runway_READ_WRITE_TOKEN,
+        contentType: 'image/png',
+      }
+    );
+
+    yield { type: 'complete', blobUrl: blob.url };
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      const timeoutErr = new Error('OpenAI API request timed out');
+      timeoutErr.status = 504;
+      timeoutErr.code = 'timeout';
+      throw timeoutErr;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 /**
  * POST /api/generate-outfit-visualization
  *
- * Body: { referencePhotoUrl, outfit, userProfile }
- * Response: { success, imageUrl, generatedAt }
+ * Body: { referencePhotoUrl, outfit, userProfile, pose, stream }
+ * Response: { success, imageUrl, generatedAt } or SSE stream
  */
 export async function handleGenerateOutfitVisualization(req, res) {
   try {
-    const { referencePhotoUrl, outfit, userProfile, pose } = req.body;
+    const { referencePhotoUrl, outfit, userProfile, pose, stream } = req.body;
     const validatedPose = VALID_POSES.includes(pose) ? pose : 'front';
 
     if (!referencePhotoUrl) {
@@ -265,6 +360,47 @@ export async function handleGenerateOutfitVisualization(req, res) {
         error: 'reference_photo_inaccessible',
         message: 'Could not reach reference photo URL. Please re-upload your photo.'
       });
+    }
+
+    // Streaming mode: send SSE events for partial + final images
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+
+      const sendEvent = (data) => {
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+      };
+
+      try {
+        sendEvent({ type: 'start', pose: validatedPose });
+
+        const gen = generateOutfitVisualizationStreaming({
+          referencePhotoUrl,
+          outfit,
+          userProfile,
+          pose: validatedPose,
+        });
+
+        for await (const event of gen) {
+          if (event.type === 'partial') {
+            sendEvent({ type: 'partial_image', b64_json: event.b64_json });
+          } else if (event.type === 'complete') {
+            sendEvent({
+              type: 'complete',
+              imageUrl: event.blobUrl,
+              generatedAt: new Date().toISOString(),
+            });
+          }
+        }
+      } catch (error) {
+        console.error('[streaming] Error:', error.message);
+        sendEvent({ type: 'error', message: error.message || 'Generation failed' });
+      } finally {
+        res.end();
+      }
+      return;
     }
 
     const prompt = buildVisualizationPrompt(outfit, userProfile, validatedPose);
