@@ -154,6 +154,7 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
+  overscroll-behavior-y: contain;
 }
 
 /* ===== Chat Input Focus ===== */
