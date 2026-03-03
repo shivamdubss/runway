@@ -498,6 +498,14 @@ function hasPendingVisualizationPose(poses) {
   });
 }
 
+function remapVizGenerationKeys(prev, idMap) {
+  const remapped = {};
+  for (const [key, entry] of Object.entries(prev)) {
+    remapped[idMap[key] ?? key] = entry;
+  }
+  return remapped;
+}
+
 function VizCarouselSlot({ poseData, loadingMessage }) {
   if (!poseData || poseData.status === 'idle') {
     return (
@@ -4893,6 +4901,7 @@ export default function OutfitRecommendations() {
   const [focusLocation, setFocusLocation] = useState(false);
   const chatSessionRef = useRef(0);
   const streamAbortRef = useRef(null);
+  const vizIdRemapRef = useRef({});
 
   useEffect(() => {
     const link = document.createElement("link");
@@ -4916,6 +4925,14 @@ export default function OutfitRecommendations() {
   useEffect(() => {
     const outfitIds = new Set(outfits.map(o => o.id));
     for (const o of savedOutfits) outfitIds.add(o.id);
+
+    // Clean stale remap entries whose new IDs are established
+    for (const [oldId, newId] of Object.entries(vizIdRemapRef.current)) {
+      if (outfitIds.has(newId)) {
+        delete vizIdRemapRef.current[oldId];
+      }
+    }
+
     setVizGenerations(prev => {
       const cleaned = {};
       for (const [id, entry] of Object.entries(prev)) {
@@ -5120,13 +5137,15 @@ export default function OutfitRecommendations() {
 
   const updateVisualizationPose = useCallback((outfitId, pose, nextPoseEntry) => {
     setVizGenerations(prev => {
-      const current = prev[outfitId];
+      // Resolve to remapped ID if the original key was swapped
+      const resolvedId = vizIdRemapRef.current[outfitId] ?? outfitId;
+      const current = prev[resolvedId];
       if (!current) return prev;
 
       const updatedPoses = { ...current.poses, [pose]: nextPoseEntry };
       return {
         ...prev,
-        [outfitId]: {
+        [resolvedId]: {
           ...current,
           status: deriveVisualizationStatus(updatedPoses),
           poses: updatedPoses,
@@ -5159,10 +5178,11 @@ export default function OutfitRecommendations() {
         updateVisualizationPose(outfit.id, pose, makePoseEntry('generating'));
       },
       onPoseComplete: (pose, result) => {
+        const resolvedId = vizIdRemapRef.current[outfit.id] ?? outfit.id;
         if (result.imageUrl) {
           completedUrls[pose] = result.imageUrl;
-          setCachedVisualization(outfit.id, referencePhotoUrl, completedUrls);
-          db.saveVisualizationUrls(outfit.id, completedUrls).catch(err =>
+          setCachedVisualization(resolvedId, referencePhotoUrl, completedUrls);
+          db.saveVisualizationUrls(resolvedId, completedUrls).catch(err =>
             console.error("Failed to save visualization URLs:", err)
           );
         }
@@ -5407,9 +5427,33 @@ export default function OutfitRecommendations() {
         if (chatId) {
           db.saveOutfits({ chatId, outfits: result.outfits, wardrobeItems: wardrobeFlat })
             .then(savedIds => {
+              // Build old→new ID mapping before swapping
+              const idMap = {};
+              result.outfits.forEach((o, i) => {
+                if (savedIds[i] && String(o.id) !== String(savedIds[i])) {
+                  idMap[o.id] = savedIds[i];
+                }
+              });
+
               setOutfits(prev => prev.map((o, i) =>
                 savedIds[i] ? { ...o, id: savedIds[i] } : o
               ));
+
+              // Remap vizGenerations keys and migrate cache entries
+              if (Object.keys(idMap).length > 0) {
+                Object.assign(vizIdRemapRef.current, idMap);
+                setVizGenerations(prev => remapVizGenerationKeys(prev, idMap));
+
+                const referencePhotoUrl = profile.referencePhoto?.url;
+                if (referencePhotoUrl) {
+                  for (const [oldId, newId] of Object.entries(idMap)) {
+                    const cached = getCachedVisualization(oldId, referencePhotoUrl);
+                    if (cached) {
+                      setCachedVisualization(newId, referencePhotoUrl, cached);
+                    }
+                  }
+                }
+              }
             })
             .catch(err => console.error("Failed to save outfits:", err));
           const subtitle = result.outfits.map(o => o.vibe).join(", ");
