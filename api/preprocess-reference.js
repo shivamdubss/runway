@@ -14,6 +14,8 @@ const PREPROCESSING_PROMPT = `Remove the background entirely and place the subje
  * Returns a Vercel Blob URL for the preprocessed image.
  */
 async function preprocessReferencePhoto(referencePhotoUrl) {
+  console.log('[preprocessReferencePhoto] Starting preprocessing');
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
 

@@ -100,7 +100,11 @@ export default async function handler(req, res) {
       clearTimeout(timeoutId);
     }
   } catch (error) {
-    console.error('[/api/generate-item-image] Error:', error?.message || error);
+    console.error('[/api/generate-item-image] Error:', {
+      message: error?.message || String(error),
+      status: error?.status ?? null,
+      code: error?.code ?? null,
+    });
 
     if (error.name === 'AbortError') {
       return res.status(504).json({

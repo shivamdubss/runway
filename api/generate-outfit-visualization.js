@@ -260,6 +260,10 @@ async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProf
       })
     }, controller.signal, { pose }, deadline);
 
+    // Fetch succeeded — clear the abort timeout so body parsing + blob upload
+    // aren't killed if the API call took most of the 50s budget
+    clearTimeout(timeoutId);
+
     const response = await apiResponse.json();
 
     if (!response?.data?.[0]?.b64_json) {
@@ -371,6 +375,9 @@ async function* generateOutfitVisualizationStreaming({ referencePhotoUrl, outfit
       }),
     }, controller.signal, { pose }, deadline);
 
+    // Fetch succeeded — clear the abort timeout so body reading isn't killed
+    clearTimeout(timeoutId);
+
     // Check if OpenAI actually returned SSE or fell back to JSON
     const responseContentType = getHeader(apiResponse.headers, 'content-type') || '';
     if (!responseContentType.includes('text/event-stream')) {
@@ -400,6 +407,10 @@ async function* generateOutfitVisualizationStreaming({ referencePhotoUrl, outfit
     const decoder = new TextDecoder();
     let buffer = '';
     let finalB64 = null;
+    let sseLineCount = 0;
+    let jsonParseOk = 0;
+    let jsonParseFail = 0;
+    let eventsMatched = 0;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -413,25 +424,49 @@ async function* generateOutfitVisualizationStreaming({ referencePhotoUrl, outfit
         if (!line.startsWith('data: ')) continue;
         const payload = line.slice(6).trim();
         if (payload === '[DONE]') continue;
+        sseLineCount++;
 
         let event;
         try {
           event = JSON.parse(payload);
+          jsonParseOk++;
         } catch {
+          jsonParseFail++;
+          console.warn('[streaming] Failed to parse SSE payload', {
+            pose,
+            snippet: payload.slice(0, 200),
+          });
           continue;
         }
 
         if (event.data?.[0]?.b64_json) {
+          eventsMatched++;
           finalB64 = event.data[0].b64_json;
           // Yield partial images (not the final one — that gets uploaded to blob)
           if (event.type !== 'image_generation.completed') {
             yield { type: 'partial', b64_json: event.data[0].b64_json };
           }
+        } else {
+          console.log('[streaming] SSE event did not match expected structure', {
+            pose,
+            eventType: event.type,
+            topKeys: Object.keys(event).join(','),
+            hasData: Array.isArray(event.data),
+            dataLength: Array.isArray(event.data) ? event.data.length : 0,
+            firstItemKeys: event.data?.[0] ? Object.keys(event.data[0]).join(',') : null,
+          });
         }
       }
     }
 
     if (!finalB64) {
+      console.error('[streaming] Stream completed with no image data', {
+        pose,
+        sseLineCount,
+        jsonParseOk,
+        jsonParseFail,
+        eventsMatched,
+      });
       throw new Error('No image data received from OpenAI streaming response');
     }
 
