@@ -2793,6 +2793,7 @@ function ChatView({
         flexDirection: "column",
         minHeight: 0,
         position: "relative",
+        overflow: "hidden",
       }}
     >
       {isDragOver && (
@@ -2833,6 +2834,7 @@ function ChatView({
         className="chat-messages"
         style={{
           flex: 1,
+          minHeight: 0,
           display: "flex",
           flexDirection: "column",
           gap: 12,
@@ -2845,9 +2847,9 @@ function ChatView({
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            justifyContent: "center",
+            justifyContent: "flex-end",
             gap: 12,
-            padding: "40px 20px",
+            padding: "20px 20px",
           }}>
             {weather ? (
               <button
