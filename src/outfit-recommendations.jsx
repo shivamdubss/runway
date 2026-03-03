@@ -2955,6 +2955,7 @@ function ChatView({
                   border: msg.role === "user" ? "none" : "1px solid rgba(0,0,0,0.06)",
                   boxShadow: msg.role === "user" ? "none" : "0 1px 3px rgba(0,0,0,0.03)",
                   overflow: "hidden",
+                  overflowWrap: "break-word",
                 }}>
                   {msg.image && (
                     <img
