@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import { sendChatMessageStreaming, shareOutfit } from "./lib/api";
 import { uploadImage } from "./lib/upload";
 import { preprocessReferencePhotoClient } from "./lib/preprocess";
@@ -17,6 +17,20 @@ import {
   getCachedVisualization,
   setCachedVisualization,
   clearVisualizationCache,
+  POSE_ORDER,
+  makePoseEntry,
+  buildQueuedPoseEntries,
+  buildReadyPoseEntries,
+  hasPendingVisualizationPose,
+  subscribeVizRegistry,
+  getVizRegistrySnapshot,
+  getVizEntry,
+  getResolvedVizId,
+  setVizEntry,
+  updateVizPose,
+  hydrateVizEntry,
+  remapVizEntryKey,
+  pruneVizRegistry,
 } from "./lib/visualization";
 import { useAuth } from "./lib/auth";
 import { isMobileShareDevice, shareOutfitLink } from "./lib/share";
@@ -464,52 +478,8 @@ function Lightbox({ item, onClose, onDelete, onEdit }) {
   );
 }
 
-const POSE_ORDER = ['front', 'angle', 'seated'];
 const POSE_LABELS = { front: 'Front View', angle: '3/4 Angle', seated: 'Seated' };
 
-function makePoseEntry(status, imageUrl = null, error = null, partialImageUrl = null) {
-  return { status, imageUrl, error, partialImageUrl };
-}
-
-function buildQueuedPoseEntries() {
-  return {
-    front: makePoseEntry('queued'),
-    angle: makePoseEntry('queued'),
-    seated: makePoseEntry('queued'),
-  };
-}
-
-function buildReadyPoseEntries(poses) {
-  return {
-    front: makePoseEntry('ready', poses.front),
-    angle: makePoseEntry(poses.angle ? 'ready' : 'idle', poses.angle),
-    seated: makePoseEntry(poses.seated ? 'ready' : 'idle', poses.seated),
-  };
-}
-
-function deriveVisualizationStatus(poses) {
-  const frontStatus = poses?.front?.status;
-  if (frontStatus === 'ready') return 'ready';
-  if (frontStatus === 'error') return 'error';
-  if (POSE_ORDER.some(pose => poses?.[pose]?.status === 'generating')) return 'generating';
-  if (POSE_ORDER.some(pose => poses?.[pose]?.status === 'queued')) return 'queued';
-  return 'idle';
-}
-
-function hasPendingVisualizationPose(poses) {
-  return POSE_ORDER.some(pose => {
-    const status = poses?.[pose]?.status;
-    return status === 'queued' || status === 'generating';
-  });
-}
-
-function remapVizGenerationKeys(prev, idMap) {
-  const remapped = {};
-  for (const [key, entry] of Object.entries(prev)) {
-    remapped[idMap[key] ?? key] = entry;
-  }
-  return remapped;
-}
 
 function VizCarouselSlot({ poseData, loadingMessage }) {
   if (!poseData || poseData.status === 'idle') {
@@ -4974,14 +4944,13 @@ export default function OutfitRecommendations() {
   const [activeChatId, setActiveChatId] = useState(null);
   const [profile, setProfile] = useState(SAMPLE_PROFILE);
   const [profileLoaded, setProfileLoaded] = useState(false);
-  const [vizGenerations, setVizGenerations] = useState({});
+  const vizGenerations = useSyncExternalStore(subscribeVizRegistry, getVizRegistrySnapshot);
   const [vizModalOutfitId, setVizModalOutfitId] = useState(null);
   const [weather, setWeather] = useState(null);
   const [savedOutfits, setSavedOutfits] = useState([]);
   const [focusLocation, setFocusLocation] = useState(false);
   const chatSessionRef = useRef(0);
   const streamAbortRef = useRef(null);
-  const vizIdRemapRef = useRef({});
 
   useEffect(() => {
     const link = document.createElement("link");
@@ -5001,30 +4970,10 @@ export default function OutfitRecommendations() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, [sidePanelOpen]);
 
-  // Clean up vizGenerations when outfits change (new recommendations)
+  // Prune stale viz entries when outfits change (new recommendations)
   useEffect(() => {
-    const outfitIds = new Set(outfits.map(o => o.id));
-    for (const o of savedOutfits) outfitIds.add(o.id);
-
-    // Clean stale remap entries whose new IDs are established
-    for (const [oldId, newId] of Object.entries(vizIdRemapRef.current)) {
-      if (outfitIds.has(newId)) {
-        delete vizIdRemapRef.current[oldId];
-      }
-    }
-
-    setVizGenerations(prev => {
-      const cleaned = {};
-      for (const [id, entry] of Object.entries(prev)) {
-        if (outfitIds.has(id) || entry.status === 'generating' || entry.status === 'queued') {
-          cleaned[id] = entry;
-        }
-      }
-      if (Object.keys(cleaned).length < Object.keys(prev).length) {
-        return cleaned;
-      }
-      return prev;
-    });
+    const activeIds = [...outfits.map(o => o.id), ...savedOutfits.map(o => o.id)];
+    pruneVizRegistry(activeIds);
   }, [outfits, savedOutfits]);
 
   useEffect(() => {
@@ -5212,65 +5161,37 @@ export default function OutfitRecommendations() {
 
   const isCurrentVisualizationUrl = (url) => typeof url === "string" && url.includes("/visualizations/v2/");
 
-  // Pre-populate vizGenerations for saved outfits that have visualization URLs
+  // Pre-populate viz registry for saved outfits that have visualization URLs
   useEffect(() => {
     if (savedOutfits.length === 0) return;
-    setVizGenerations(prev => {
-      const next = { ...prev };
-      let changed = false;
-      for (const outfit of savedOutfits) {
-        if (next[outfit.id]) continue;
-        const urls = outfit.visualizationUrls || (outfit.visualizationUrl ? { front: outfit.visualizationUrl } : null);
-        const compatibleUrls = urls
-          ? Object.fromEntries(
-            Object.entries(urls).filter(([, url]) => isCurrentVisualizationUrl(url))
-          )
-          : null;
-        if (compatibleUrls?.front) {
-          next[outfit.id] = {
-            status: 'ready',
-            poses: buildReadyPoseEntries(compatibleUrls),
-            outfit,
-          };
-          changed = true;
-        }
+    for (const outfit of savedOutfits) {
+      if (getVizEntry(outfit.id)) continue;
+      const urls = outfit.visualizationUrls || (outfit.visualizationUrl ? { front: outfit.visualizationUrl } : null);
+      const compatibleUrls = urls
+        ? Object.fromEntries(
+          Object.entries(urls).filter(([, url]) => isCurrentVisualizationUrl(url))
+        )
+        : null;
+      if (compatibleUrls?.front) {
+        hydrateVizEntry(outfit.id, {
+          status: 'ready',
+          poses: buildReadyPoseEntries(compatibleUrls),
+          outfit,
+        });
       }
-      return changed ? next : prev;
-    });
+    }
   }, [savedOutfits]);
-
-  const updateVisualizationPose = useCallback((outfitId, pose, nextPoseEntry) => {
-    setVizGenerations(prev => {
-      // Resolve to remapped ID if the original key was swapped
-      const resolvedId = vizIdRemapRef.current[outfitId] ?? outfitId;
-      const current = prev[resolvedId];
-      if (!current) return prev;
-
-      const updatedPoses = { ...current.poses, [pose]: nextPoseEntry };
-      return {
-        ...prev,
-        [resolvedId]: {
-          ...current,
-          status: deriveVisualizationStatus(updatedPoses),
-          poses: updatedPoses,
-        }
-      };
-    });
-  }, []);
 
   const startVisualizationSequence = useCallback(async (outfit) => {
     const referencePhotoUrl = getVisualizationReferenceUrl(profile);
     if (!referencePhotoUrl) return;
 
     cancelQueuedVisualizationTasks(outfit.id);
-    setVizGenerations(prev => ({
-      ...prev,
-      [outfit.id]: {
-        status: 'queued',
-        poses: buildQueuedPoseEntries(),
-        outfit,
-      }
-    }));
+    setVizEntry(outfit.id, {
+      status: 'queued',
+      poses: buildQueuedPoseEntries(),
+      outfit,
+    });
 
     const completedUrls = {};
 
@@ -5279,10 +5200,10 @@ export default function OutfitRecommendations() {
       outfit,
       userProfile: profile,
       onPoseStart: (pose) => {
-        updateVisualizationPose(outfit.id, pose, makePoseEntry('generating'));
+        updateVizPose(outfit.id, pose, makePoseEntry('generating'));
       },
       onPoseComplete: (pose, result) => {
-        const resolvedId = vizIdRemapRef.current[outfit.id] ?? outfit.id;
+        const resolvedId = getResolvedVizId(outfit.id);
         if (result.imageUrl) {
           completedUrls[pose] = result.imageUrl;
           setCachedVisualization(resolvedId, referencePhotoUrl, completedUrls);
@@ -5291,10 +5212,10 @@ export default function OutfitRecommendations() {
           );
         }
 
-        updateVisualizationPose(outfit.id, pose, result);
+        updateVizPose(outfit.id, pose, result);
       }
     });
-  }, [profile, updateVisualizationPose]);
+  }, [profile]);
 
   const handleVisualizeOutfit = useCallback(async (outfit) => {
     if (!profile.referencePhoto) {
@@ -5305,38 +5226,37 @@ export default function OutfitRecommendations() {
     // Check cache first
     const cachedPoses = getCachedVisualization(outfit.id, getVisualizationReferenceUrl(profile));
     if (cachedPoses?.front) {
-      setVizGenerations(prev => ({
-        ...prev,
-        [outfit.id]: {
-          status: 'ready',
-          poses: buildReadyPoseEntries(cachedPoses),
-          outfit
-        }
-      }));
+      setVizEntry(outfit.id, {
+        status: 'ready',
+        poses: buildReadyPoseEntries(cachedPoses),
+        outfit,
+      });
       setVizModalOutfitId(outfit.id);
       return;
     }
 
+    const currentEntry = getVizEntry(outfit.id);
+
     // Already queued or generating — do nothing
-    if (vizGenerations[outfit.id]?.status === 'generating' || vizGenerations[outfit.id]?.status === 'queued') return;
+    if (currentEntry?.status === 'generating' || currentEntry?.status === 'queued') return;
 
     // Already ready — open modal
-    if (vizGenerations[outfit.id]?.status === 'ready') {
+    if (currentEntry?.status === 'ready') {
       setVizModalOutfitId(outfit.id);
       return;
     }
 
     await startVisualizationSequence(outfit);
-  }, [profile, startVisualizationSequence, vizGenerations]);
+  }, [profile, startVisualizationSequence]);
 
   const handleRegenerateVisualization = useCallback(async (outfitId) => {
-    const genEntry = vizGenerations[outfitId];
+    const genEntry = getVizEntry(outfitId);
     if (!genEntry?.outfit) return;
     if (hasPendingVisualizationPose(genEntry.poses)) return;
 
     cancelQueuedVisualizationTasks(outfitId);
     await startVisualizationSequence(genEntry.outfit);
-  }, [startVisualizationSequence, vizGenerations]);
+  }, [startVisualizationSequence]);
 
   const allWardrobeItems = wardrobeFlat;
 
@@ -5543,10 +5463,11 @@ export default function OutfitRecommendations() {
                 savedIds[i] ? { ...o, id: savedIds[i] } : o
               ));
 
-              // Remap vizGenerations keys and migrate cache entries
+              // Remap viz registry keys and migrate cache entries
               if (Object.keys(idMap).length > 0) {
-                Object.assign(vizIdRemapRef.current, idMap);
-                setVizGenerations(prev => remapVizGenerationKeys(prev, idMap));
+                for (const [oldId, newId] of Object.entries(idMap)) {
+                  remapVizEntryKey(oldId, newId);
+                }
 
                 const vizRefUrl = getVisualizationReferenceUrl(profile);
                 if (vizRefUrl) {
@@ -5644,7 +5565,7 @@ export default function OutfitRecommendations() {
       setMessages(hydratedMessages);
       setOutfits(chatOutfits);
 
-      const restoredViz = {};
+      // Hydrate viz registry from DB — in-flight entries are preserved automatically
       for (const outfit of chatOutfits) {
         const urls = outfit.visualizationUrls || (outfit.visualizationUrl ? { front: outfit.visualizationUrl } : null);
         const compatibleUrls = urls
@@ -5653,14 +5574,13 @@ export default function OutfitRecommendations() {
           )
           : null;
         if (compatibleUrls?.front) {
-          restoredViz[outfit.id] = {
+          hydrateVizEntry(outfit.id, {
             status: 'ready',
             poses: buildReadyPoseEntries(compatibleUrls),
             outfit,
-          };
+          });
         }
       }
-      setVizGenerations(restoredViz);
 
       setCurrent(0);
       setView("chat");

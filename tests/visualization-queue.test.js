@@ -318,9 +318,9 @@ describe('visualization queue', () => {
 
     // Angle tried twice (initial + 1 retry) and still failed
     expect(angleAttempts).toBe(2);
-    expect(results.front).toEqual({ status: 'ready', imageUrl: 'http://front.png', error: null });
+    expect(results.front).toEqual({ status: 'ready', imageUrl: 'http://front.png', error: null, partialImageUrl: null });
     expect(results.angle.status).toBe('error');
-    expect(results.seated).toEqual({ status: 'ready', imageUrl: 'http://seated.png', error: null });
+    expect(results.seated).toEqual({ status: 'ready', imageUrl: 'http://seated.png', error: null, partialImageUrl: null });
   });
 });
 

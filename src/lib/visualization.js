@@ -4,7 +4,7 @@
 import { supabase } from './supabase';
 import { enqueueApiCall } from './api-queue';
 
-const POSE_ORDER = ['front', 'angle', 'seated'];
+export const POSE_ORDER = ['front', 'angle', 'seated'];
 const VISUALIZATION_CACHE_PREFIX = 'viz_';
 const VISUALIZATION_CACHE_VERSION = 'v2';
 const CLIENT_TIMEOUT_MS = 62_000;
@@ -43,8 +43,42 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function makePoseResult(status, imageUrl = null, error = null) {
-  return { status, imageUrl, error };
+// --- Shared pose helpers (used by registry and component) ---
+
+export function makePoseEntry(status, imageUrl = null, error = null, partialImageUrl = null) {
+  return { status, imageUrl, error, partialImageUrl };
+}
+
+export function buildQueuedPoseEntries() {
+  return {
+    front: makePoseEntry('queued'),
+    angle: makePoseEntry('queued'),
+    seated: makePoseEntry('queued'),
+  };
+}
+
+export function buildReadyPoseEntries(poses) {
+  return {
+    front: makePoseEntry('ready', poses.front),
+    angle: makePoseEntry(poses.angle ? 'ready' : 'idle', poses.angle),
+    seated: makePoseEntry(poses.seated ? 'ready' : 'idle', poses.seated),
+  };
+}
+
+export function deriveVisualizationStatus(poses) {
+  const frontStatus = poses?.front?.status;
+  if (frontStatus === 'ready') return 'ready';
+  if (frontStatus === 'error') return 'error';
+  if (POSE_ORDER.some(pose => poses?.[pose]?.status === 'generating')) return 'generating';
+  if (POSE_ORDER.some(pose => poses?.[pose]?.status === 'queued')) return 'queued';
+  return 'idle';
+}
+
+export function hasPendingVisualizationPose(poses) {
+  return POSE_ORDER.some(pose => {
+    const status = poses?.[pose]?.status;
+    return status === 'queued' || status === 'generating';
+  });
 }
 
 function parseRetryAfterSeconds(value) {
@@ -77,7 +111,7 @@ async function waitForSchedulerWindow() {
 function finalizeRemainingPoses(sequence, status = 'idle') {
   for (const pose of POSE_ORDER) {
     if (!sequence.results[pose]) {
-      sequence.results[pose] = makePoseResult(status);
+      sequence.results[pose] = makePoseEntry(status);
       if (sequence.onPoseComplete) {
         sequence.onPoseComplete(pose, sequence.results[pose]);
       }
@@ -121,7 +155,7 @@ async function runVisualizationSequence(sequence) {
               pose,
             })
           );
-          sequence.results[pose] = makePoseResult('ready', result.imageUrl);
+          sequence.results[pose] = makePoseEntry('ready', result.imageUrl);
           break;
         } catch (error) {
           const retryAfterSeconds = parseRetryAfterSeconds(error.retryAfter);
@@ -129,7 +163,7 @@ async function runVisualizationSequence(sequence) {
             rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + retryAfterSeconds * 1000);
           }
           if (retryAttempt >= POSE_RETRY_MAX) {
-            sequence.results[pose] = makePoseResult('error', null, error.message || 'Failed to generate');
+            sequence.results[pose] = makePoseEntry('error', null, error.message || 'Failed to generate');
           }
         }
       }
@@ -183,6 +217,96 @@ export function __resetVisualizationSchedulerForTests(overrides = {}) {
     minStartIntervalMs: VISUALIZATION_MIN_START_INTERVAL_MS,
     ...overrides,
   };
+  __resetVizRegistryForTests();
+}
+
+// --- Viz registry (session-level source of truth for visualization state) ---
+// Lives at module scope alongside the scheduler globals because the viz lifecycle
+// is app-scoped, not chat-scoped.
+
+const vizRegistry = new Map();
+const vizIdRemap = new Map();
+const registryListeners = new Set();
+let registrySnapshot = {};
+
+function notifyRegistryListeners() {
+  registrySnapshot = Object.fromEntries(vizRegistry);
+  for (const listener of registryListeners) listener();
+}
+
+export function subscribeVizRegistry(listener) {
+  registryListeners.add(listener);
+  return () => registryListeners.delete(listener);
+}
+
+export function getVizRegistrySnapshot() {
+  return registrySnapshot;
+}
+
+export function getVizEntry(outfitId) {
+  const resolvedId = vizIdRemap.get(outfitId) ?? outfitId;
+  return vizRegistry.get(resolvedId) ?? null;
+}
+
+export function getResolvedVizId(outfitId) {
+  return vizIdRemap.get(outfitId) ?? outfitId;
+}
+
+export function setVizEntry(outfitId, entry) {
+  vizRegistry.set(outfitId, entry);
+  notifyRegistryListeners();
+}
+
+export function updateVizPose(outfitId, pose, poseEntry) {
+  const resolvedId = vizIdRemap.get(outfitId) ?? outfitId;
+  const current = vizRegistry.get(resolvedId);
+  if (!current) return;
+  const updatedPoses = { ...current.poses, [pose]: poseEntry };
+  vizRegistry.set(resolvedId, {
+    ...current,
+    status: deriveVisualizationStatus(updatedPoses),
+    poses: updatedPoses,
+  });
+  notifyRegistryListeners();
+}
+
+export function hydrateVizEntry(outfitId, entry) {
+  const existing = vizRegistry.get(outfitId);
+  if (existing && (existing.status === 'generating' || existing.status === 'queued')) return;
+  vizRegistry.set(outfitId, entry);
+  notifyRegistryListeners();
+}
+
+export function remapVizEntryKey(oldId, newId) {
+  vizIdRemap.set(oldId, newId);
+  const entry = vizRegistry.get(oldId);
+  if (entry) {
+    vizRegistry.delete(oldId);
+    vizRegistry.set(newId, entry);
+  }
+  notifyRegistryListeners();
+}
+
+export function pruneVizRegistry(activeOutfitIds) {
+  const activeSet = new Set(activeOutfitIds);
+  let changed = false;
+  for (const [oldId, newId] of vizIdRemap) {
+    if (activeSet.has(newId)) { vizIdRemap.delete(oldId); }
+  }
+  for (const [id, entry] of vizRegistry) {
+    if (!activeSet.has(id) && entry.status !== 'generating' && entry.status !== 'queued') {
+      vizRegistry.delete(id);
+      changed = true;
+    }
+  }
+  if (changed) notifyRegistryListeners();
+}
+
+export function __resetVizRegistryForTests() {
+  vizRegistry.clear();
+  vizIdRemap.clear();
+  registryListeners.clear();
+  registrySnapshot = {};
 }
 
 /**
