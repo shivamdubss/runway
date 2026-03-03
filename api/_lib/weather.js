@@ -9,7 +9,7 @@ export async function fetchWeather(city) {
   if (!apiKey || !city) return null;
 
   try {
-    const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&units=imperial&appid=${apiKey}`;
+    const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&units=metric&appid=${apiKey}`;
     const response = await fetch(url, { signal: AbortSignal.timeout(3000) });
 
     if (!response.ok) return null;
@@ -23,7 +23,7 @@ export async function fetchWeather(city) {
       low: Math.round(data.main.temp_min),
       condition: data.weather?.[0]?.description || '',
       icon: data.weather?.[0]?.icon || '',
-      wind: Math.round(data.wind?.speed || 0),
+      wind: Math.round((data.wind?.speed || 0) * 3.6),
       humidity: data.main.humidity,
       city: data.name,
     };

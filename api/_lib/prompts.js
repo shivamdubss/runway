@@ -190,12 +190,12 @@ export function buildWeatherSection(weather) {
 
   const lines = ['## Current weather context'];
   lines.push(`Location: ${weather.city}`);
-  lines.push(`Now: ${weather.temp}°F, ${weather.condition}`);
+  lines.push(`Now: ${weather.temp}°C, ${weather.condition}`);
   if (weather.high && weather.low) {
-    lines.push(`Today's range: ${weather.low}°F – ${weather.high}°F`);
+    lines.push(`Today's range: ${weather.low}°C – ${weather.high}°C`);
   }
   if (weather.wind) {
-    lines.push(`Wind: ${weather.wind} mph`);
+    lines.push(`Wind: ${weather.wind} km/h`);
   }
   lines.push('');
   lines.push('Factor this weather into your recommendations. Prioritize weather-appropriate');

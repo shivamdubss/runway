@@ -29,10 +29,10 @@ describe('buildWeatherSection', () => {
     };
     const result = buildWeatherSection(weather);
     expect(result).toContain('New York');
-    expect(result).toContain('72°F');
+    expect(result).toContain('72°C');
     expect(result).toContain('clear sky');
-    expect(result).toContain('65°F – 78°F');
-    expect(result).toContain('5 mph');
+    expect(result).toContain('65°C – 78°C');
+    expect(result).toContain('5 km/h');
   });
 
   it('includes weather-appropriate guidance text', () => {
@@ -71,7 +71,7 @@ describe('buildSystemPrompt weather integration', () => {
     const prompt = buildSystemPrompt({ wardrobeItems: baseItems, profile: null, weather });
     expect(prompt).toContain('## Current weather context');
     expect(prompt).toContain('Chicago');
-    expect(prompt).toContain('55°F');
+    expect(prompt).toContain('55°C');
     expect(prompt).toContain('overcast clouds');
   });
 
@@ -149,7 +149,7 @@ describe('fetchWeather', () => {
       low: 65,
       condition: 'clear sky',
       icon: '01d',
-      wind: 6,
+      wind: 21,
       humidity: 45,
       city: 'New York',
     });
@@ -171,7 +171,7 @@ describe('fetchWeather', () => {
     expect(result).toBeNull();
   });
 
-  it('calls OpenWeatherMap with correct URL and imperial units', async () => {
+  it('calls OpenWeatherMap with correct URL and metric units', async () => {
     globalThis.fetch = vi.fn(() => Promise.resolve({
       ok: true,
       json: () => Promise.resolve({
@@ -189,7 +189,7 @@ describe('fetchWeather', () => {
     const url = globalThis.fetch.mock.calls[0][0];
     expect(url).toContain('api.openweathermap.org');
     expect(url).toContain('q=Seattle');
-    expect(url).toContain('units=imperial');
+    expect(url).toContain('units=metric');
     expect(url).toContain('appid=test-key');
   });
 });

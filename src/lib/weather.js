@@ -24,7 +24,7 @@ export async function fetchWeatherForDisplay(city) {
 
   try {
     const response = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&units=imperial&appid=${import.meta.env.VITE_OPENWEATHERMAP_API_KEY}`
+      `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&units=metric&appid=${import.meta.env.VITE_OPENWEATHERMAP_API_KEY}`
     );
     if (!response.ok) return null;
 

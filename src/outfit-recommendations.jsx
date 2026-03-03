@@ -2869,7 +2869,7 @@ function ChatView({
                 }}
               >
                 <span style={{ fontSize: 14 }}>{weatherIconToEmoji(weather.icon)}</span>
-                {weather.temp}°F {weather.city}
+                {weather.temp}°C {weather.city}
               </button>
             ) : !hasLocation ? (
               <button
@@ -5273,13 +5273,8 @@ export default function OutfitRecommendations() {
       referencePhotoUrl,
       outfit,
       userProfile: profile,
-      stream: true,
       onPoseStart: (pose) => {
         updateVisualizationPose(outfit.id, pose, makePoseEntry('generating'));
-      },
-      onPartialImage: (pose, b64) => {
-        const dataUrl = `data:image/png;base64,${b64}`;
-        updateVisualizationPose(outfit.id, pose, makePoseEntry('generating', null, null, dataUrl));
       },
       onPoseComplete: (pose, result) => {
         const resolvedId = vizIdRemapRef.current[outfit.id] ?? outfit.id;

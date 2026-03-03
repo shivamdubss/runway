@@ -112,20 +112,11 @@ async function runVisualizationSequence(sequence) {
         }
 
         try {
-          // Use streaming on first attempt, fall back to non-streaming on retries
-          const useStreaming = sequence.stream !== false && retryAttempt === 0;
-          const generateFn = useStreaming
-            ? generateVisualizationStreaming
-            : generateVisualization;
-
-          const result = await generateFn({
+          const result = await generateVisualization({
             referencePhotoUrl: sequence.referencePhotoUrl,
             outfit: sequence.outfit,
             userProfile: sequence.userProfile,
             pose,
-            onPartialImage: useStreaming && sequence.onPartialImage
-              ? (b64) => sequence.onPartialImage(pose, b64)
-              : undefined,
           });
           sequence.results[pose] = makePoseResult('ready', result.imageUrl);
           break;
@@ -355,120 +346,8 @@ export async function generateVisualization({ referencePhotoUrl, outfit, userPro
 }
 
 /**
- * Generate outfit visualization via SSE streaming API for a single pose.
- * Calls onPartialImage(base64) for each progressive partial image.
- * Returns { imageUrl } when complete.
- */
-export async function generateVisualizationStreaming({
-  referencePhotoUrl,
-  outfit,
-  userProfile,
-  pose = 'front',
-  onPartialImage,
-}) {
-  const { data: { session } } = await supabase.auth.getSession();
-
-  const headers = { 'Content-Type': 'application/json' };
-  if (session?.access_token) {
-    headers['Authorization'] = `Bearer ${session.access_token}`;
-  }
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
-
-  try {
-    const response = await fetch('/api/generate-outfit-visualization', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        referencePhotoUrl,
-        outfit,
-        userProfile,
-        pose,
-        stream: true,
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const error = new Error(errorData.message || 'Failed to generate visualization');
-      error.code = errorData.error;
-      error.retryAfter = parseRetryAfterSeconds(errorData.retryAfter);
-      throw error;
-    }
-
-    // Check if the server actually returned SSE or fell back to JSON
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.includes('text/event-stream')) {
-      const data = await response.json();
-      if (!data.imageUrl) throw new Error('No imageUrl in response');
-      return { imageUrl: data.imageUrl };
-    }
-
-    if (!response.body) {
-      throw new Error('Streaming not supported');
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let finalImageUrl = null;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split('\n\n');
-      buffer = events.pop() || '';
-
-      for (const rawEvent of events) {
-        const dataLine = rawEvent
-          .split('\n')
-          .find(line => line.startsWith('data: '));
-        if (!dataLine) continue;
-
-        let event;
-        try {
-          event = JSON.parse(dataLine.slice(6));
-        } catch {
-          continue;
-        }
-
-        if (event.type === 'partial_image' && onPartialImage) {
-          onPartialImage(event.b64_json);
-        }
-
-        if (event.type === 'complete') {
-          finalImageUrl = event.imageUrl;
-        }
-
-        if (event.type === 'error') {
-          throw new Error(event.message || 'Streaming generation failed');
-        }
-      }
-    }
-
-    if (!finalImageUrl) {
-      throw new Error('Stream ended without completing');
-    }
-
-    return { imageUrl: finalImageUrl };
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      throw new Error('This is taking longer than usual. Please try again.');
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-/**
  * Generate all 3 pose visualizations through a shared FIFO scheduler.
  * Calls onPoseComplete(pose, { status, imageUrl, error }) as each resolves.
- * Calls onPartialImage(pose, base64) for progressive streaming previews.
  * Returns { front: { status, imageUrl, error }, angle: {...}, seated: {...} }.
  */
 export async function generateMultiPoseVisualization({
@@ -477,8 +356,6 @@ export async function generateMultiPoseVisualization({
   userProfile,
   onPoseStart,
   onPoseComplete,
-  onPartialImage,
-  stream = false,
 }) {
   const results = {};
   cancelQueuedVisualizationTasks(outfit.id);
@@ -491,8 +368,6 @@ export async function generateMultiPoseVisualization({
       userProfile,
       onPoseStart,
       onPoseComplete,
-      onPartialImage,
-      stream,
       results,
       cancelled: false,
       resolve,
