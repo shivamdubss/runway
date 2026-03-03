@@ -264,7 +264,7 @@ describe('visualization queue', () => {
     expect(results.seated.status).toBe('idle');
   });
 
-  it('keeps the front pose ready when a later pose fails', async () => {
+  it('keeps the front pose ready when a later pose fails after retry', async () => {
     const responses = [
       {
         ok: true,
@@ -274,6 +274,11 @@ describe('visualization queue', () => {
         ok: false,
         status: 500,
         json: () => Promise.resolve({ message: 'Angle failed' }),
+      },
+      {
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ message: 'Angle failed again' }),
       },
       {
         ok: true,
@@ -293,6 +298,7 @@ describe('visualization queue', () => {
       },
     });
 
+    expect(globalThis.fetch).toHaveBeenCalledTimes(4);
     expect(completions).toEqual([
       ['front', 'ready'],
       ['angle', 'error'],
@@ -301,5 +307,139 @@ describe('visualization queue', () => {
     expect(results.front).toEqual({ status: 'ready', imageUrl: 'http://front.png', error: null });
     expect(results.angle.status).toBe('error');
     expect(results.seated).toEqual({ status: 'ready', imageUrl: 'http://seated.png', error: null });
+  });
+});
+
+describe('client-side auto-retry for non-front poses', () => {
+  beforeEach(() => {
+    __resetVisualizationSchedulerForTests({ minStartIntervalMs: 0 });
+    setCachedPreprocessedUrl('http://photo.jpg', 'http://preprocessed.jpg');
+  });
+
+  it('retries a failed angle pose once and succeeds', async () => {
+    let angleAttempts = 0;
+    const completions = [];
+
+    vi.stubGlobal('fetch', vi.fn((url, opts) => {
+      const body = JSON.parse(opts.body);
+
+      if (body.pose === 'front') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ imageUrl: 'http://front.png' }),
+        });
+      }
+
+      if (body.pose === 'angle') {
+        angleAttempts++;
+        if (angleAttempts === 1) {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({ message: 'Temporary failure' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ imageUrl: 'http://angle.png' }),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ imageUrl: 'http://seated.png' }),
+      });
+    }));
+
+    const results = await generateMultiPoseVisualization({
+      referencePhotoUrl: 'http://photo.jpg',
+      outfit: makeOutfit('retry-angle'),
+      userProfile: null,
+      onPoseComplete: (pose, result) => {
+        completions.push([pose, result.status]);
+      },
+    });
+
+    expect(angleAttempts).toBe(2);
+    expect(completions).toEqual([
+      ['front', 'ready'],
+      ['angle', 'ready'],
+      ['seated', 'ready'],
+    ]);
+    expect(results.angle.status).toBe('ready');
+    expect(results.angle.imageUrl).toBe('http://angle.png');
+  });
+
+  it('does NOT retry the front pose — front failure still cancels remaining poses', async () => {
+    const completions = [];
+
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({ message: 'Server error' }),
+    })));
+
+    const results = await generateMultiPoseVisualization({
+      referencePhotoUrl: 'http://photo.jpg',
+      outfit: makeOutfit('no-retry-front'),
+      userProfile: null,
+      onPoseComplete: (pose, result) => {
+        completions.push([pose, result.status]);
+      },
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(completions).toEqual([
+      ['front', 'error'],
+      ['angle', 'idle'],
+      ['seated', 'idle'],
+    ]);
+  });
+
+  it('marks pose as error when retry also fails', async () => {
+    let angleAttempts = 0;
+    const completions = [];
+
+    vi.stubGlobal('fetch', vi.fn((url, opts) => {
+      const body = JSON.parse(opts.body);
+
+      if (body.pose === 'front') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ imageUrl: 'http://front.png' }),
+        });
+      }
+
+      if (body.pose === 'angle') {
+        angleAttempts++;
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({ message: 'Persistent failure' }),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ imageUrl: 'http://seated.png' }),
+      });
+    }));
+
+    const results = await generateMultiPoseVisualization({
+      referencePhotoUrl: 'http://photo.jpg',
+      outfit: makeOutfit('retry-exhausted'),
+      userProfile: null,
+      onPoseComplete: (pose, result) => {
+        completions.push([pose, result.status]);
+      },
+    });
+
+    expect(angleAttempts).toBe(2);
+    expect(completions).toEqual([
+      ['front', 'ready'],
+      ['angle', 'error'],
+      ['seated', 'ready'],
+    ]);
+    expect(results.angle.status).toBe('error');
   });
 });

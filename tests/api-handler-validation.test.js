@@ -129,54 +129,116 @@ describe('API handler validation', () => {
     expect(put.mock.calls[0][0]).toContain('runway/visualizations/v2/');
   });
 
-  it('returns 429 on rate limit error from OpenAI without retrying', async () => {
-    let openAICallCount = 0;
-    globalThis.fetch = vi.fn((url) => {
-      // HEAD request for reference photo validation
-      if (url === validBody.referencePhotoUrl) {
-        return Promise.resolve({ ok: true });
-      }
-      openAICallCount++;
-      // OpenAI returns 429 — 429s are never retried upstream
-      return Promise.resolve({
-        ok: false,
-        status: 429,
-        json: () => Promise.resolve({ error: { message: 'Rate limit exceeded' } })
-      });
-    });
+  it('retries 429 errors and surfaces final 429 after all retries fail', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(Math, 'random').mockReturnValue(0);
 
-    const res = mockRes();
-    await handler(mockReq({ body: validBody }), res);
-    expect(res.statusCode).toBe(429);
-    expect(res.body.error).toBe('rate_limit');
-    expect(res.body.retryAfter).toBe(30);
-    expect(openAICallCount).toBe(1);
+      let openAICallCount = 0;
+      globalThis.fetch = vi.fn((url) => {
+        if (url === validBody.referencePhotoUrl) {
+          return Promise.resolve({ ok: true });
+        }
+        openAICallCount++;
+        return Promise.resolve({
+          ok: false,
+          status: 429,
+          json: () => Promise.resolve({ error: { message: 'Rate limit exceeded' } })
+        });
+      });
+
+      const res = mockRes();
+      const handlerPromise = handler(mockReq({ body: validBody }), res);
+      // Advance past retry delays (buildRetryDelayMs with random=0: 500, 1000)
+      await vi.advanceTimersByTimeAsync(600);
+      await vi.advanceTimersByTimeAsync(1100);
+      await handlerPromise;
+
+      expect(openAICallCount).toBe(3);
+      expect(res.statusCode).toBe(429);
+      expect(res.body.error).toBe('rate_limit');
+      expect(res.body.retryAfter).toBe(30);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries 429 and succeeds on second attempt', async () => {
+    vi.useFakeTimers();
+    try {
+      let openAICallCount = 0;
+      globalThis.fetch = vi.fn((url) => {
+        if (url === validBody.referencePhotoUrl) {
+          return Promise.resolve({ ok: true });
+        }
+        openAICallCount++;
+        if (openAICallCount === 1) {
+          return Promise.resolve({
+            ok: false,
+            status: 429,
+            headers: {
+              get(name) {
+                return name.toLowerCase() === 'retry-after' ? '2' : null;
+              }
+            },
+            json: () => Promise.resolve({ error: { message: 'Rate limit exceeded' } })
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            data: [{ b64_json: Buffer.from('fake-image').toString('base64') }]
+          })
+        });
+      });
+
+      const res = mockRes();
+      const handlerPromise = handler(mockReq({ body: validBody }), res);
+      await vi.advanceTimersByTimeAsync(2100);
+      await handlerPromise;
+
+      expect(openAICallCount).toBe(2);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.success).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('propagates Retry-After from upstream 429 responses', async () => {
-    globalThis.fetch = vi.fn((url) => {
-      if (url === validBody.referencePhotoUrl) {
-        return Promise.resolve({ ok: true });
-      }
-      return Promise.resolve({
-        ok: false,
-        status: 429,
-        headers: {
-          get(name) {
-            return name.toLowerCase() === 'retry-after' ? '12' : null;
-          }
-        },
-        json: () => Promise.resolve({ error: { message: 'Rate limit exceeded' } })
+    vi.useFakeTimers();
+    try {
+      globalThis.fetch = vi.fn((url) => {
+        if (url === validBody.referencePhotoUrl) {
+          return Promise.resolve({ ok: true });
+        }
+        return Promise.resolve({
+          ok: false,
+          status: 429,
+          headers: {
+            get(name) {
+              return name.toLowerCase() === 'retry-after' ? '12' : null;
+            }
+          },
+          json: () => Promise.resolve({ error: { message: 'Rate limit exceeded' } })
+        });
       });
-    });
 
-    const res = mockRes();
-    await handler(mockReq({ body: validBody }), res);
-    expect(res.statusCode).toBe(429);
-    expect(res.body.retryAfter).toBe(12);
+      const res = mockRes();
+      const handlerPromise = handler(mockReq({ body: validBody }), res);
+      // Advance past each 12s retry-after wait (2 retries)
+      await vi.advanceTimersByTimeAsync(12_100);
+      await vi.advanceTimersByTimeAsync(12_100);
+      await handlerPromise;
+
+      expect(res.statusCode).toBe(429);
+      expect(res.body.retryAfter).toBe(12);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('retries one transient 5xx error and then surfaces the final failure', async () => {
+  it('retries transient 5xx errors up to MAX_TRANSIENT_RETRIES times', async () => {
     vi.useFakeTimers();
     try {
       vi.spyOn(Math, 'random').mockReturnValue(0);
@@ -201,10 +263,12 @@ describe('API handler validation', () => {
 
       const res = mockRes();
       const handlerPromise = handler(mockReq({ body: validBody }), res);
+      // First retry delay: 500ms, second retry delay: 1000ms
       await vi.advanceTimersByTimeAsync(600);
+      await vi.advanceTimersByTimeAsync(1100);
       await handlerPromise;
 
-      expect(openAICallCount).toBe(2);
+      expect(openAICallCount).toBe(3);
       expect(res.statusCode).toBe(500);
       expect(res.body.error).toBe('api_error');
       expect(res.body.message).toBe('Something went wrong. Please try again.');

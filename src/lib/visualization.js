@@ -10,6 +10,7 @@ const PREPROCESSED_CACHE_PREFIX = 'preproc_';
 const CLIENT_TIMEOUT_MS = 62_000;
 const VISUALIZATION_MAX_CONCURRENT = 1;
 const VISUALIZATION_MIN_START_INTERVAL_MS = 12_500;
+const POSE_RETRY_MAX = 1;
 
 const pendingSequences = [];
 
@@ -106,20 +107,34 @@ async function runVisualizationSequence(sequence) {
         refUrl = sequence.results.front.imageUrl;
       }
 
-      try {
-        const result = await generateVisualization({
-          referencePhotoUrl: refUrl,
-          outfit: sequence.outfit,
-          userProfile: sequence.userProfile,
-          pose,
-        });
-        sequence.results[pose] = makePoseResult('ready', result.imageUrl);
-      } catch (error) {
-        const retryAfterSeconds = parseRetryAfterSeconds(error.retryAfter);
-        if (retryAfterSeconds) {
-          rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + retryAfterSeconds * 1000);
+      // Front poses are not retried here (front failure cancels the sequence);
+      // non-front poses get up to POSE_RETRY_MAX automatic retries
+      const maxRetries = pose === 'front' ? 0 : POSE_RETRY_MAX;
+
+      for (let retryAttempt = 0; retryAttempt <= maxRetries; retryAttempt++) {
+        if (retryAttempt > 0) {
+          await waitForSchedulerWindow();
+          if (sequence.cancelled) break;
         }
-        sequence.results[pose] = makePoseResult('error', null, error.message || 'Failed to generate');
+
+        try {
+          const result = await generateVisualization({
+            referencePhotoUrl: refUrl,
+            outfit: sequence.outfit,
+            userProfile: sequence.userProfile,
+            pose,
+          });
+          sequence.results[pose] = makePoseResult('ready', result.imageUrl);
+          break;
+        } catch (error) {
+          const retryAfterSeconds = parseRetryAfterSeconds(error.retryAfter);
+          if (retryAfterSeconds) {
+            rateLimitedUntil = Math.max(rateLimitedUntil, Date.now() + retryAfterSeconds * 1000);
+          }
+          if (retryAttempt >= maxRetries) {
+            sequence.results[pose] = makePoseResult('error', null, error.message || 'Failed to generate');
+          }
+        }
       }
 
       if (sequence.onPoseComplete) {

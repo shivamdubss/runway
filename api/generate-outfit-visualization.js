@@ -72,8 +72,9 @@ The replacement garments must drape naturally on the existing body with physical
 }
 
 const OPENAI_TIMEOUT_MS = 50_000;
-const MAX_TRANSIENT_RETRIES = 1;
+const MAX_TRANSIENT_RETRIES = 2;
 const RETRY_BACKOFF_BASE_MS = 500;
+const MAX_429_RETRY_WAIT_MS = 15_000;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -109,8 +110,10 @@ function buildRetryDelayMs(attempt) {
 /**
  * Fetch with retry for transient errors (429, 5xx).
  * Shares a single AbortController so the overall timeout spans all attempts.
+ * 429 retries respect the Retry-After header but are capped at MAX_429_RETRY_WAIT_MS
+ * and skipped when insufficient time remains before the deadline.
  */
-async function fetchWithRetry(url, options, signal, context = {}) {
+async function fetchWithRetry(url, options, signal, context = {}, deadline = Infinity) {
   let lastError;
   for (let attempt = 0; attempt <= MAX_TRANSIENT_RETRIES; attempt++) {
     const startedAt = Date.now();
@@ -147,6 +150,34 @@ async function fetchWithRetry(url, options, signal, context = {}) {
         retryAfter,
         requestId,
       });
+
+      if (response.status === 429 && attempt < MAX_TRANSIENT_RETRIES) {
+        const retryWaitMs = retryAfter != null
+          ? Math.min(retryAfter * 1000, MAX_429_RETRY_WAIT_MS)
+          : buildRetryDelayMs(attempt);
+        const remainingMs = deadline - Date.now();
+
+        if (retryWaitMs + 5000 < remainingMs) {
+          console.log('[fetchWithRetry] Retrying after 429 rate limit', {
+            pose: context.pose,
+            attempt: attempt + 1,
+            delayMs: retryWaitMs,
+            retryAfter,
+            requestId,
+            remainingMs,
+          });
+          await sleep(retryWaitMs);
+          lastError = err;
+          continue;
+        }
+        console.log('[fetchWithRetry] 429 received but not enough time to retry', {
+          pose: context.pose,
+          attempt: attempt + 1,
+          retryWaitMs,
+          remainingMs,
+          requestId,
+        });
+      }
 
       if (response.status >= 500 && attempt < MAX_TRANSIENT_RETRIES) {
         const delay = buildRetryDelayMs(attempt);
@@ -206,6 +237,7 @@ async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProf
   });
 
   const controller = new AbortController();
+  const deadline = Date.now() + OPENAI_TIMEOUT_MS;
   const timeoutId = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
 
   try {
@@ -226,7 +258,7 @@ async function generateOutfitVisualization({ referencePhotoUrl, outfit, userProf
         size: VISUALIZATION_OUTPUT_SIZE,
         input_fidelity: "high"
       })
-    }, controller.signal, { pose });
+    }, controller.signal, { pose }, deadline);
 
     const response = await apiResponse.json();
 
