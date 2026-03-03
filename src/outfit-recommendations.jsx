@@ -2505,7 +2505,7 @@ function WardrobeView({ wardrobeItems, onItemClick, onAddItemClick }) {
   );
 }
 
-function SavedOutfitsView({ savedOutfits, onItemClick, onToggleSaved }) {
+function SavedOutfitsView({ savedOutfits, onItemClick, onToggleSaved, vizGenerations, hasReferencePhoto, onVisualizeClick, onViewVisualization }) {
   if (savedOutfits.length === 0) {
     return (
       <div style={{
@@ -2544,49 +2544,108 @@ function SavedOutfitsView({ savedOutfits, onItemClick, onToggleSaved }) {
           padding: `0 var(--container-padding-x) calc(24px + var(--safe-bottom))`,
         }}
       >
-        {savedOutfits.map((outfit) => (
-          <div key={outfit.id} style={{ marginBottom: 24 }}>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 10,
-            }}>
-              <span style={{
-                fontSize: "var(--font-body)",
-                fontWeight: 600,
-                color: "#1A1A1A",
-                fontFamily: "'DM Sans', sans-serif",
+        {savedOutfits.map((outfit) => {
+          const vizStatus = vizGenerations?.[outfit.id]?.status;
+          return (
+            <div key={outfit.id} style={{ marginBottom: 24 }}>
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 10,
               }}>
-                {outfit.vibe}
-              </span>
-              <button
-                onClick={() => onToggleSaved(outfit.id, true)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 4,
-                  display: "flex",
-                  alignItems: "center",
-                }}
-                title="Unsave outfit"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24"
-                  fill="#1A1A1A" stroke="#1A1A1A"
-                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                <span style={{
+                  fontSize: "var(--font-body)",
+                  fontWeight: 600,
+                  color: "#1A1A1A",
+                  fontFamily: "'DM Sans', sans-serif",
+                }}>
+                  {outfit.vibe}
+                </span>
+                <button
+                  onClick={() => onToggleSaved(outfit.id, true)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 4,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                  title="Unsave outfit"
                 >
-                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-                </svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24"
+                    fill="#1A1A1A" stroke="#1A1A1A"
+                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  >
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                  </svg>
+                </button>
+              </div>
+              <div className="item-card-grid">
+                {outfit.items.map((item, i) => (
+                  <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  if (vizStatus === 'ready') {
+                    onViewVisualization(outfit.id);
+                  } else if (vizStatus !== 'generating' && vizStatus !== 'queued') {
+                    onVisualizeClick(outfit);
+                  }
+                }}
+                disabled={!hasReferencePhoto || vizStatus === 'generating' || vizStatus === 'queued'}
+                style={{
+                  width: "100%",
+                  padding: "12px 20px",
+                  marginTop: 16,
+                  background: vizStatus === 'ready'
+                    ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                    : "transparent",
+                  color: vizStatus === 'ready'
+                    ? "#fff"
+                    : hasReferencePhoto ? "#666" : "#bbb",
+                  border: vizStatus === 'ready'
+                    ? "none"
+                    : hasReferencePhoto ? "1px solid #E0E0E0" : "1px solid #EBEBEB",
+                  borderRadius: 12,
+                  fontSize: "var(--font-body)",
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontWeight: vizStatus === 'ready' ? 600 : 500,
+                  cursor: hasReferencePhoto && vizStatus !== 'generating' && vizStatus !== 'queued' ? "pointer" : "not-allowed",
+                  transition: "all 0.2s ease",
+                  opacity: vizStatus === 'generating' || vizStatus === 'queued' ? 0.6 : 1,
+                  letterSpacing: "0.01em",
+                }}
+              >
+                {vizStatus === 'generating' ? (
+                  <span
+                    role="status"
+                    aria-label="Creating your look"
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <span style={{
+                      width: 16, height: 16, borderRadius: "50%",
+                      border: "2px solid #D8D8D8", borderTopColor: "#8A8A8A",
+                      animation: "spin 0.8s linear infinite",
+                    }} />
+                  </span>
+                ) : vizStatus === 'queued' ? (
+                  <span>Hang tight...</span>
+                ) : vizStatus === 'ready' ? (
+                  <span>View your look</span>
+                ) : vizStatus === 'error' ? (
+                  <span>Try again</span>
+                ) : hasReferencePhoto ? (
+                  <span>See this on you 😎</span>
+                ) : (
+                  <span>Add a photo to try things on</span>
+                )}
               </button>
             </div>
-            <div className="item-card-grid">
-              {outfit.items.map((item, i) => (
-                <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />
-              ))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -2669,13 +2728,20 @@ function ChatView({
   hasLocation,
   onOpenProfile,
 }) {
-  const messagesEndRef = useRef(null);
+  const chatMessagesRef = useRef(null);
+  const isInitialMount = useRef(true);
   const fileInputRef = useRef(null);
   const canSend = !isGenerating && (inputValue.trim() || pendingImage);
   const [isDragOver, setIsDragOver] = useState(false);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const container = chatMessagesRef.current;
+    if (!container) return;
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: isInitialMount.current ? "instant" : "smooth",
+    });
+    isInitialMount.current = false;
   }, [messages]);
 
   return (
@@ -2731,6 +2797,7 @@ function ChatView({
         </div>
       )}
       <div
+        ref={chatMessagesRef}
         className="chat-messages"
         style={{
           flex: 1,
@@ -2956,7 +3023,6 @@ function ChatView({
           ))
         )}
         {isWaitingForFirstToken && <TypingIndicator />}
-        <div ref={messagesEndRef} />
       </div>
 
       {pendingImage && (
@@ -4849,6 +4915,7 @@ export default function OutfitRecommendations() {
   // Clean up vizGenerations when outfits change (new recommendations)
   useEffect(() => {
     const outfitIds = new Set(outfits.map(o => o.id));
+    for (const o of savedOutfits) outfitIds.add(o.id);
     setVizGenerations(prev => {
       const cleaned = {};
       for (const [id, entry] of Object.entries(prev)) {
@@ -4861,7 +4928,7 @@ export default function OutfitRecommendations() {
       }
       return prev;
     });
-  }, [outfits]);
+  }, [outfits, savedOutfits]);
 
   useEffect(() => {
     if (!profileLoaded) return;
@@ -5023,6 +5090,33 @@ export default function OutfitRecommendations() {
   }, []);
 
   const isCurrentVisualizationUrl = (url) => typeof url === "string" && url.includes("/visualizations/v2/");
+
+  // Pre-populate vizGenerations for saved outfits that have visualization URLs
+  useEffect(() => {
+    if (savedOutfits.length === 0) return;
+    setVizGenerations(prev => {
+      const next = { ...prev };
+      let changed = false;
+      for (const outfit of savedOutfits) {
+        if (next[outfit.id]) continue;
+        const urls = outfit.visualizationUrls || (outfit.visualizationUrl ? { front: outfit.visualizationUrl } : null);
+        const compatibleUrls = urls
+          ? Object.fromEntries(
+            Object.entries(urls).filter(([, url]) => isCurrentVisualizationUrl(url))
+          )
+          : null;
+        if (compatibleUrls?.front) {
+          next[outfit.id] = {
+            status: 'ready',
+            poses: buildReadyPoseEntries(compatibleUrls),
+            outfit,
+          };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [savedOutfits]);
 
   const updateVisualizationPose = useCallback((outfitId, pose, nextPoseEntry) => {
     setVizGenerations(prev => {
@@ -5760,6 +5854,10 @@ export default function OutfitRecommendations() {
           savedOutfits={savedOutfits}
           onItemClick={(item) => setLightboxItem(item)}
           onToggleSaved={handleToggleOutfitSaved}
+          vizGenerations={vizGenerations}
+          hasReferencePhoto={!!profile.referencePhoto}
+          onVisualizeClick={handleVisualizeOutfit}
+          onViewVisualization={(outfitId) => setVizModalOutfitId(outfitId)}
         />
       ) : view === "profile" ? (
         <ProfileView

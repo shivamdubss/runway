@@ -291,7 +291,7 @@ export async function fetchOutfitsForChat(chatId) {
       saved: outfit.saved,
       visualizationUrl: outfit.visualization_url || null,
       visualizationUrls: outfit.visualization_urls || (outfit.visualization_url ? { front: outfit.visualization_url } : null),
-      items: (junctionRows || []).map(jr => toFrontendItem(jr.wardrobe_items)),
+      items: (junctionRows || []).filter(jr => jr.wardrobe_items).map(jr => toFrontendItem(jr.wardrobe_items)),
     });
   }
   return results;
@@ -333,7 +333,7 @@ export async function fetchSavedOutfits() {
       saved: outfit.saved,
       visualizationUrl: outfit.visualization_url || null,
       visualizationUrls: outfit.visualization_urls || (outfit.visualization_url ? { front: outfit.visualization_url } : null),
-      items: (junctionRows || []).map(jr => toFrontendItem(jr.wardrobe_items)),
+      items: (junctionRows || []).filter(jr => jr.wardrobe_items).map(jr => toFrontendItem(jr.wardrobe_items)),
     });
   }
   return results;
