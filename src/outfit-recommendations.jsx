@@ -1235,6 +1235,28 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
     await Promise.all(workers);
   };
 
+  const regenItemImage = async (item) => {
+    setImportItems(prev => prev.map(i =>
+      i.id === item.id ? { ...i, imageStatus: "pending" } : i
+    ));
+    try {
+      const result = await generateItemImage({
+        name: item.name,
+        description: item.description,
+        color: item.color,
+        category: item.category,
+      });
+      setImportItems(prev => prev.map(i =>
+        i.id === item.id ? { ...i, imageUrl: result.imageUrl, imageStatus: "ready" } : i
+      ));
+    } catch (err) {
+      console.error(`Image regeneration failed for ${item.name}:`, err);
+      setImportItems(prev => prev.map(i =>
+        i.id === item.id ? { ...i, imageStatus: "error" } : i
+      ));
+    }
+  };
+
   const importActiveItems = importItems.filter(i => !i.removed);
   const allGenDone = genProgress.total > 0 && genProgress.completed >= genProgress.total;
 
@@ -1608,6 +1630,17 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
                             cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
                           }}
                         >✕</button>
+                        {(item.imageStatus === "ready" || item.imageStatus === "error") && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); regenItemImage(item); }}
+                            title="Regenerate image"
+                            style={{
+                              position: "absolute", bottom: 6, left: 6, width: 28, height: 28, borderRadius: 14,
+                              background: "rgba(0,0,0,0.45)", border: "none", color: "#fff", fontSize: 15,
+                              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                            }}
+                          >↻</button>
+                        )}
                       </div>
 
                       {/* Info area */}
@@ -1788,75 +1821,67 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
           {closeButton}
           {fileInputs}
 
-          {/* Photo area */}
-          <div
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-            onDragLeave={() => setIsDragOver(false)}
-            onDrop={(e) => {
-              setIsDragOver(false);
-              const file = getImageFileFromDrop(e);
-              if (file) handleFileSelected(file);
-            }}
-            style={{
-              width: "100%", aspectRatio: "4 / 3",
-              background: isDragOver ? "#E8E6E2" : "#F3F2F0",
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", gap: 8, position: "relative", overflow: "hidden",
-              border: isDragOver ? "2px dashed #999" : "2px dashed transparent",
-              transition: "background 0.15s ease, border-color 0.15s ease",
-            }}
-          >
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
-              <circle cx="12" cy="13" r="4"/>
-            </svg>
-            <span style={{
-              fontSize: "var(--font-body)", color: "#bbb", fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
-            }}>
-              Take or choose a photo
-            </span>
-            <span style={{
-              fontSize: 12, color: "#ccc", fontFamily: "'DM Sans', sans-serif",
-            }}>
-              Select multiple for bulk add
-            </span>
-          </div>
-
-          {/* Upload error */}
-          {uploadError && (
-            <div style={{ padding: "8px var(--container-padding-x)", fontSize: "var(--font-body)", color: "#c0392b", fontFamily: "'DM Sans', sans-serif" }}>
-              {uploadError}
-            </div>
-          )}
-
-          {/* Import from outfit photo — separate card */}
-          <div style={{ padding: "12px var(--container-padding-x) var(--container-padding-x)" }}>
+          {/* Two equal choice cards */}
+          <div style={{ padding: "var(--container-padding-x)", display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* Card 1: Individual garment photos */}
             <button
-              onClick={() => setMode("import")}
+              onClick={() => fileInputRef.current?.click()}
               style={{
-                width: "100%", padding: "14px 16px", borderRadius: 16,
+                width: "100%", padding: "20px 16px", borderRadius: 16,
                 border: "1px solid rgba(0,0,0,0.08)", background: "#F9F8F7",
                 cursor: "pointer", display: "flex", alignItems: "center", gap: 12,
                 transition: "all 0.15s ease", textAlign: "left",
               }}
             >
-              <span style={{ fontSize: 24, flexShrink: 0 }}>📸</span>
+              <span style={{ fontSize: 28, flexShrink: 0 }}>👕</span>
               <div>
                 <div style={{
                   fontSize: "var(--font-body)", fontWeight: 600, color: "#333",
                   fontFamily: "'DM Sans', sans-serif",
                 }}>
-                  Import from outfit photo
+                  Add garment photos
                 </div>
                 <div style={{
                   fontSize: 12, color: "#999", fontFamily: "'DM Sans', sans-serif", marginTop: 2,
                 }}>
-                  Snap a full outfit, we'll detect each item
+                  Upload photos of individual items — select multiple for bulk add
+                </div>
+              </div>
+            </button>
+
+            {/* Card 2: Full outfit detection */}
+            <button
+              onClick={() => setMode("import")}
+              style={{
+                width: "100%", padding: "20px 16px", borderRadius: 16,
+                border: "1px solid rgba(0,0,0,0.08)", background: "#F9F8F7",
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 12,
+                transition: "all 0.15s ease", textAlign: "left",
+              }}
+            >
+              <span style={{ fontSize: 28, flexShrink: 0 }}>🧍</span>
+              <div>
+                <div style={{
+                  fontSize: "var(--font-body)", fontWeight: 600, color: "#333",
+                  fontFamily: "'DM Sans', sans-serif",
+                }}>
+                  Detect from outfit photo
+                </div>
+                <div style={{
+                  fontSize: 12, color: "#999", fontFamily: "'DM Sans', sans-serif", marginTop: 2,
+                }}>
+                  Upload one photo — we'll find each item automatically
                 </div>
               </div>
             </button>
           </div>
+
+          {/* Upload error */}
+          {uploadError && (
+            <div style={{ padding: "0 var(--container-padding-x) 8px", fontSize: "var(--font-body)", color: "#c0392b", fontFamily: "'DM Sans', sans-serif" }}>
+              {uploadError}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -2826,7 +2851,7 @@ function ChatView({
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            justifyContent: "flex-end",
+            justifyContent: "center",
             gap: 12,
             padding: "20px 20px",
           }}>
