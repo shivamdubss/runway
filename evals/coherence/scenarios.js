@@ -103,6 +103,97 @@ const TOPS_HEAVY_WARDROBE = [
 ];
 
 // ---------------------------------------------------------------------------
+// Calibration scenarios
+// Pre-baked outfits that bypass generation and go straight to the judge.
+// These verify the judge can actually detect failures — one per dimension.
+// Every calibration scenario has expectedPass: false.
+// ---------------------------------------------------------------------------
+
+export const CALIBRATION_SCENARIOS = [
+  {
+    id: 'calibration_formality_clash',
+    request: 'Date night at a nice restaurant',
+    wardrobeItems: BALANCED_WARDROBE,
+    prebuiltOutfits: [
+      {
+        vibe: 'Mixed Signals',
+        reasoning: 'Dressed up the jacket, kept the rest relaxed.',
+        items: [
+          { name: 'Black Tuxedo Jacket' },
+          { name: 'Graphic Band Tee' },
+          { name: 'Ripped Skinny Jeans' },
+          { name: 'Rubber Flip Flops' },
+        ],
+      },
+    ],
+    expectedPass: false,
+    tags: ['calibration', 'formality-clash'],
+  },
+
+  {
+    id: 'calibration_seasonal_mismatch',
+    request: 'Outdoor picnic with family this afternoon.',
+    wardrobeItems: SUMMER_WARDROBE,
+    weather: { city: 'Los Angeles', temp: 35, high: 38, low: 28, wind: 5, condition: 'Sunny' },
+    prebuiltOutfits: [
+      {
+        vibe: 'Cozy Layers',
+        reasoning: 'Staying warm and comfortable.',
+        items: [
+          { name: 'Heavy Wool Overcoat' },
+          { name: 'Cashmere Turtleneck' },
+          { name: 'Thermal Leggings' },
+          { name: 'Fleece-Lined Snow Boots' },
+        ],
+      },
+    ],
+    expectedPass: false,
+    tags: ['calibration', 'seasonal-mismatch'],
+  },
+
+  {
+    id: 'calibration_color_clash',
+    request: 'Casual Friday at the office.',
+    wardrobeItems: BALANCED_WARDROBE,
+    prebuiltOutfits: [
+      {
+        vibe: 'Bold Statement',
+        reasoning: 'Making an entrance with color.',
+        items: [
+          { name: 'Neon Green Polo Shirt' },
+          { name: 'Bright Orange Cargo Pants' },
+          { name: 'Electric Blue High-Top Sneakers' },
+          { name: 'Hot Pink Canvas Belt' },
+        ],
+      },
+    ],
+    expectedPass: false,
+    tags: ['calibration', 'color-clash'],
+  },
+
+  {
+    id: 'calibration_style_incoherence',
+    request: 'Job interview at a tech startup.',
+    wardrobeItems: BALANCED_WARDROBE,
+    prebuiltOutfits: [
+      {
+        vibe: 'Eclectic Mix',
+        reasoning: 'A creative combination of personal style influences.',
+        items: [
+          { name: 'Tweed Hunting Jacket' },
+          { name: 'Hawaiian Print Shirt' },
+          { name: 'Athletic Compression Shorts' },
+          { name: 'Cowboy Boots' },
+          { name: 'Top Hat' },
+        ],
+      },
+    ],
+    expectedPass: false,
+    tags: ['calibration', 'style-incoherence'],
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Test scenarios
 // ---------------------------------------------------------------------------
 
@@ -243,3 +334,6 @@ export const SCENARIOS = [
     tags: ['casual', 'tops-heavy', 'wardrobe-stress', 'limited-bottoms'],
   },
 ];
+
+// All scenarios combined — used by the test runner
+export const ALL_SCENARIOS = [...SCENARIOS, ...CALIBRATION_SCENARIOS];

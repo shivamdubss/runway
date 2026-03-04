@@ -17,6 +17,21 @@ Shared infrastructure lives in `evals/lib/` — do not duplicate it.
 
 ---
 
+## Required: positive AND negative test cases
+
+**Every eval must include both types of scenarios.** This is not optional.
+
+- **Positive scenarios** (`expectedPass: true`) — use the real pipeline (`generate()` calls the API). They verify that the recommendation flow produces outputs that pass the judge. A passing eval without negative cases only proves the judge isn't crashing.
+- **Negative scenarios / calibration** (`expectedPass: false`, `prebuiltOutfits` set) — pre-baked obviously bad outputs that bypass generation and go straight to judging. They verify the judge can actually detect failures. Without them, a lenient rubric will rubber-stamp everything and the eval is worthless.
+
+A good calibration scenario is one where a human would immediately agree the output is wrong. One bad case per judge dimension is the minimum. Export them as `CALIBRATION_SCENARIOS` and combine with `SCENARIOS` into `ALL_SCENARIOS`.
+
+```js
+export const ALL_SCENARIOS = [...SCENARIOS, ...CALIBRATION_SCENARIOS];
+```
+
+---
+
 ## Test case schema
 
 Every scenario object must have these fields:
@@ -29,7 +44,8 @@ Every scenario object must have these fields:
   profile: Object | null,   // user profile or null
   weather: Object | null,   // { city, temp, high, low, wind, condition } or null
   conversationHistory: Array, // prior messages for constraint/refinement scenarios
-  expectedPass: boolean,    // human-labeled expectation (used for calibration)
+  expectedPass: boolean,    // true = judge should pass, false = judge should fail (calibration)
+  prebuiltOutfits: Array | undefined, // calibration only — bypasses generation, goes straight to judge
   tags: Array<string>,      // for filtering and reporting (e.g. ['formal', 'constraint'])
 }
 ```

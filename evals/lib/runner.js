@@ -44,22 +44,34 @@ export async function runEval({ evalName, scenarios, generate, judge, log }) {
       }
     }
 
-    // Scenario passes if every outfit passes
-    const allPass = judgments.length > 0 && judgments.every(j => j.judgment.overall_pass);
-    const icon = allPass ? '+' : 'X';
+    const judgeAllPass = judgments.length > 0 && judgments.every(j => j.judgment.overall_pass);
+    // For expectedPass:true  → scenario passes when judge agrees all outfits are good
+    // For expectedPass:false → scenario passes when judge catches at least one bad outfit
+    const expectedPass = scenario.expectedPass !== false; // default true
+    const scenarioPass = expectedPass ? judgeAllPass : !judgeAllPass;
+    const icon = scenarioPass ? '+' : 'X';
     process.stdout.write(`\r  [${icon}] ${scenario.id}\n`);
 
-    // Print details for failing scenarios
-    if (!allPass) {
-      for (const { outfit, judgment } of judgments) {
-        if (!judgment.overall_pass) {
-          console.log(`      Outfit: "${outfit.vibe}" — FAIL`);
-          const dims = judgment.dimensions || {};
-          for (const [dim, result] of Object.entries(dims)) {
-            if (!result.pass) {
-              console.log(`        ${dim}: FAIL — ${result.reason}`);
+    // Print details when something went wrong
+    if (!scenarioPass) {
+      if (expectedPass) {
+        // Expected pass but judge flagged failures
+        for (const { outfit, judgment } of judgments) {
+          if (!judgment.overall_pass) {
+            console.log(`      Outfit: "${outfit.vibe}" — FAIL`);
+            const dims = judgment.dimensions || {};
+            for (const [dim, result] of Object.entries(dims)) {
+              if (!result.pass) {
+                console.log(`        ${dim}: FAIL — ${result.reason}`);
+              }
             }
           }
+        }
+      } else {
+        // Expected failure but judge passed everything — rubric is too lenient
+        console.log(`      Judge passed all outfits but expected failure (rubric may be too lenient)`);
+        for (const { outfit } of judgments) {
+          console.log(`      Outfit: "${outfit.vibe}" — judge said PASS`);
         }
       }
     }
@@ -69,7 +81,7 @@ export async function runEval({ evalName, scenarios, generate, judge, log }) {
     results.push({
       id: scenario.id,
       tags: scenario.tags || [],
-      pass: allPass,
+      pass: scenarioPass,
       outfitCount: outfits.length,
       judgments,
       rawResponse,

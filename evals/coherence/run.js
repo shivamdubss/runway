@@ -18,7 +18,7 @@ import { parseOutfitResponse } from '../../api/_lib/parse-outfits.js';
 import { runEval } from '../lib/runner.js';
 import { judgeOutfit } from '../lib/judge.js';
 import { logResults } from '../lib/logger.js';
-import { SCENARIOS } from './scenarios.js';
+import { ALL_SCENARIOS } from './scenarios.js';
 import { JUDGE_PROMPT } from './judge-prompt.js';
 
 // ---------------------------------------------------------------------------
@@ -43,13 +43,17 @@ const openai = new OpenAI();
 // ---------------------------------------------------------------------------
 
 async function generate(scenario) {
+  // Calibration scenarios supply outfits directly — no API call needed
+  if (scenario.prebuiltOutfits) {
+    return { outfits: scenario.prebuiltOutfits, rawResponse: null, systemPrompt: null };
+  }
+
   const systemPrompt = buildSystemPrompt({
     wardrobeItems: scenario.wardrobeItems,
     profile: scenario.profile || null,
     weather: scenario.weather || null,
   });
 
-  // Build the messages array — include conversation history for constraint scenarios
   const messages = [
     { role: 'system', content: systemPrompt },
     ...scenario.conversationHistory,
@@ -89,7 +93,7 @@ async function judge(scenario, outfit) {
 
 const runData = await runEval({
   evalName: 'coherence',
-  scenarios: SCENARIOS,
+  scenarios: ALL_SCENARIOS,
   generate,
   judge,
   log: (data) => logResults({ ...data, model: MODEL }),

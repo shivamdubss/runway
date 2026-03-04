@@ -12,7 +12,7 @@ import { describe, test, expect } from 'vitest';
 import { buildSystemPrompt } from '../api/_lib/prompts.js';
 import { parseOutfitResponse } from '../api/_lib/parse-outfits.js';
 import { judgeOutfit } from '../evals/lib/judge.js';
-import { SCENARIOS } from '../evals/coherence/scenarios.js';
+import { ALL_SCENARIOS } from '../evals/coherence/scenarios.js';
 import { JUDGE_PROMPT } from '../evals/coherence/judge-prompt.js';
 
 // Generate outfits using the real pipeline
@@ -39,21 +39,16 @@ async function generate(scenario) {
 }
 
 describe('coherence eval', () => {
-  for (const scenario of SCENARIOS) {
-    // Generous timeout — each scenario makes 1 generation + up to 3 judge calls
+  for (const scenario of ALL_SCENARIOS) {
     test(scenario.id, async (ctx) => {
-      // Check at execution time (not module-load time) so dotenv has been applied
-      if (!process.env.OPENAI_API_KEY) {
-        ctx.skip();
-        return;
-      }
+      if (!process.env.OPENAI_API_KEY) { ctx.skip(); return; }
 
-      const { outfits } = await generate(scenario);
+      // Calibration scenarios supply outfits directly; pipeline scenarios generate them
+      const outfits = scenario.prebuiltOutfits ?? (await generate(scenario)).outfits;
+      expect(outfits.length, `${scenario.id}: no outfits returned`).toBeGreaterThan(0);
 
-      // Must produce at least one outfit
-      expect(outfits.length, `${scenario.id}: expected at least one outfit`).toBeGreaterThan(0);
+      const expectedPass = scenario.expectedPass !== false; // default true
 
-      // Every outfit must pass the coherence judge
       for (const outfit of outfits) {
         const result = await judgeOutfit({
           request: scenario.request,
@@ -63,16 +58,20 @@ describe('coherence eval', () => {
           model: 'gpt-4o-mini',
         });
 
-        if (!result.overall_pass) {
+        if (expectedPass && !result.overall_pass) {
           const failures = Object.entries(result.dimensions)
             .filter(([, v]) => !v.pass)
             .map(([dim, v]) => `${dim}: ${v.reason}`)
             .join('; ');
+          expect.fail(`${scenario.id} — "${outfit.vibe}" failed: ${failures}`);
+        }
+
+        if (!expectedPass && result.overall_pass) {
           expect.fail(
-            `${scenario.id} — outfit "${outfit.vibe}" failed coherence: ${failures}`
+            `${scenario.id} — judge passed "${outfit.vibe}" but this outfit should be incoherent (rubric may be too lenient)`
           );
         }
       }
-    }, 90_000); // 90s per scenario
+    }, 90_000);
   }
 });
