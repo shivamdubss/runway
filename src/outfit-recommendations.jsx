@@ -4832,6 +4832,37 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, 
               </span>
             )}
           </button>
+
+          <button
+            onClick={onOpenProfile}
+            style={{
+              width: "100%",
+              height: 40,
+              borderRadius: 8,
+              border: "none",
+              background: "transparent",
+              color: "#1A1A1A",
+              fontSize: "var(--font-body)",
+              fontWeight: 500,
+              fontFamily: "'DM Sans', sans-serif",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-start",
+              padding: "0 12px",
+              gap: 8,
+              transition: "background 0.15s ease",
+            }}
+            onPointerDown={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.05)"}
+            onPointerUp={(e) => e.currentTarget.style.background = "transparent"}
+            onPointerLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+            </svg>
+            My Profile
+          </button>
         </div>
 
         {/* Scrollable chat list */}
@@ -4877,36 +4908,6 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, 
               ))}
             </div>
           )}
-
-          {/* My Profile Button */}
-          <div style={{ padding: "16px 16px 8px" }}>
-            <button
-              onClick={onOpenProfile}
-              style={{
-                width: "100%",
-                height: 44,
-                borderRadius: 12,
-                border: "1px solid rgba(0,0,0,0.08)",
-                background: "#fff",
-                color: "#1A1A1A",
-                fontSize: "var(--font-body)",
-                fontWeight: 600,
-                fontFamily: "'DM Sans', sans-serif",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                transition: "background 0.15s ease",
-              }}
-              onPointerDown={(e) => e.currentTarget.style.background = "#F3F2F0"}
-              onPointerUp={(e) => e.currentTarget.style.background = "#fff"}
-              onPointerLeave={(e) => e.currentTarget.style.background = "#fff"}
-            >
-              <span style={{ fontSize: 18 }}>✨</span>
-              My Profile
-            </button>
-          </div>
 
           {/* Sign Out */}
           <div style={{ padding: "0 16px 16px" }}>
