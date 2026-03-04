@@ -1,0 +1,40 @@
+name: Coherence Eval
+
+on:
+  pull_request:
+    paths:
+      - 'api/_lib/prompts.js'
+      - 'api/chat.js'
+      - 'api/chat/stream.js'
+      - 'evals/**'
+  # Also allows manual trigger from the GitHub Actions UI
+  workflow_dispatch:
+
+jobs:
+  eval:
+    name: Run coherence eval
+    runs-on: ubuntu-latest
+    # Skip if OPENAI_API_KEY secret is not configured in this repo
+    if: ${{ vars.EVALS_ENABLED == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Run coherence eval
+        run: node evals/coherence/run.js
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      - name: Upload result log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-${{ github.run_id }}
+          path: evals/results/
+          retention-days: 30

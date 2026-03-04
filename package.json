@@ -10,7 +10,9 @@
     "seed": "node scripts/seed.js",
     "start": "node server/index.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "eval:coherence": "node evals/coherence/run.js",
+    "eval": "node evals/coherence/run.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",

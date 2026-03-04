@@ -1821,64 +1821,99 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
           {closeButton}
           {fileInputs}
 
+          {/* Header */}
+          <div style={{ padding: "28px 20px 4px", textAlign: "center" }}>
+            <div style={{
+              fontSize: 17, fontWeight: 700, color: "#1a1a1a",
+              fontFamily: "'DM Sans', sans-serif", letterSpacing: "-0.01em",
+            }}>
+              Add to wardrobe
+            </div>
+            <div style={{
+              fontSize: 13, color: "#aaa", fontFamily: "'DM Sans', sans-serif", marginTop: 4,
+            }}>
+              How do you want to add items?
+            </div>
+          </div>
+
           {/* Two equal choice cards */}
-          <div style={{ padding: "var(--container-padding-x)", display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ padding: "20px 20px 24px", display: "flex", flexDirection: "column", gap: 14 }}>
             {/* Card 1: Individual garment photos */}
             <button
               onClick={() => fileInputRef.current?.click()}
               style={{
-                width: "100%", padding: "20px 16px", borderRadius: 16,
-                border: "1px solid rgba(0,0,0,0.08)", background: "#F9F8F7",
-                cursor: "pointer", display: "flex", alignItems: "center", gap: 12,
-                transition: "all 0.15s ease", textAlign: "left",
+                width: "100%", padding: "18px 16px", borderRadius: 18,
+                border: "1.5px solid rgba(0,0,0,0.07)", background: "#FAFAF9",
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 14,
+                transition: "background 0.15s ease, border-color 0.15s ease", textAlign: "left",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
               }}
             >
-              <span style={{ fontSize: 28, flexShrink: 0 }}>👕</span>
-              <div>
+              <div style={{
+                width: 52, height: 52, borderRadius: 14, background: "#F0EEF8",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, fontSize: 26,
+              }}>
+                👕
+              </div>
+              <div style={{ flex: 1 }}>
                 <div style={{
-                  fontSize: "var(--font-body)", fontWeight: 600, color: "#333",
-                  fontFamily: "'DM Sans', sans-serif",
+                  fontSize: 15, fontWeight: 600, color: "#1a1a1a",
+                  fontFamily: "'DM Sans', sans-serif", letterSpacing: "-0.01em",
                 }}>
                   Add garment photos
                 </div>
                 <div style={{
-                  fontSize: 12, color: "#999", fontFamily: "'DM Sans', sans-serif", marginTop: 2,
+                  fontSize: 12.5, color: "#999", fontFamily: "'DM Sans', sans-serif", marginTop: 3, lineHeight: 1.4,
                 }}>
                   Upload photos of individual items — select multiple for bulk add
                 </div>
               </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
             </button>
 
             {/* Card 2: Full outfit detection */}
             <button
               onClick={() => setMode("import")}
               style={{
-                width: "100%", padding: "20px 16px", borderRadius: 16,
-                border: "1px solid rgba(0,0,0,0.08)", background: "#F9F8F7",
-                cursor: "pointer", display: "flex", alignItems: "center", gap: 12,
-                transition: "all 0.15s ease", textAlign: "left",
+                width: "100%", padding: "18px 16px", borderRadius: 18,
+                border: "1.5px solid rgba(0,0,0,0.07)", background: "#FAFAF9",
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 14,
+                transition: "background 0.15s ease, border-color 0.15s ease", textAlign: "left",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
               }}
             >
-              <span style={{ fontSize: 28, flexShrink: 0 }}>🧍</span>
-              <div>
+              <div style={{
+                width: 52, height: 52, borderRadius: 14, background: "#EEF4F0",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, fontSize: 26,
+              }}>
+                🧍
+              </div>
+              <div style={{ flex: 1 }}>
                 <div style={{
-                  fontSize: "var(--font-body)", fontWeight: 600, color: "#333",
-                  fontFamily: "'DM Sans', sans-serif",
+                  fontSize: 15, fontWeight: 600, color: "#1a1a1a",
+                  fontFamily: "'DM Sans', sans-serif", letterSpacing: "-0.01em",
                 }}>
                   Detect from outfit photo
                 </div>
                 <div style={{
-                  fontSize: 12, color: "#999", fontFamily: "'DM Sans', sans-serif", marginTop: 2,
+                  fontSize: 12.5, color: "#999", fontFamily: "'DM Sans', sans-serif", marginTop: 3, lineHeight: 1.4,
                 }}>
                   Upload one photo — we'll find each item automatically
                 </div>
               </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
             </button>
           </div>
 
           {/* Upload error */}
           {uploadError && (
-            <div style={{ padding: "0 var(--container-padding-x) 8px", fontSize: "var(--font-body)", color: "#c0392b", fontFamily: "'DM Sans', sans-serif" }}>
+            <div style={{ padding: "0 20px 12px", fontSize: "var(--font-body)", color: "#c0392b", fontFamily: "'DM Sans', sans-serif" }}>
               {uploadError}
             </div>
           )}
@@ -2106,7 +2141,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
 }
 
 
-function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisualizeClick, onViewVisualization, onShare, onToggleSaved }) {
+function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisualizeClick, onViewVisualization, onShare, onToggleSaved, onToggleDisliked }) {
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
   const [shareState, setShareState] = useState('idle'); // 'idle' | 'loading' | 'copied'
   const [showToast, setShowToast] = useState(false);
@@ -2235,6 +2270,28 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
           )}
         </div>
         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleDisliked(outfit.id, outfit.disliked);
+            }}
+            style={{
+              ...actionButtonStyle,
+              background: outfit.disliked ? "rgba(0,0,0,0.04)" : "transparent",
+              cursor: "pointer",
+            }}
+            title={outfit.disliked ? "Remove feedback" : "Not for me"}
+            aria-label={outfit.disliked ? "Remove feedback" : "Not for me"}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24"
+              fill={outfit.disliked ? "#1A1A1A" : "none"}
+              stroke={outfit.disliked ? "#1A1A1A" : "#666"}
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            >
+              <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3z" />
+              <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+            </svg>
+          </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -5667,6 +5724,17 @@ export default function OutfitRecommendations() {
     }
   }, []);
 
+  const handleToggleOutfitDisliked = useCallback(async (outfitId, currentDisliked) => {
+    try {
+      await db.toggleOutfitDisliked(outfitId, currentDisliked);
+      setOutfits(prev => prev.map(o =>
+        o.id === outfitId ? { ...o, disliked: !currentDisliked } : o
+      ));
+    } catch (err) {
+      console.error("Failed to toggle outfit disliked:", err);
+    }
+  }, []);
+
   const handleDeleteChat = useCallback(async (chatId) => {
     try {
       await db.deleteChat(chatId);
@@ -5955,6 +6023,7 @@ export default function OutfitRecommendations() {
                       });
                     }}
                     onToggleSaved={handleToggleOutfitSaved}
+                    onToggleDisliked={handleToggleOutfitDisliked}
                   />
                 </div>
               ))}

@@ -289,6 +289,7 @@ export async function fetchOutfitsForChat(chatId) {
       vibe: outfit.vibe,
       reasoning: outfit.reasoning,
       saved: outfit.saved,
+      disliked: outfit.disliked ?? false,
       visualizationUrl: outfit.visualization_url || null,
       visualizationUrls: outfit.visualization_urls || (outfit.visualization_url ? { front: outfit.visualization_url } : null),
       items: (junctionRows || []).filter(jr => jr.wardrobe_items).map(jr => toFrontendItem(jr.wardrobe_items)),
@@ -301,6 +302,17 @@ export async function toggleOutfitSaved(outfitId, currentSaved) {
   const { data, error } = await supabase
     .from('outfits')
     .update({ saved: !currentSaved })
+    .eq('id', outfitId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function toggleOutfitDisliked(outfitId, currentDisliked) {
+  const { data, error } = await supabase
+    .from('outfits')
+    .update({ disliked: !currentDisliked })
     .eq('id', outfitId)
     .select()
     .single();
@@ -331,6 +343,7 @@ export async function fetchSavedOutfits() {
       vibe: outfit.vibe,
       reasoning: outfit.reasoning,
       saved: outfit.saved,
+      disliked: outfit.disliked ?? false,
       visualizationUrl: outfit.visualization_url || null,
       visualizationUrls: outfit.visualization_urls || (outfit.visualization_url ? { front: outfit.visualization_url } : null),
       items: (junctionRows || []).filter(jr => jr.wardrobe_items).map(jr => toFrontendItem(jr.wardrobe_items)),
