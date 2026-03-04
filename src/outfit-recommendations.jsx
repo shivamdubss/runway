@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import { sendChatMessageStreaming, shareOutfit } from "./lib/api";
 import { uploadImage } from "./lib/upload";
+import { buildConversationHistory } from "./lib/conversation-history";
 import { preprocessReferencePhotoClient } from "./lib/preprocess";
 import { analyzeImage } from "./lib/analyze";
 import { analyzeOutfitPhoto, generateItemImage } from "./lib/import-from-photo";
@@ -5343,10 +5344,8 @@ export default function OutfitRecommendations() {
       );
     }
 
-    // Build conversation history for the API
-    const conversationHistory = [...messages, { role: "user", text: messageText }]
-      .filter(msg => msg.text)
-      .map(msg => ({ role: msg.role, content: msg.text }));
+    // Build conversation history for the API (includes image URLs for multimodal messages)
+    const conversationHistory = buildConversationHistory(messages, messageText, imageUrl);
 
     const streamId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const assistantMessageId = `assistant-${streamId}`;
