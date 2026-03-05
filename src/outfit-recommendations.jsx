@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import { sendChatMessageStreaming, shareOutfit } from "./lib/api";
+import { track } from "./lib/analytics";
 import { uploadImage } from "./lib/upload";
 import { buildConversationHistory } from "./lib/conversation-history";
 import { preprocessReferencePhotoClient } from "./lib/preprocess";
@@ -5426,6 +5427,7 @@ export default function OutfitRecommendations() {
         console.error("Failed to save user message:", err)
       );
     }
+    track('chat_message_sent', { has_image: !!imageUrl });
 
     // Build conversation history for the API (includes image URLs for multimodal messages)
     const conversationHistory = buildConversationHistory(messages, messageText, imageUrl);
@@ -5538,6 +5540,10 @@ export default function OutfitRecommendations() {
       }
 
       if (result.outfits && result.outfits.length > 0) {
+        track('outfits_generated', {
+          count: result.outfits.length,
+          vibes: result.outfits.map(o => o.vibe).filter(Boolean),
+        });
         setOutfits(result.outfits);
         setCurrent(0);
 
@@ -6016,6 +6022,7 @@ export default function OutfitRecommendations() {
                     onViewVisualization={(outfitId) => setVizModalOutfitId(outfitId)}
                     onShare={async (outfitId) => {
                       const { shareToken } = await shareOutfit(outfitId);
+                      track('outfit_shared', { outfit_id: outfitId });
                       const shareUrl = `${window.location.origin}/s/${shareToken}`;
                       return shareOutfitLink({
                         url: shareUrl,

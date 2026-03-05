@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { track } from './analytics';
 
 // ── Shape mappers ──────────────────────────────────────────
 
@@ -70,7 +71,9 @@ export async function addWardrobeItem(item) {
     .select()
     .single();
   if (error) throw error;
-  return toFrontendItem(data);
+  const result = toFrontendItem(data);
+  track('wardrobe_item_added', { category: result.category, has_image: !!result.image });
+  return result;
 }
 
 export async function addWardrobeItemsBulk(items) {
@@ -80,7 +83,9 @@ export async function addWardrobeItemsBulk(items) {
     .insert(dbItems)
     .select();
   if (error) throw error;
-  return data.map(toFrontendItem);
+  const results = data.map(toFrontendItem);
+  track('wardrobe_items_bulk_added', { count: results.length });
+  return results;
 }
 
 export async function deleteWardrobeItem(id) {
@@ -89,6 +94,7 @@ export async function deleteWardrobeItem(id) {
     .delete()
     .eq('id', id);
   if (error) throw error;
+  track('wardrobe_item_deleted', {});
 }
 
 export async function updateWardrobeItem(id, fields) {
@@ -126,6 +132,7 @@ export async function createChat({ title, subtitle }) {
     .select()
     .single();
   if (error) throw error;
+  track('chat_created', {});
   return data;
 }
 
@@ -306,6 +313,7 @@ export async function toggleOutfitSaved(outfitId, currentSaved) {
     .select()
     .single();
   if (error) throw error;
+  track(currentSaved ? 'outfit_unsaved' : 'outfit_saved', { outfit_id: outfitId });
   return data;
 }
 
@@ -317,6 +325,7 @@ export async function toggleOutfitDisliked(outfitId, currentDisliked) {
     .select()
     .single();
   if (error) throw error;
+  track(currentDisliked ? 'outfit_undisliked' : 'outfit_disliked', { outfit_id: outfitId });
   return data;
 }
 
