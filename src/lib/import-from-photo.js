@@ -27,6 +27,25 @@ export async function analyzeOutfitPhoto(imageUrl) {
   return res.json();
 }
 
+export async function enhanceItemImage(imageUrl, item) {
+  return enqueueApiCall(async () => {
+    const headers = await getAuthHeaders();
+
+    const res = await fetch('/api/enhance-item-image', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ imageUrl, item }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || body.message || `Image enhancement failed (${res.status})`);
+    }
+
+    return res.json();
+  });
+}
+
 export async function generateItemImage(item) {
   return enqueueApiCall(async () => {
     const headers = await getAuthHeaders();

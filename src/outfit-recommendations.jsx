@@ -5,7 +5,7 @@ import { uploadImage } from "./lib/upload";
 import { buildConversationHistory } from "./lib/conversation-history";
 import { preprocessReferencePhotoClient } from "./lib/preprocess";
 import { analyzeImage } from "./lib/analyze";
-import { analyzeOutfitPhoto, generateItemImage } from "./lib/import-from-photo";
+import { analyzeOutfitPhoto, generateItemImage, enhanceItemImage } from "./lib/import-from-photo";
 import * as db from "./lib/db";
 import { compareOutfitItems } from "./lib/outfit-sort";
 import {
@@ -37,7 +37,7 @@ import {
 } from "./lib/visualization";
 import { useAuth } from "./lib/auth";
 import { isMobileShareDevice, shareOutfitLink } from "./lib/share";
-import { fetchWeatherForDisplay, weatherIconToEmoji, searchCities } from "./lib/weather";
+import { fetchWeatherForDisplay, weatherIconToEmoji, searchCities, detectLocationFromBrowser } from "./lib/weather";
 
 // Inject CSS animations for streaming states
 const style = document.createElement('style');
@@ -148,7 +148,7 @@ function getVisualizationReferenceUrl(profile) {
   return profile.referencePhoto?.preprocessedUrl || profile.referencePhoto?.url || null;
 }
 
-function Lightbox({ item, onClose, onDelete, onEdit }) {
+function Lightbox({ item, onClose, onDelete, onEdit, onEnhance, onStyleItem, isEnhancing = false }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(item.name);
@@ -303,6 +303,31 @@ function Lightbox({ item, onClose, onDelete, onEdit }) {
                   ))}
                 </div>
               )}
+              {onEnhance && !isEditing && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isEnhancing) onEnhance(item.id, images[activeIdx], item);
+                  }}
+                  disabled={isEnhancing}
+                  style={{
+                    position: "absolute", bottom: 10, left: 10,
+                    height: 28, padding: "0 10px", borderRadius: 14,
+                    border: "none",
+                    background: isEnhancing ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0.45)",
+                    color: "#fff",
+                    fontSize: 11, fontWeight: 600,
+                    fontFamily: "'DM Sans', sans-serif",
+                    cursor: isEnhancing ? "default" : "pointer",
+                    display: "flex", alignItems: "center", gap: 4,
+                    backdropFilter: "blur(4px)",
+                    WebkitBackdropFilter: "blur(4px)",
+                    transition: "background 0.2s ease",
+                  }}
+                >
+                  ✨ {isEnhancing ? "Enhancing…" : "Enhance"}
+                </button>
+              )}
             </>
           ) : (
             <span>{item.emoji}</span>
@@ -436,44 +461,56 @@ function Lightbox({ item, onClose, onDelete, onEdit }) {
               }}>
                 {item.name}
               </div>
-              {canEdit && (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 0",
+              {(canEdit || onStyleItem || (item.id && onDelete)) && (() => {
+                const btnBase = (color, extraStyle = {}) => ({
+                  flex: 1,
+                  padding: "12px 4px",
+                  border: "none",
+                  background: "transparent",
+                  color,
+                  fontSize: "var(--font-caption)",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontFamily: "'DM Sans', sans-serif",
+                  textAlign: "center",
+                  lineHeight: 1.2,
+                  ...extraStyle,
+                });
+                return (
+                  <div style={{
+                    display: "flex",
+                    borderTop: "1px solid rgba(0,0,0,0.06)",
                     marginTop: 12,
-                    border: "none",
-                    background: "transparent",
-                    color: "#555",
-                    fontSize: "var(--font-caption)",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}
-                >
-                  Edit
-                </button>
-              )}
-              {item.id && onDelete && (
-                <button
-                  onClick={() => { onDelete(item.id); onClose(); }}
-                  style={{
-                    width: "100%",
-                    padding: "12px 0",
-                    marginTop: canEdit ? 0 : 12,
-                    border: "none",
-                    background: "transparent",
-                    color: "#C85A5A",
-                    fontSize: "var(--font-caption)",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}
-                >
-                  Remove from Wardrobe
-                </button>
-              )}
+                  }}>
+                    {canEdit && (
+                      <button onClick={() => setIsEditing(true)} style={btnBase("#555")}>
+                        Edit
+                      </button>
+                    )}
+                    {onStyleItem && (
+                      <button
+                        onClick={onStyleItem}
+                        style={btnBase("#1A1A1A", {
+                          flex: 2,
+                          fontWeight: 700,
+                          borderLeft: canEdit ? "1px solid rgba(0,0,0,0.06)" : "none",
+                          borderRight: (item.id && onDelete) ? "1px solid rgba(0,0,0,0.06)" : "none",
+                        })}
+                      >
+                        Style this Item
+                      </button>
+                    )}
+                    {item.id && onDelete && (
+                      <button
+                        onClick={() => { onDelete(item.id); onClose(); }}
+                        style={btnBase("#C85A5A")}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
             </>
           )}
         </div>
@@ -849,7 +886,7 @@ function OutfitVisualizationModal({ poses, outfit, onClose, onRegenerate }) {
   );
 }
 
-function ItemCard({ item, onClick, overlay = false }) {
+function ItemCard({ item, onClick, overlay = false, isEnhancing = false }) {
   return (
     <div
       onClick={onClick}
@@ -904,6 +941,15 @@ function ItemCard({ item, onClick, overlay = false }) {
           <span>{item.emoji}</span>
         )}
 
+        {isEnhancing && (
+          <div style={{
+            position: "absolute", inset: 0,
+            background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.45) 50%, transparent 100%)",
+            backgroundSize: "200% 100%",
+            animation: "shimmer 1.4s infinite",
+            pointerEvents: "none",
+          }} />
+        )}
         {overlay && (
           <div style={{
             position: "absolute",
@@ -961,6 +1007,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
 
   // --- Single-item state ---
   const [phase, setPhase] = useState("capture"); // "capture" | "analyzing" | "confirm"
+  const [autoEnhance, setAutoEnhance] = useState(true);
   const [isEditingName, setIsEditingName] = useState(false);
   const [itemName, setItemName] = useState("");
   const [category, setCategory] = useState("Tops");
@@ -996,6 +1043,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [bulkEditName, setBulkEditName] = useState("");
   const [bulkEditCategory, setBulkEditCategory] = useState("Tops");
+  const [bulkAutoEnhance, setBulkAutoEnhance] = useState(true);
 
   // Cleanup preview URLs on unmount
   useEffect(() => {
@@ -1139,7 +1187,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
           emoji: item.emoji || "📷",
           images: [item.uploadedUrl],
           category: item.category,
-        })));
+        })), { autoEnhance: bulkAutoEnhance });
       }
     }
   };
@@ -1159,7 +1207,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
           emoji: item.emoji || "📷",
           images: [item.uploadedUrl],
           category: item.category,
-        })));
+        })), { autoEnhance: bulkAutoEnhance });
       } else {
         onClose();
       }
@@ -1181,7 +1229,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
         emoji: item.emoji || "📷",
         images: [item.uploadedUrl],
         category: item.category,
-      })));
+      })), { autoEnhance: bulkAutoEnhance });
     }
   };
 
@@ -1485,6 +1533,27 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
                     Save all as-is
                   </button>
                 )}
+                <button
+                  onClick={() => setBulkAutoEnhance(v => !v)}
+                  style={{
+                    width: "100%", height: 40, marginTop: 6,
+                    borderRadius: 14,
+                    border: "1px solid rgba(0,0,0,0.08)",
+                    background: bulkAutoEnhance ? "#F5F0FF" : "#fff",
+                    color: bulkAutoEnhance ? "#6B3FA0" : "#888",
+                    fontSize: "var(--font-body)", fontWeight: 600,
+                    fontFamily: "'DM Sans', sans-serif", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  }}
+                >
+                  <span style={{
+                    width: 16, height: 16, borderRadius: 8,
+                    background: bulkAutoEnhance ? "#6B3FA0" : "rgba(0,0,0,0.15)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 9, color: "#fff", flexShrink: 0,
+                  }}>✓</span>
+                  ✨ Enhance all photos
+                </button>
               </div>
             </>
           ) : null}
@@ -2130,6 +2199,32 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
             })}
           </div>
 
+          {/* Auto-enhance toggle */}
+          {images.some(img => img.uploadedUrl) && (
+            <button
+              onClick={() => setAutoEnhance(v => !v)}
+              style={{
+                width: "100%", height: 44, borderRadius: 14, marginBottom: 10,
+                border: "1px solid rgba(0,0,0,0.08)",
+                background: autoEnhance ? "#F5F0FF" : "#fff",
+                color: autoEnhance ? "#6B3FA0" : "#888",
+                fontSize: "var(--font-body)", fontWeight: 600,
+                fontFamily: "'DM Sans', sans-serif",
+                cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                transition: "all 0.15s ease",
+              }}
+            >
+              <span style={{
+                width: 18, height: 18, borderRadius: 9,
+                background: autoEnhance ? "#6B3FA0" : "rgba(0,0,0,0.15)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 10, color: "#fff", flexShrink: 0, transition: "background 0.15s ease",
+              }}>✓</span>
+              ✨ Enhance photo
+            </button>
+          )}
+
           {/* Add to Wardrobe button */}
           <button
             onClick={async () => {
@@ -2145,6 +2240,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
                 images: uploadedImages,
                 image: uploadedImages[0] || null,
                 category: category,
+                autoEnhance: autoEnhance && uploadedImages.length > 0,
               });
             }}
             disabled={!itemName.trim()}
@@ -2517,7 +2613,7 @@ function OutfitEmptyState({ onSwitchToChat }) {
   );
 }
 
-function WardrobeView({ wardrobeItems, onItemClick, onAddItemClick }) {
+function WardrobeView({ wardrobeItems, onItemClick, onAddItemClick, enhancingItems }) {
   const [activeFilter, setActiveFilter] = useState("All");
 
   const categories = ["All", ...Object.keys(wardrobeItems)];
@@ -2613,7 +2709,7 @@ function WardrobeView({ wardrobeItems, onItemClick, onAddItemClick }) {
             )}
             <div className="item-card-grid">
               {items.map((item, i) => (
-                <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />
+                <ItemCard key={i} item={item} onClick={() => onItemClick(item)} isEnhancing={enhancingItems?.has(item.id)} />
               ))}
             </div>
           </div>
@@ -4015,6 +4111,7 @@ function LocationCard({ profile, onSave, focusLocation, onClearFocusLocation }) 
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedCity, setSelectedCity] = useState(null);
   const [error, setError] = useState(null);
+  const [detectingLocation, setDetectingLocation] = useState(false);
   const debounceRef = useRef(null);
   const dropdownRef = useRef(null);
   const inputRef = useRef(null);
@@ -4105,6 +4202,27 @@ function LocationCard({ profile, onSave, focusLocation, onClearFocusLocation }) 
     setDraft(displayCity);
     setSelectedCity(profile.location?.city ? { name: profile.location.city, country: profile.location.country || "" } : null);
     setIsEditing(true);
+  };
+
+  const handleDetectLocation = async () => {
+    setDetectingLocation(true);
+    setError(null);
+    try {
+      const city = await detectLocationFromBrowser();
+      onSave({
+        ...profile,
+        location: { city: city.name, country: city.country, source: "geolocation" },
+        lastUpdated: new Date().toISOString(),
+      });
+      setIsEditing(false);
+    } catch (err) {
+      const msg = err.code === 1
+        ? "Location access denied. Please allow location access or type your city."
+        : err.message || "Could not detect location.";
+      setError(msg);
+    } finally {
+      setDetectingLocation(false);
+    }
   };
 
   useEffect(() => {
@@ -4242,6 +4360,31 @@ function LocationCard({ profile, onSave, focusLocation, onClearFocusLocation }) 
             }}>
               Used to give you weather-aware outfit recommendations.
             </span>
+          )}
+          {typeof navigator !== "undefined" && navigator.geolocation && (
+            <button
+              onClick={handleDetectLocation}
+              disabled={detectingLocation}
+              style={{
+                marginTop: 10,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "8px 14px",
+                borderRadius: 8,
+                border: "1px solid #E5E5E5",
+                background: "#F9F9F9",
+                color: "#555",
+                fontSize: "var(--font-caption)",
+                fontWeight: 600,
+                cursor: detectingLocation ? "default" : "pointer",
+                fontFamily: "'DM Sans', sans-serif",
+                opacity: detectingLocation ? 0.7 : 1,
+              }}
+            >
+              <span>📍</span>
+              {detectingLocation ? "Detecting…" : "Use my location"}
+            </button>
           )}
         </div>
 
@@ -5078,6 +5221,7 @@ export default function OutfitRecommendations() {
   const [addItemModalOpen, setAddItemModalOpen] = useState(false);
   const [wardrobeItems, setWardrobeItems] = useState({});
   const [wardrobeFlat, setWardrobeFlat] = useState([]);
+  const [enhancingItems, setEnhancingItems] = useState(new Set());
   const [chatHistory, setChatHistory] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [profile, setProfile] = useState(SAMPLE_PROFILE);
@@ -5269,7 +5413,8 @@ export default function OutfitRecommendations() {
 
   const handleAddItem = useCallback(async (newItem) => {
     try {
-      await db.addWardrobeItem(newItem);
+      const { autoEnhance, ...itemData } = newItem;
+      const saved = await db.addWardrobeItem(itemData);
       const [grouped, flat] = await Promise.all([
         db.fetchWardrobeItems(),
         db.fetchWardrobeItemsFlat(),
@@ -5277,14 +5422,17 @@ export default function OutfitRecommendations() {
       setWardrobeItems(grouped);
       setWardrobeFlat(flat);
       setAddItemModalOpen(false);
+      if (autoEnhance && saved?.id && itemData.images?.[0]) {
+        handleEnhanceWardrobeItemImage(saved.id, itemData.images[0], itemData);
+      }
     } catch (err) {
       console.error("Failed to add wardrobe item:", err);
     }
-  }, []);
+  }, [handleEnhanceWardrobeItemImage]);
 
-  const handleBulkAddItems = useCallback(async (items) => {
+  const handleBulkAddItems = useCallback(async (items, { autoEnhance = false } = {}) => {
     try {
-      await db.addWardrobeItemsBulk(items);
+      const saved = await db.addWardrobeItemsBulk(items);
       const [grouped, flat] = await Promise.all([
         db.fetchWardrobeItems(),
         db.fetchWardrobeItemsFlat(),
@@ -5292,10 +5440,17 @@ export default function OutfitRecommendations() {
       setWardrobeItems(grouped);
       setWardrobeFlat(flat);
       setAddItemModalOpen(false);
+      if (autoEnhance) {
+        for (const savedItem of saved) {
+          if (savedItem.id && savedItem.images?.[0]) {
+            handleEnhanceWardrobeItemImage(savedItem.id, savedItem.images[0], savedItem);
+          }
+        }
+      }
     } catch (err) {
       console.error("Failed to bulk add wardrobe items:", err);
     }
-  }, []);
+  }, [handleEnhanceWardrobeItemImage]);
 
   const isCurrentVisualizationUrl = (url) => typeof url === "string" && url.includes("/visualizations/v2/");
 
@@ -5823,6 +5978,31 @@ export default function OutfitRecommendations() {
     }
   }, []);
 
+  const handleEnhanceWardrobeItemImage = useCallback((itemId, imageUrl, item) => {
+    setEnhancingItems(prev => new Set([...prev, itemId]));
+    enhanceItemImage(imageUrl, item)
+      .then(async ({ imageUrl: enhancedUrl }) => {
+        const current = wardrobeFlat.find(i => i.id === itemId);
+        const updatedImages = [enhancedUrl, ...(current?.images ?? [imageUrl])];
+        await db.updateWardrobeItemImages(itemId, updatedImages);
+        const [grouped, flat] = await Promise.all([
+          db.fetchWardrobeItems(),
+          db.fetchWardrobeItemsFlat(),
+        ]);
+        setWardrobeItems(grouped);
+        setWardrobeFlat(flat);
+        setLightboxItem(prev => prev?.id === itemId ? { ...prev, images: updatedImages, image: enhancedUrl } : prev);
+      })
+      .catch(err => console.error('[enhance-item-image]', err))
+      .finally(() => {
+        setEnhancingItems(prev => {
+          const next = new Set(prev);
+          next.delete(itemId);
+          return next;
+        });
+      });
+  }, [wardrobeFlat]);
+
   const isSelected = outfits.length > 0 && selected === outfits[current]?.id;
 
   return (
@@ -5844,6 +6024,13 @@ export default function OutfitRecommendations() {
           onClose={() => setLightboxItem(null)}
           onDelete={view === "wardrobe" ? handleDeleteWardrobeItem : null}
           onEdit={view === "wardrobe" ? handleUpdateWardrobeItem : null}
+          onEnhance={view === "wardrobe" ? handleEnhanceWardrobeItemImage : null}
+          onStyleItem={() => {
+            setLightboxItem(null);
+            setView("chat");
+            handleSendMessage(`How should I style my ${lightboxItem.name}?`);
+          }}
+          isEnhancing={enhancingItems.has(lightboxItem.id)}
         />
       )}
       {addItemModalOpen && (
@@ -6035,6 +6222,7 @@ export default function OutfitRecommendations() {
           wardrobeItems={wardrobeItems}
           onItemClick={(item) => setLightboxItem(item)}
           onAddItemClick={() => setAddItemModalOpen(true)}
+          enhancingItems={enhancingItems}
         />
       ) : view === "outfit" ? (
         outfits.length > 0 ? (

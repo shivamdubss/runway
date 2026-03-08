@@ -193,3 +193,92 @@ describe('fetchWeather', () => {
     expect(url).toContain('appid=test-key');
   });
 });
+
+// --- Tests for detectLocationFromBrowser (client-side geolocation) ---
+
+describe('detectLocationFromBrowser', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('throws when geolocation is not available', async () => {
+    vi.stubGlobal('navigator', { geolocation: undefined });
+    const { detectLocationFromBrowser } = await import('../src/lib/weather.js');
+    await expect(detectLocationFromBrowser()).rejects.toThrow('Geolocation is not supported');
+  });
+
+  it('throws when geolocation permission is denied', async () => {
+    const permissionError = Object.assign(new Error('User denied Geolocation'), { code: 1 });
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition: (_success, error) => error(permissionError),
+      },
+    });
+    const { detectLocationFromBrowser } = await import('../src/lib/weather.js');
+    await expect(detectLocationFromBrowser()).rejects.toThrow('User denied Geolocation');
+  });
+
+  it('returns city and country on success', async () => {
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition: (success) => success({ coords: { latitude: 40.71, longitude: -74.01 } }),
+      },
+    });
+    globalThis.fetch = vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({
+        address: { city: 'New York', country: 'United States' },
+      }),
+    }));
+    const { detectLocationFromBrowser } = await import('../src/lib/weather.js');
+    const result = await detectLocationFromBrowser();
+    expect(result).toEqual({ name: 'New York', country: 'United States' });
+  });
+
+  it('falls back to town when city is missing', async () => {
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition: (success) => success({ coords: { latitude: 51.5, longitude: -0.1 } }),
+      },
+    });
+    globalThis.fetch = vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({
+        address: { town: 'Richmond', country: 'United Kingdom' },
+      }),
+    }));
+    const { detectLocationFromBrowser } = await import('../src/lib/weather.js');
+    const result = await detectLocationFromBrowser();
+    expect(result).toEqual({ name: 'Richmond', country: 'United Kingdom' });
+  });
+
+  it('throws when Nominatim response is not ok', async () => {
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition: (success) => success({ coords: { latitude: 0, longitude: 0 } }),
+      },
+    });
+    globalThis.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 500 }));
+    const { detectLocationFromBrowser } = await import('../src/lib/weather.js');
+    await expect(detectLocationFromBrowser()).rejects.toThrow('Failed to reverse geocode');
+  });
+
+  it('throws when no city can be resolved from address', async () => {
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition: (success) => success({ coords: { latitude: 0, longitude: 0 } }),
+      },
+    });
+    globalThis.fetch = vi.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ address: {} }),
+    }));
+    const { detectLocationFromBrowser } = await import('../src/lib/weather.js');
+    await expect(detectLocationFromBrowser()).rejects.toThrow('Could not determine city');
+  });
+});

@@ -13,6 +13,7 @@ import { handleGenerateOutfitVisualization } from './api/generate-outfit-visuali
 import { handleAnalyzeOutfitPhoto } from './api/analyze-outfit-photo.js';
 import { handleGenerateItemImage } from './api/generate-item-image.js';
 import { handlePreprocessReference } from './api/preprocess-reference.js';
+import { handleEnhanceItemImage } from './api/enhance-item-image.js';
 import { handleShare } from './api/share.js';
 import { handleShareLookup } from './api/share-lookup.js';
 import { requireAuth } from './middleware/auth.js';
@@ -38,6 +39,7 @@ app.post('/api/generate-outfit-visualization', requireAuth, handleGenerateOutfit
 app.post('/api/preprocess-reference', requireAuth, handlePreprocessReference);
 app.post('/api/analyze-outfit-photo', requireAuth, handleAnalyzeOutfitPhoto);
 app.post('/api/generate-item-image', requireAuth, handleGenerateItemImage);
+app.post('/api/enhance-item-image', requireAuth, handleEnhanceItemImage);
 app.post('/api/share', requireAuth, handleShare);
 app.get('/api/share/:token', handleShareLookup);
 app.get('/api/share-lookup', handleShareLookup);

@@ -75,6 +75,39 @@ export async function searchCities(query) {
 }
 
 /**
+ * Detect user's location using the browser Geolocation API + Nominatim reverse geocoding.
+ *
+ * @returns {Promise<{name: string, country: string}>}
+ * @throws {Error} If geolocation is unavailable, permission denied, or city cannot be resolved
+ */
+export async function detectLocationFromBrowser() {
+  if (!navigator.geolocation) {
+    throw new Error('Geolocation is not supported by your browser');
+  }
+
+  const position = await new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+  });
+
+  const { latitude, longitude } = position.coords;
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+  );
+  if (!res.ok) throw new Error('Failed to reverse geocode location');
+
+  const data = await res.json();
+  const city =
+    data.address?.city ||
+    data.address?.town ||
+    data.address?.village ||
+    data.address?.county;
+  const country = data.address?.country || '';
+
+  if (!city) throw new Error('Could not determine city from your location');
+  return { name: city, country };
+}
+
+/**
  * Map OpenWeatherMap icon code to a weather emoji.
  */
 export function weatherIconToEmoji(icon) {

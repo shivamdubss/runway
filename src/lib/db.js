@@ -114,6 +114,17 @@ export async function updateWardrobeItem(id, fields) {
   return toFrontendItem(data);
 }
 
+export async function updateWardrobeItemImages(id, images) {
+  const { data, error } = await supabase
+    .from('wardrobe_items')
+    .update({ image_urls: images })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toFrontendItem(data);
+}
+
 // ── Chats ──────────────────────────────────────────────────
 
 export async function fetchChats() {
