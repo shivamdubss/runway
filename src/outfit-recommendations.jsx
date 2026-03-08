@@ -7,6 +7,7 @@ import { preprocessReferencePhotoClient } from "./lib/preprocess";
 import { analyzeImage } from "./lib/analyze";
 import { analyzeOutfitPhoto, generateItemImage } from "./lib/import-from-photo";
 import * as db from "./lib/db";
+import { compareOutfitItems } from "./lib/outfit-sort";
 import {
   OUTFIT_NAV_CTA,
   appendLegacyOutfitsCtaMessage,
@@ -848,14 +849,14 @@ function OutfitVisualizationModal({ poses, outfit, onClose, onRegenerate }) {
   );
 }
 
-function ItemCard({ item, onClick }) {
+function ItemCard({ item, onClick, overlay = false }) {
   return (
     <div
       onClick={onClick}
       style={{
         borderRadius: "var(--card-border-radius)",
         overflow: "hidden",
-        background: "#fff",
+        background: overlay ? "transparent" : "#fff",
         border: "1px solid rgba(0,0,0,0.06)",
         boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
         cursor: "pointer",
@@ -902,26 +903,53 @@ function ItemCard({ item, onClick }) {
         ) : (
           <span>{item.emoji}</span>
         )}
+
+        {overlay && (
+          <div style={{
+            position: "absolute",
+            bottom: 0, left: 0, right: 0,
+            padding: "var(--space-card-padding)",
+            background: "rgba(255, 255, 255, 0.75)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+          }}>
+            <span style={{
+              fontSize: "var(--font-item-name)",
+              fontWeight: 600,
+              color: "#222",
+              fontFamily: "'DM Sans', sans-serif",
+              lineHeight: 1.2,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              display: "block",
+            }}>
+              {item.name}
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Text strip */}
-      <div style={{
-        padding: "var(--space-card-padding)",
-      }}>
-        <span style={{
-          fontSize: "var(--font-item-name)",
-          fontWeight: 600,
-          color: "#222",
-          fontFamily: "'DM Sans', sans-serif",
-          lineHeight: 1.2,
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          display: "block",
+      {/* Text strip (non-overlay mode only) */}
+      {!overlay && (
+        <div style={{
+          padding: "var(--space-card-padding)",
         }}>
-          {item.name}
-        </span>
-      </div>
+          <span style={{
+            fontSize: "var(--font-item-name)",
+            fontWeight: 600,
+            color: "#222",
+            fontFamily: "'DM Sans', sans-serif",
+            lineHeight: 1.2,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            display: "block",
+          }}>
+            {item.name}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -2350,10 +2378,13 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
         </div>
       </div>
 
-      <div className="item-card-grid">
-        {outfit.items.map((item, i) => (
-          <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />
-        ))}
+      <div className="outfit-item-card-grid">
+        {outfit.items
+          .slice()
+          .sort(compareOutfitItems)
+          .map((item, i) => (
+            <ItemCard key={i} item={item} onClick={() => onItemClick(item)} overlay />
+          ))}
       </div>
 
       <button

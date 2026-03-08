@@ -20,6 +20,10 @@ Color coordination:
   beige) do not count toward this limit.
 - Avoid matching the exact same non-neutral color across multiple items unless
   going for a monochrome look intentionally.
+- Avoid pairing colors that are visually similar but not identical (e.g., pink
+  with mauve, blush with dusty rose, olive with khaki). Near-matches tend to
+  clash rather than coordinate. Separate similar tones with a neutral, or pair
+  them with a clearly different color instead.
 - Earth tones pair well together. Cool tones pair well together. Mixing warm
   and cool works best when one is dominant and the other is an accent.
 
@@ -42,7 +46,13 @@ Proportions and silhouette:
 Seasonal and weather appropriateness:
 - If weather context is provided, respect it strictly. Do not recommend a wool
   sweater for 90F weather.
+- When no weather data is provided, apply common-sense seasonal judgment: do
+  not pair heavy winter knitwear with shorts, or lightweight summer fabrics
+  with insulating outerwear, unless the user explicitly requests it.
 - Layer recommendations when weather calls for it. Specify the layering order.
+- Avoid stacking two heavyweight or thick items (e.g., a chunky cable-knit
+  sweater under a thick wool cardigan). Effective layering has a clear weight
+  differential — a lighter base piece beneath a heavier outer layer.
 
 Footwear and accessories:
 - Shoes should match the outfit's formality level.

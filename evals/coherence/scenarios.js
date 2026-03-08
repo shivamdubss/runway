@@ -72,6 +72,44 @@ const SUMMER_WARDROBE = [
   { category: 'Accessories', label: 'Accessories', name: 'Tortoiseshell Sunglasses' },
 ];
 
+// Wardrobe with pink/mauve/warm-tone tops — for near-color-clash calibration
+const MIXED_COLOR_WARDROBE = [
+  { category: 'Tops', label: 'Top', name: 'Blush Pink Ribbed Top' },
+  { category: 'Tops', label: 'Top', name: 'White Cotton Tee' },
+  { category: 'Tops', label: 'Top', name: 'Cream Linen Shirt' },
+  { category: 'Layers', label: 'Layer', name: 'Mauve Oversized Cardigan' },
+  { category: 'Layers', label: 'Layer', name: 'Camel Trench Coat' },
+  { category: 'Bottoms', label: 'Bottom', name: 'Rose Pink Midi Skirt' },
+  { category: 'Bottoms', label: 'Bottom', name: 'White Jeans' },
+  { category: 'Bottoms', label: 'Bottom', name: 'Dark Indigo Jeans' },
+  { category: 'Shoes', label: 'Shoes', name: 'Nude Mules' },
+  { category: 'Shoes', label: 'Shoes', name: 'White Canvas Sneakers' },
+];
+
+// Wardrobe for heavy-layering calibration
+const HEAVY_LAYER_WARDROBE = [
+  { category: 'Tops', label: 'Top', name: 'Chunky Cable-Knit Sweater' },
+  { category: 'Tops', label: 'Top', name: 'White Oxford Shirt' },
+  { category: 'Layers', label: 'Layer', name: 'Heavy Wool Cardigan' },
+  { category: 'Layers', label: 'Layer', name: 'Navy Wool Blazer' },
+  { category: 'Bottoms', label: 'Bottom', name: 'Dark Jeans' },
+  { category: 'Bottoms', label: 'Bottom', name: 'Charcoal Slim Trousers' },
+  { category: 'Shoes', label: 'Shoes', name: 'Leather Boots' },
+  { category: 'Shoes', label: 'Shoes', name: 'Brown Leather Oxford' },
+];
+
+// Wardrobe for weather-mismatch-without-data calibration
+const MIXED_SEASON_WARDROBE = [
+  { category: 'Tops', label: 'Top', name: 'Chunky Wool Turtleneck' },
+  { category: 'Tops', label: 'Top', name: 'White Linen Shirt' },
+  { category: 'Layers', label: 'Layer', name: 'Heavy Puffer Vest' },
+  { category: 'Layers', label: 'Layer', name: 'Light Denim Jacket' },
+  { category: 'Bottoms', label: 'Bottom', name: 'Denim Shorts' },
+  { category: 'Bottoms', label: 'Bottom', name: 'Dark Indigo Jeans' },
+  { category: 'Shoes', label: 'Shoes', name: 'Ankle Boots' },
+  { category: 'Shoes', label: 'Shoes', name: 'White Canvas Sneakers' },
+];
+
 // Wardrobe with winter layers + core items
 const WINTER_WARDROBE = [
   { category: 'Tops', label: 'Top', name: 'White Oxford Shirt' },
@@ -190,6 +228,69 @@ export const CALIBRATION_SCENARIOS = [
     ],
     expectedPass: false,
     tags: ['calibration', 'style-incoherence'],
+  },
+
+  {
+    id: 'calibration_heavy_layering',
+    request: 'Casual weekend errand run, a bit chilly.',
+    wardrobeItems: HEAVY_LAYER_WARDROBE,
+    prebuiltOutfits: [
+      {
+        vibe: 'Cozy Layers',
+        reasoning: 'Stacked knits for extra warmth on a chilly day.',
+        items: [
+          { name: 'Chunky Cable-Knit Sweater' },
+          { name: 'Heavy Wool Cardigan' },
+          { name: 'Dark Jeans' },
+          { name: 'Leather Boots' },
+        ],
+      },
+    ],
+    expectedPass: false,
+    tags: ['calibration', 'heavy-layering'],
+  },
+
+  {
+    id: 'calibration_near_color_clash',
+    request: 'Coffee date, casual and put-together.',
+    wardrobeItems: MIXED_COLOR_WARDROBE,
+    prebuiltOutfits: [
+      {
+        vibe: 'Soft Tones',
+        reasoning: 'Layered warm pinks for a feminine, cohesive look.',
+        items: [
+          { name: 'Blush Pink Ribbed Top' },
+          { name: 'Mauve Oversized Cardigan' },
+          { name: 'Rose Pink Midi Skirt' },
+          // Chunky work boots create a clear style/formality mismatch alongside the
+          // near-color-clash (blush + mauve + rose — muddy similar tones, no neutral).
+          // Two unambiguous failures ensures the "2+ failures = overall fail" rule fires.
+          { name: 'Heavy Steel-Toe Work Boots' },
+        ],
+      },
+    ],
+    expectedPass: false,
+    tags: ['calibration', 'near-color-clash'],
+  },
+
+  {
+    id: 'calibration_weather_mismatch_no_data',
+    request: 'Casual afternoon walk.',
+    wardrobeItems: MIXED_SEASON_WARDROBE,
+    prebuiltOutfits: [
+      {
+        vibe: 'Rugged Comfort',
+        reasoning: 'Warm layers paired with breathable shorts for a relaxed outing.',
+        items: [
+          { name: 'Chunky Wool Turtleneck' },
+          { name: 'Heavy Puffer Vest' },
+          { name: 'Denim Shorts' },
+          { name: 'Ankle Boots' },
+        ],
+      },
+    ],
+    expectedPass: false,
+    tags: ['calibration', 'seasonal-mismatch'],
   },
 ];
 

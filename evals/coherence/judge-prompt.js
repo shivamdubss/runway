@@ -25,8 +25,12 @@ evaluate the following four criteria:
 
 3. COLOR: Does the color palette work together?
    - FAIL: three competing bright colors (neon green + bright red + orange) with no anchor;
-     a palette that a reasonable person would describe as "clashing"
-   - PASS: neutrals anchoring the palette; complementary colors; monochrome; earth tones together
+     a palette that a reasonable person would describe as "clashing";
+     multiple items in visually similar but non-identical non-neutral tones stacked without a
+     neutral to separate them (e.g., blush pink top + mauve cardigan + rose trousers — near-matches
+     that muddy rather than coordinate)
+   - PASS: neutrals anchoring the palette; complementary colors; monochrome; earth tones together;
+     two similar-toned pieces where a neutral (white, black, grey, beige, navy) separates them
    - NOTE: you cannot see actual item colors — assess based on item names and the outfit's vibe label.
      When color is ambiguous from names alone, default to PASS.
 

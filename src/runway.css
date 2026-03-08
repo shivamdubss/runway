@@ -124,6 +124,33 @@ body {
   gap: var(--card-grid-gap);
 }
 
+/* ===== Outfit Item Card Grid (1 col mobile → 2 → 3 → 4) ===== */
+.outfit-item-card-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--card-grid-gap);
+  --card-image-height: clamp(160px, 50vw, 220px);
+}
+
+@media (min-width: 480px) {
+  .outfit-item-card-grid {
+    grid-template-columns: repeat(2, 1fr);
+    --card-image-height: clamp(90px, 18vw + 30px, 140px);
+  }
+}
+
+@media (min-width: 768px) {
+  .outfit-item-card-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .outfit-item-card-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
 /* ===== Swipe Container ===== */
 .swipe-container {
   user-select: none;
