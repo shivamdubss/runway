@@ -258,7 +258,9 @@ function Lightbox({ item, onClose, onDelete, onEdit, onEnhance, onStyleItem, isE
                 style={{
                   width: "100%",
                   height: "100%",
-                  objectFit: "cover",
+                  objectFit: images[activeIdx]?.includes('/enhanced/') ? "contain" : "cover",
+                  padding: images[activeIdx]?.includes('/enhanced/') ? "16px" : 0,
+                  boxSizing: "border-box",
                 }}
               />
               {hasMultiple && activeIdx > 0 && (
@@ -462,39 +464,44 @@ function Lightbox({ item, onClose, onDelete, onEdit, onEnhance, onStyleItem, isE
                 {item.name}
               </div>
               {(canEdit || onStyleItem || (item.id && onDelete)) && (() => {
-                const btnBase = (color, extraStyle = {}) => ({
+                const pillBase = (extraStyle = {}) => ({
                   flex: 1,
-                  padding: "12px 4px",
-                  border: "none",
+                  height: 36,
+                  padding: "0 12px",
+                  borderRadius: 18,
+                  border: "1px solid rgba(0,0,0,0.10)",
                   background: "transparent",
-                  color,
+                  color: "#555",
                   fontSize: "var(--font-caption)",
                   fontWeight: 600,
                   cursor: "pointer",
                   fontFamily: "'DM Sans', sans-serif",
                   textAlign: "center",
-                  lineHeight: 1.2,
+                  transition: "all 0.15s ease",
                   ...extraStyle,
                 });
                 return (
                   <div style={{
                     display: "flex",
+                    gap: 8,
                     borderTop: "1px solid rgba(0,0,0,0.06)",
                     marginTop: 12,
+                    padding: "12px 16px",
                   }}>
                     {canEdit && (
-                      <button onClick={() => setIsEditing(true)} style={btnBase("#555")}>
+                      <button onClick={() => setIsEditing(true)} style={pillBase()}>
                         Edit
                       </button>
                     )}
                     {onStyleItem && (
                       <button
                         onClick={onStyleItem}
-                        style={btnBase("#1A1A1A", {
+                        style={pillBase({
                           flex: 2,
                           fontWeight: 700,
-                          borderLeft: canEdit ? "1px solid rgba(0,0,0,0.06)" : "none",
-                          borderRight: (item.id && onDelete) ? "1px solid rgba(0,0,0,0.06)" : "none",
+                          background: "#1A1A1A",
+                          color: "#fff",
+                          border: "none",
                         })}
                       >
                         Style this Item
@@ -503,7 +510,10 @@ function Lightbox({ item, onClose, onDelete, onEdit, onEnhance, onStyleItem, isE
                     {item.id && onDelete && (
                       <button
                         onClick={() => { onDelete(item.id); onClose(); }}
-                        style={btnBase("#C85A5A")}
+                        style={pillBase({
+                          color: "#C85A5A",
+                          border: "1px solid rgba(200,90,90,0.25)",
+                        })}
                       >
                         Remove
                       </button>
