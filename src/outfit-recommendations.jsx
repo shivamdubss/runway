@@ -5411,6 +5411,31 @@ export default function OutfitRecommendations() {
     setPendingImage(null);
   }, [pendingImage]);
 
+  const handleEnhanceWardrobeItemImage = useCallback((itemId, imageUrl, item) => {
+    setEnhancingItems(prev => new Set([...prev, itemId]));
+    enhanceItemImage(imageUrl, item)
+      .then(async ({ imageUrl: enhancedUrl }) => {
+        const current = wardrobeFlat.find(i => i.id === itemId);
+        const updatedImages = [enhancedUrl, ...(current?.images ?? [imageUrl])];
+        await db.updateWardrobeItemImages(itemId, updatedImages);
+        const [grouped, flat] = await Promise.all([
+          db.fetchWardrobeItems(),
+          db.fetchWardrobeItemsFlat(),
+        ]);
+        setWardrobeItems(grouped);
+        setWardrobeFlat(flat);
+        setLightboxItem(prev => prev?.id === itemId ? { ...prev, images: updatedImages, image: enhancedUrl } : prev);
+      })
+      .catch(err => console.error('[enhance-item-image]', err))
+      .finally(() => {
+        setEnhancingItems(prev => {
+          const next = new Set(prev);
+          next.delete(itemId);
+          return next;
+        });
+      });
+  }, [wardrobeFlat]);
+
   const handleAddItem = useCallback(async (newItem) => {
     try {
       const { autoEnhance, ...itemData } = newItem;
@@ -5977,31 +6002,6 @@ export default function OutfitRecommendations() {
       console.error("Failed to update wardrobe item:", err);
     }
   }, []);
-
-  const handleEnhanceWardrobeItemImage = useCallback((itemId, imageUrl, item) => {
-    setEnhancingItems(prev => new Set([...prev, itemId]));
-    enhanceItemImage(imageUrl, item)
-      .then(async ({ imageUrl: enhancedUrl }) => {
-        const current = wardrobeFlat.find(i => i.id === itemId);
-        const updatedImages = [enhancedUrl, ...(current?.images ?? [imageUrl])];
-        await db.updateWardrobeItemImages(itemId, updatedImages);
-        const [grouped, flat] = await Promise.all([
-          db.fetchWardrobeItems(),
-          db.fetchWardrobeItemsFlat(),
-        ]);
-        setWardrobeItems(grouped);
-        setWardrobeFlat(flat);
-        setLightboxItem(prev => prev?.id === itemId ? { ...prev, images: updatedImages, image: enhancedUrl } : prev);
-      })
-      .catch(err => console.error('[enhance-item-image]', err))
-      .finally(() => {
-        setEnhancingItems(prev => {
-          const next = new Set(prev);
-          next.delete(itemId);
-          return next;
-        });
-      });
-  }, [wardrobeFlat]);
 
   const isSelected = outfits.length > 0 && selected === outfits[current]?.id;
 
