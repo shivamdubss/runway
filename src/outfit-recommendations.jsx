@@ -5893,6 +5893,31 @@ export default function OutfitRecommendations() {
             {view === "wardrobe" ? "My Wardrobe" : view === "saved" ? "Saved Outfits" : view === "outfit" ? (outfits.length > 0 ? outfits[current].vibe : "Outfits") : view === "profile" ? "My Profile" : "Chat"}
           </h1>
 
+          {weather && (view === "chat" || view === "outfit") && (
+            <button
+              onClick={() => setView("profile")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "4px 10px",
+                borderRadius: 14,
+                border: "1px solid rgba(0,0,0,0.08)",
+                background: "#fff",
+                color: "#555",
+                fontSize: 13,
+                fontFamily: "'DM Sans', sans-serif",
+                fontWeight: 500,
+                cursor: "pointer",
+                flexShrink: 0,
+                marginRight: 8,
+              }}
+            >
+              <span style={{ fontSize: 13 }}>{weatherIconToEmoji(weather.icon)}</span>
+              {weather.temp}°C
+            </button>
+          )}
+
           {view !== "wardrobe" && view !== "profile" && view !== "saved" && (
             <div style={{
               display: "flex",
