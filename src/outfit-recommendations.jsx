@@ -94,9 +94,10 @@ const CATEGORY_TO_LABEL = {
   Bottoms: "Bottom",
   Shoes: "Shoes",
   Accessories: "Accessories",
+  "Dresses & Jumpsuits": "Dress/Jumpsuit",
 };
 
-const CATEGORIES = ["Tops", "Layers", "Bottoms", "Shoes", "Accessories"];
+const CATEGORIES = ["Tops", "Layers", "Bottoms", "Shoes", "Accessories", "Dresses & Jumpsuits"];
 
 function getImageFileFromDrop(e) {
   e.preventDefault();

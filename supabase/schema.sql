@@ -21,8 +21,8 @@ CREATE TABLE profiles (
 -- ============================================================
 CREATE TABLE wardrobe_items (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  category      TEXT NOT NULL CHECK (category IN ('Tops', 'Layers', 'Bottoms', 'Shoes', 'Accessories')),
-  label         TEXT NOT NULL CHECK (label IN ('Top', 'Layer', 'Bottom', 'Shoes', 'Accessories')),
+  category      TEXT NOT NULL CHECK (category IN ('Tops', 'Layers', 'Bottoms', 'Shoes', 'Accessories', 'Dresses & Jumpsuits')),
+  label         TEXT NOT NULL CHECK (label IN ('Top', 'Layer', 'Bottom', 'Shoes', 'Accessories', 'Dress/Jumpsuit')),
   name          TEXT NOT NULL,
   color         TEXT NOT NULL,
   accent_color  TEXT NOT NULL,

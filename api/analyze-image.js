@@ -5,10 +5,10 @@ const ANALYZE_IMAGE_PROMPT = `You are a clothing identification assistant. Analy
 
 {
   "name": "A short, descriptive name for the clothing item (e.g., 'Navy Crew-Neck Sweater', 'Black Slim Jeans'). Keep it to 2-4 words.",
-  "category": "Exactly one of: Tops, Layers, Bottoms, Shoes, Accessories",
+  "category": "Exactly one of: Tops, Layers, Bottoms, Shoes, Accessories, Dresses & Jumpsuits",
   "color": "The primary/dominant color as a hex code (e.g., '#1B2A4A')",
   "accent_color": "A secondary or complementary color from the item as a hex code. If the item is solid, use a slightly lighter or darker shade of the primary color.",
-  "emoji": "A single emoji that best represents this type of clothing item (e.g., 👕, 🧥, 👖, 👟, 🧣)"
+  "emoji": "A single emoji that best represents this type of clothing item (e.g., 👕, 🧥, 👖, 👟, 🧣, 👗)"
 }
 
 Category guidelines:
@@ -17,10 +17,11 @@ Category guidelines:
 - Bottoms: jeans, pants, shorts, skirts, trousers, leggings
 - Shoes: sneakers, boots, sandals, heels, loafers, flats
 - Accessories: hats, scarves, bags, belts, jewelry, sunglasses, watches
+- Dresses & Jumpsuits: dresses, jumpsuits, rompers, overalls, maxi dresses
 
 Return ONLY the JSON object. No additional text.`;
 
-const VALID_CATEGORIES = ['Tops', 'Layers', 'Bottoms', 'Shoes', 'Accessories'];
+const VALID_CATEGORIES = ['Tops', 'Layers', 'Bottoms', 'Shoes', 'Accessories', 'Dresses & Jumpsuits'];
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 /**
