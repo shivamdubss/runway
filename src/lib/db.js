@@ -359,10 +359,14 @@ export function getTripDayLabel(startDate, dayIndex) {
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-export function getSlotNamesForCount(slotsPerDay) {
-  if (slotsPerDay === 1) return ['morning'];
-  if (slotsPerDay === 2) return ['morning', 'evening'];
-  return ['morning', 'afternoon', 'evening'];
+export const MAX_OUTFITS_PER_DAY = 5;
+
+export function slotNameForIndex(index) {
+  return `slot_${index}`;
+}
+
+export function slotIndexFromName(slotName) {
+  return parseInt(slotName.replace('slot_', ''), 10);
 }
 
 function toFrontendTripPlan(row) {
@@ -372,7 +376,6 @@ function toFrontendTripPlan(row) {
     destination: row.destination || null,
     startDate: row.start_date,
     endDate: row.end_date,
-    slotsPerDay: row.slots_per_day,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -384,6 +387,7 @@ function toFrontendTripSlot(row) {
     tripPlanId: row.trip_plan_id,
     dayIndex: row.day_index,
     slotName: row.slot_name,
+    slotIndex: slotIndexFromName(row.slot_name),
     outfitId: row.outfit_id || null,
     outfit: row.outfits ? {
       id: row.outfits.id,
@@ -407,13 +411,13 @@ export async function fetchTripPlans() {
   return (data || []).map(toFrontendTripPlan);
 }
 
-export async function createTripPlan({ title, destination, startDate, endDate, slotsPerDay }) {
+export async function createTripPlan({ title, destination, startDate, endDate }) {
   if (new Date(endDate) < new Date(startDate)) {
     throw new Error('end_date_before_start');
   }
   const { data, error } = await supabase
     .from('trip_plans')
-    .insert({ title, destination: destination || null, start_date: startDate, end_date: endDate, slots_per_day: slotsPerDay })
+    .insert({ title, destination: destination || null, start_date: startDate, end_date: endDate, slots_per_day: 3 })
     .select()
     .single();
   if (error) throw error;
@@ -424,6 +428,8 @@ export async function updateTripPlan(id, fields) {
   const updates = {};
   if (fields.title !== undefined) updates.title = fields.title;
   if (fields.destination !== undefined) updates.destination = fields.destination;
+  if (fields.startDate !== undefined) updates.start_date = fields.startDate;
+  if (fields.endDate !== undefined) updates.end_date = fields.endDate;
   const { data, error } = await supabase
     .from('trip_plans')
     .update(updates)
@@ -431,7 +437,18 @@ export async function updateTripPlan(id, fields) {
     .select()
     .single();
   if (error) throw error;
-  return toFrontendTripPlan(data);
+  const plan = toFrontendTripPlan(data);
+  // If dates changed, remove slots that fall outside the new date range
+  if (fields.startDate !== undefined || fields.endDate !== undefined) {
+    const newDayCount = getTripDayCount(plan.startDate, plan.endDate);
+    const { error: delError } = await supabase
+      .from('trip_plan_slots')
+      .delete()
+      .eq('trip_plan_id', id)
+      .gte('day_index', newDayCount);
+    if (delError) console.error('Failed to clean up orphaned slots:', delError);
+  }
+  return plan;
 }
 
 export async function deleteTripPlan(id) {
