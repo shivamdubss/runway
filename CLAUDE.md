@@ -60,3 +60,18 @@ Edge cases discovered should become test cases — not just one-off fixes.
 ## Allowed auto-run commands
 
 - `npm test 2>&1`
+
+## Feature Branch Workflow
+
+Every feature must be developed on its own branch and merged to main via a PR — all managed through Claude Code.
+
+**For every new feature:**
+1. Create a branch: `git checkout -b feature/<short-description>`
+2. Implement the feature and commit changes
+3. Push the branch: `git push -u origin <branch>`
+4. Open a PR: `gh pr create` with a clear title and summary
+5. After the user explicitly says to merge, run: `gh pr merge --merge --delete-branch`
+
+**Naming convention:** `feature/<short-kebab-case-description>` (e.g. `feature/garment-tagging`)
+
+**Never commit directly to main.**

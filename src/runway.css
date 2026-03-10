@@ -177,6 +177,14 @@ body {
   display: none;
 }
 
+.outfit-name-chips {
+  scrollbar-width: none;
+}
+
+.outfit-name-chips::-webkit-scrollbar {
+  display: none;
+}
+
 .chat-messages {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -223,6 +231,17 @@ body {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 /* ===== Side Panel ===== */

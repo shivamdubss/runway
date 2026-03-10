@@ -549,6 +549,357 @@ function Lightbox({ item, onClose, onDelete, onEdit, onEnhance, onStyleItem, isE
   );
 }
 
+function GarmentDetailPage({ item, onDelete, onEdit, onEnhance, onStyleItem, isEnhancing = false }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(item.name);
+  const [editCategory, setEditCategory] = useState(item.category);
+  const [isSaving, setIsSaving] = useState(false);
+  const images = item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : []);
+  const hasMultiple = images.length > 1;
+  const canEdit = item.id && onEdit;
+  const hasChanges = editName.trim() !== item.name || editCategory !== item.category;
+  const canSave = editName.trim().length > 0 && hasChanges && !isSaving;
+
+  const handleSave = async () => {
+    if (!canSave) return;
+    setIsSaving(true);
+    try {
+      await onEdit(item.id, {
+        name: editName.trim(),
+        category: editCategory,
+        label: CATEGORY_TO_LABEL[editCategory],
+      });
+      setIsEditing(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setEditName(item.name);
+    setEditCategory(item.category);
+    setIsEditing(false);
+  };
+
+  return (
+    <div style={{
+      flex: 1,
+      display: "flex",
+      flexDirection: "column",
+      overflowY: "auto",
+      background: "#FAFAF8",
+      animation: "slideInFromRight 0.22s ease",
+      minHeight: 0,
+    }}>
+      {/* Image section */}
+      <div style={{
+        width: "100%",
+        background: "#fff",
+        position: "relative",
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+        aspectRatio: "4 / 3",
+        maxHeight: "55dvh",
+      }}>
+        {images.length > 0 ? (
+          <>
+            <img
+              src={images[activeIdx]}
+              alt={item.name}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                padding: "24px",
+                boxSizing: "border-box",
+              }}
+            />
+            {hasMultiple && activeIdx > 0 && (
+              <button
+                onClick={() => setActiveIdx(i => i - 1)}
+                style={{
+                  position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
+                  width: 36, height: 36, borderRadius: 18,
+                  border: "none", background: "rgba(0,0,0,0.35)", color: "#fff",
+                  fontSize: 20, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                ‹
+              </button>
+            )}
+            {hasMultiple && activeIdx < images.length - 1 && (
+              <button
+                onClick={() => setActiveIdx(i => i + 1)}
+                style={{
+                  position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+                  width: 36, height: 36, borderRadius: 18,
+                  border: "none", background: "rgba(0,0,0,0.35)", color: "#fff",
+                  fontSize: 20, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                ›
+              </button>
+            )}
+            {hasMultiple && (
+              <div style={{
+                position: "absolute", bottom: 12, left: "50%", transform: "translateX(-50%)",
+                display: "flex", gap: 6,
+              }}>
+                {images.map((_, i) => (
+                  <div key={i} style={{
+                    width: 6, height: 6, borderRadius: 3,
+                    background: i === activeIdx ? "#1A1A1A" : "rgba(0,0,0,0.18)",
+                    transition: "background 0.2s ease",
+                  }} />
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <span style={{ fontSize: "var(--font-lightbox-emoji)" }}>{item.emoji}</span>
+        )}
+        {canEdit && !isEditing && (
+          <button
+            onClick={() => setIsEditing(true)}
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              border: "none",
+              background: "rgba(0,0,0,0.35)",
+              color: "#fff",
+              fontSize: 16,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            ✏️
+          </button>
+        )}
+      </div>
+
+      {/* Details section */}
+      <div style={{ padding: "20px var(--container-padding-x) calc(32px + var(--safe-bottom))", flex: 1 }}>
+        {isEditing ? (
+          <>
+            <div style={{
+              fontSize: "var(--font-caption)",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              color: "#aaa",
+              marginBottom: 6,
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              Category
+            </div>
+            <select
+              value={editCategory}
+              onChange={(e) => setEditCategory(e.target.value)}
+              style={{
+                width: "100%",
+                height: 40,
+                borderRadius: 10,
+                border: "1px solid rgba(0,0,0,0.12)",
+                padding: "0 12px",
+                fontSize: "var(--font-caption)",
+                fontWeight: 600,
+                fontFamily: "'DM Sans', sans-serif",
+                color: "#1A1A1A",
+                background: "#fff",
+                appearance: "auto",
+                cursor: "pointer",
+                marginBottom: 12,
+              }}
+            >
+              {CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            <div style={{
+              fontSize: "var(--font-caption)",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              color: "#aaa",
+              marginBottom: 6,
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              Name
+            </div>
+            <input
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="Item name"
+              className="chat-input"
+              style={{
+                width: "100%",
+                height: 40,
+                borderRadius: 10,
+                border: "1px solid rgba(0,0,0,0.12)",
+                padding: "0 12px",
+                fontSize: "var(--font-lightbox-title)",
+                fontWeight: 600,
+                fontFamily: "'DM Sans', sans-serif",
+                color: "#1A1A1A",
+                boxSizing: "border-box",
+                marginBottom: 12,
+              }}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={handleCancel}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  borderRadius: 12,
+                  border: "1px solid rgba(0,0,0,0.12)",
+                  background: "#fff",
+                  color: "#555",
+                  fontSize: "var(--font-caption)",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!canSave}
+                style={{
+                  flex: 2,
+                  height: 44,
+                  borderRadius: 12,
+                  border: "none",
+                  background: canSave ? "#1A1A1A" : "#EEEDEB",
+                  color: canSave ? "#fff" : "#ccc",
+                  fontSize: "var(--font-caption)",
+                  fontWeight: 600,
+                  cursor: canSave ? "pointer" : "default",
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                {isSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{
+              fontSize: "var(--font-caption)",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              color: "#aaa",
+              marginBottom: 4,
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              {item.label}
+            </div>
+            <div style={{
+              fontSize: "var(--font-lightbox-title)",
+              fontWeight: 600,
+              color: "#1A1A1A",
+              fontFamily: "'DM Sans', sans-serif",
+              lineHeight: 1.25,
+              marginBottom: 20,
+            }}>
+              {item.name}
+            </div>
+            <div style={{
+              borderTop: "1px solid rgba(0,0,0,0.06)",
+              paddingTop: 16,
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}>
+              <div style={{ display: "flex", gap: 10 }}>
+                {item.id && onDelete && (
+                  <button
+                    onClick={() => onDelete(item.id)}
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 24,
+                      border: "1px solid rgba(200,90,90,0.25)",
+                      background: "transparent",
+                      color: "#C85A5A",
+                      fontSize: 20,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    🗑️
+                  </button>
+                )}
+                {onStyleItem && (
+                  <button
+                    onClick={onStyleItem}
+                    style={{
+                      flex: 1,
+                      height: 48,
+                      borderRadius: 24,
+                      border: "none",
+                      background: "#1A1A1A",
+                      color: "#fff",
+                      fontSize: "var(--font-caption)",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >
+                    Style Item
+                  </button>
+                )}
+              </div>
+              {onEnhance && (
+                <button
+                  onClick={() => { if (!isEnhancing) onEnhance(item.id, images[activeIdx], item); }}
+                  disabled={isEnhancing}
+                  style={{
+                    width: "100%",
+                    height: 48,
+                    borderRadius: 24,
+                    border: "none",
+                    background: isEnhancing ? "rgba(0,0,0,0.04)" : "rgba(0,0,0,0.06)",
+                    color: isEnhancing ? "#aaa" : "#555",
+                    fontSize: "var(--font-caption)",
+                    fontWeight: 600,
+                    cursor: isEnhancing ? "default" : "pointer",
+                    fontFamily: "'DM Sans', sans-serif",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                  }}
+                >
+                  ✨ {isEnhancing ? "Enhancing…" : "Enhance"}
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const POSE_LABELS = { front: 'Front View', angle: '3/4 Angle', seated: 'Seated' };
 
 
@@ -2372,118 +2723,130 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
 
       <div style={{
         display: "flex",
+        alignItems: "center",
         gap: 8,
         marginBottom: 16,
-        alignItems: "flex-start",
       }}>
-        <div
-          onClick={() => setReasoningExpanded(!reasoningExpanded)}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleDisliked(outfit.id, outfit.disliked);
+          }}
+          style={{
+            ...actionButtonStyle,
+            background: outfit.disliked ? "rgba(0,0,0,0.04)" : "transparent",
+            cursor: "pointer",
+          }}
+          title={outfit.disliked ? "Remove feedback" : "Not for me"}
+          aria-label={outfit.disliked ? "Remove feedback" : "Not for me"}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24"
+            fill={outfit.disliked ? "#1A1A1A" : "none"}
+            stroke={outfit.disliked ? "#1A1A1A" : "#666"}
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3z" />
+            <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+          </svg>
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSaved(outfit.id, outfit.saved);
+          }}
+          style={{
+            ...actionButtonStyle,
+            background: outfit.saved ? "rgba(0,0,0,0.04)" : "transparent",
+            cursor: "pointer",
+          }}
+          title={outfit.saved ? "Unsave outfit" : "Save outfit"}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24"
+            fill={outfit.saved ? "#1A1A1A" : "none"}
+            stroke={outfit.saved ? "#1A1A1A" : "#666"}
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+          </svg>
+        </button>
+        <button
+          onClick={handleShare}
+          disabled={shareState === 'loading'}
+          style={{
+            ...actionButtonStyle,
+            background: shareState === 'copied' ? "rgba(0,0,0,0.04)" : "transparent",
+            cursor: shareState === 'loading' ? "wait" : "pointer",
+          }}
+          title={shareButtonLabel}
+          aria-label={shareButtonLabel}
+        >
+          {shareState === 'copied' ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          ) : shareState === 'loading' ? (
+            <span style={{
+              width: 16,
+              height: 16,
+              borderRadius: "50%",
+              border: "2px solid #D8D8D8",
+              borderTopColor: "#8A8A8A",
+              animation: "spin 0.8s linear infinite",
+              display: "block",
+            }} />
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+              <polyline points="16 6 12 2 8 6" />
+              <line x1="12" y1="2" x2="12" y2="15" />
+            </svg>
+          )}
+        </button>
+        <div style={{ width: 1, height: 20, background: "rgba(0,0,0,0.12)", marginLeft: 2, marginRight: 2, flexShrink: 0 }} />
+        <button
+          onClick={() => {
+            if (vizStatus === 'ready') {
+              onViewVisualization(outfit.id);
+            } else if (vizStatus !== 'generating' && vizStatus !== 'queued') {
+              onVisualizeClick(outfit);
+            }
+          }}
+          disabled={!hasReferencePhoto || vizStatus === 'generating' || vizStatus === 'queued'}
           style={{
             flex: 1,
-            minWidth: 0,
-            padding: "14px 16px",
-            background: reasoningExpanded ? "rgba(0,0,0,0.02)" : "transparent",
+            height: 44,
+            padding: "0 14px",
+            background: vizStatus === 'ready'
+              ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+              : "transparent",
+            color: vizStatus === 'ready'
+              ? "#fff"
+              : hasReferencePhoto ? "#666" : "#bbb",
+            border: vizStatus === 'ready'
+              ? "none"
+              : hasReferencePhoto ? "1px solid #E0E0E0" : "1px solid #EBEBEB",
             borderRadius: 12,
-            border: "1px solid rgba(0,0,0,0.1)",
-            cursor: "pointer",
-            transition: "all 0.25s ease",
-          }}
-        >
-          <div style={{
+            fontSize: "var(--font-body)",
+            fontFamily: "'DM Sans', sans-serif",
+            fontWeight: vizStatus === 'ready' ? 600 : 500,
+            cursor: hasReferencePhoto && vizStatus !== 'generating' && vizStatus !== 'queued' ? "pointer" : "not-allowed",
+            transition: "all 0.2s ease",
+            opacity: vizStatus === 'generating' || vizStatus === 'queued' ? 0.6 : 1,
+            letterSpacing: "0.01em",
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-          }}>
-            <span style={{
-              fontSize: "var(--font-item-name)",
-              fontWeight: 600,
-              color: "#666",
-              fontFamily: "'DM Sans', sans-serif",
-            }}>
-              Why this works
-            </span>
-            <span style={{
-              fontSize: "var(--font-item-name)",
-              color: "#888",
-              transform: reasoningExpanded ? "rotate(180deg)" : "rotate(0deg)",
-              transition: "transform 0.25s ease",
-              display: "inline-block",
-            }}>
-              ▾
-            </span>
-          </div>
-          {reasoningExpanded && (
-            <p style={{
-              fontSize: "var(--font-reasoning)",
-              lineHeight: 1.55,
-              color: "#777",
-              fontFamily: "'DM Sans', sans-serif",
-              marginTop: 8,
-              marginBottom: 0,
-            }}>
-              {outfit.reasoning}
-            </p>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleDisliked(outfit.id, outfit.disliked);
-            }}
-            style={{
-              ...actionButtonStyle,
-              background: outfit.disliked ? "rgba(0,0,0,0.04)" : "transparent",
-              cursor: "pointer",
-            }}
-            title={outfit.disliked ? "Remove feedback" : "Not for me"}
-            aria-label={outfit.disliked ? "Remove feedback" : "Not for me"}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24"
-              fill={outfit.disliked ? "#1A1A1A" : "none"}
-              stroke={outfit.disliked ? "#1A1A1A" : "#666"}
-              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            justifyContent: "center",
+            gap: 6,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+          }}
+        >
+          {vizStatus === 'generating' ? (
+            <span
+              role="status"
+              aria-label="Creating your look"
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
             >
-              <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3z" />
-              <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
-            </svg>
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleSaved(outfit.id, outfit.saved);
-            }}
-            style={{
-              ...actionButtonStyle,
-              background: outfit.saved ? "rgba(0,0,0,0.04)" : "transparent",
-              cursor: "pointer",
-            }}
-            title={outfit.saved ? "Unsave outfit" : "Save outfit"}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24"
-              fill={outfit.saved ? "#1A1A1A" : "none"}
-              stroke={outfit.saved ? "#1A1A1A" : "#666"}
-              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            >
-              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-            </svg>
-          </button>
-          <button
-            onClick={handleShare}
-            disabled={shareState === 'loading'}
-            style={{
-              ...actionButtonStyle,
-              background: shareState === 'copied' ? "rgba(0,0,0,0.04)" : "transparent",
-              cursor: shareState === 'loading' ? "wait" : "pointer",
-            }}
-            title={shareButtonLabel}
-            aria-label={shareButtonLabel}
-          >
-            {shareState === 'copied' ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            ) : shareState === 'loading' ? (
               <span style={{
                 width: 16,
                 height: 16,
@@ -2491,17 +2854,20 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
                 border: "2px solid #D8D8D8",
                 borderTopColor: "#8A8A8A",
                 animation: "spin 0.8s linear infinite",
-                display: "block",
               }} />
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                <polyline points="16 6 12 2 8 6" />
-                <line x1="12" y1="2" x2="12" y2="15" />
-              </svg>
-            )}
-          </button>
-        </div>
+            </span>
+          ) : vizStatus === 'queued' ? (
+            <span>Hang tight...</span>
+          ) : vizStatus === 'ready' ? (
+            <span>View your look</span>
+          ) : vizStatus === 'error' ? (
+            <span>Try again</span>
+          ) : hasReferencePhoto ? (
+            <span>See on you 😎</span>
+          ) : (
+            <span>Try on</span>
+          )}
+        </button>
       </div>
 
       <div className="outfit-item-card-grid">
@@ -2513,72 +2879,55 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
           ))}
       </div>
 
-      <button
-        onClick={() => {
-          if (vizStatus === 'ready') {
-            onViewVisualization(outfit.id);
-          } else if (vizStatus !== 'generating' && vizStatus !== 'queued') {
-            onVisualizeClick(outfit);
-          }
-        }}
-        disabled={!hasReferencePhoto || vizStatus === 'generating' || vizStatus === 'queued'}
+      <div
+        onClick={() => setReasoningExpanded(!reasoningExpanded)}
         style={{
-          width: "100%",
-          padding: "12px 20px",
+          padding: "14px 16px",
+          background: reasoningExpanded ? "rgba(0,0,0,0.02)" : "transparent",
+          borderRadius: 12,
+          border: "1px solid rgba(0,0,0,0.1)",
+          cursor: "pointer",
+          transition: "all 0.25s ease",
           marginTop: 16,
           marginBottom: 16,
-          background: vizStatus === 'ready'
-            ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-            : "transparent",
-          color: vizStatus === 'ready'
-            ? "#fff"
-            : hasReferencePhoto ? "#666" : "#bbb",
-          border: vizStatus === 'ready'
-            ? "none"
-            : hasReferencePhoto ? "1px solid #E0E0E0" : "1px solid #EBEBEB",
-          borderRadius: 12,
-          fontSize: "var(--font-body)",
-          fontFamily: "'DM Sans', sans-serif",
-          fontWeight: vizStatus === 'ready' ? 600 : 500,
-          cursor: hasReferencePhoto && vizStatus !== 'generating' && vizStatus !== 'queued' ? "pointer" : "not-allowed",
-          transition: "all 0.2s ease",
-          opacity: vizStatus === 'generating' || vizStatus === 'queued' ? 0.6 : 1,
-          letterSpacing: "0.01em",
         }}
       >
-        {vizStatus === 'generating' ? (
-          <span
-            role="status"
-            aria-label="Creating your look"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <span
-              style={{
-                width: 16,
-                height: 16,
-                borderRadius: "50%",
-                border: "2px solid #D8D8D8",
-                borderTopColor: "#8A8A8A",
-                animation: "spin 0.8s linear infinite",
-              }}
-            />
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}>
+          <span style={{
+            fontSize: "var(--font-item-name)",
+            fontWeight: 600,
+            color: "#666",
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+            Why this works
           </span>
-        ) : vizStatus === 'queued' ? (
-          <span>Hang tight...</span>
-        ) : vizStatus === 'ready' ? (
-          <span>View your look</span>
-        ) : vizStatus === 'error' ? (
-          <span>Try again</span>
-        ) : hasReferencePhoto ? (
-          <span>See this on you 😎</span>
-        ) : (
-          <span>Add a photo to try things on</span>
+          <span style={{
+            fontSize: "var(--font-item-name)",
+            color: "#888",
+            transform: reasoningExpanded ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.25s ease",
+            display: "inline-block",
+          }}>
+            ▾
+          </span>
+        </div>
+        {reasoningExpanded && (
+          <p style={{
+            fontSize: "var(--font-reasoning)",
+            lineHeight: 1.55,
+            color: "#777",
+            fontFamily: "'DM Sans', sans-serif",
+            marginTop: 8,
+            marginBottom: 0,
+          }}>
+            {outfit.reasoning}
+          </p>
         )}
-      </button>
+      </div>
     </div>
   );
 }
@@ -5241,6 +5590,7 @@ export default function OutfitRecommendations() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isWaitingForFirstToken, setIsWaitingForFirstToken] = useState(false);
   const [lightboxItem, setLightboxItem] = useState(null);
+  const [garmentPreviousView, setGarmentPreviousView] = useState(null);
   const [touchStart, setTouchStart] = useState(null);
   const [touchDelta, setTouchDelta] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -6013,10 +6363,12 @@ export default function OutfitRecommendations() {
       setWardrobeItems(grouped);
       setWardrobeFlat(flat);
       setLightboxItem(null);
+      setView(garmentPreviousView ?? "wardrobe");
+      setGarmentPreviousView(null);
     } catch (err) {
       console.error("Failed to delete wardrobe item:", err);
     }
-  }, []);
+  }, [garmentPreviousView]);
 
   const handleUpdateWardrobeItem = useCallback(async (itemId, fields) => {
     try {
@@ -6033,6 +6385,18 @@ export default function OutfitRecommendations() {
     }
   }, []);
 
+  const navigateToGarment = useCallback((item) => {
+    setLightboxItem(item);
+    setGarmentPreviousView(view);
+    setView("garment");
+  }, [view]);
+
+  const handleGarmentBack = useCallback(() => {
+    setView(garmentPreviousView ?? "wardrobe");
+    setLightboxItem(null);
+    setGarmentPreviousView(null);
+  }, [garmentPreviousView]);
+
   const isSelected = outfits.length > 0 && selected === outfits[current]?.id;
 
   return (
@@ -6048,21 +6412,6 @@ export default function OutfitRecommendations() {
       fontFamily: "'DM Sans', sans-serif",
       position: "relative",
     }}>
-      {lightboxItem && (
-        <Lightbox
-          item={lightboxItem}
-          onClose={() => setLightboxItem(null)}
-          onDelete={view === "wardrobe" ? handleDeleteWardrobeItem : null}
-          onEdit={view === "wardrobe" ? handleUpdateWardrobeItem : null}
-          onEnhance={view === "wardrobe" ? handleEnhanceWardrobeItemImage : null}
-          onStyleItem={() => {
-            setLightboxItem(null);
-            setView("chat");
-            handleSendMessage(`How should I style my ${lightboxItem.name}?`);
-          }}
-          isEnhancing={enhancingItems.has(lightboxItem.id)}
-        />
-      )}
       {addItemModalOpen && (
         <AddItemModal
           onClose={() => setAddItemModalOpen(false)}
@@ -6106,8 +6455,8 @@ export default function OutfitRecommendations() {
           marginBottom: "var(--space-header-mb)",
         }}>
           <button
-            onClick={() => setSidePanelOpen(true)}
-            aria-label="Open menu"
+            onClick={view === "garment" ? handleGarmentBack : () => setSidePanelOpen(true)}
+            aria-label={view === "garment" ? "Go back" : "Open menu"}
             style={{
               width: 40,
               height: 40,
@@ -6125,9 +6474,15 @@ export default function OutfitRecommendations() {
               marginRight: 8,
             }}
           >
-            <span style={{ display: "block", width: 20, height: 2, background: "#1A1A1A", borderRadius: 1 }} />
-            <span style={{ display: "block", width: 20, height: 2, background: "#1A1A1A", borderRadius: 1 }} />
-            <span style={{ display: "block", width: 14, height: 2, background: "#1A1A1A", borderRadius: 1 }} />
+            {view === "garment" ? (
+              <span style={{ fontSize: 22, lineHeight: 1, color: "#1A1A1A" }}>←</span>
+            ) : (
+              <>
+                <span style={{ display: "block", width: 20, height: 2, background: "#1A1A1A", borderRadius: 1 }} />
+                <span style={{ display: "block", width: 20, height: 2, background: "#1A1A1A", borderRadius: 1 }} />
+                <span style={{ display: "block", width: 14, height: 2, background: "#1A1A1A", borderRadius: 1 }} />
+              </>
+            )}
           </button>
           <h1 style={{
             fontSize: "var(--font-title)",
@@ -6138,7 +6493,7 @@ export default function OutfitRecommendations() {
             lineHeight: 1.1,
             flex: 1,
           }}>
-            {view === "wardrobe" ? "My Wardrobe" : view === "saved" ? "Saved Outfits" : view === "outfit" ? (outfits.length > 0 ? outfits[current].vibe : "Outfits") : view === "profile" ? "My Profile" : "Chat"}
+            {view === "garment" ? (lightboxItem?.name ?? "Item") : view === "wardrobe" ? "My Wardrobe" : view === "saved" ? "Saved Outfits" : view === "outfit" ? (outfits.length > 0 ? outfits[current].vibe : "Outfits") : view === "profile" ? "My Profile" : "Chat"}
           </h1>
 
           {weather && (view === "chat" || view === "outfit") && (
@@ -6166,7 +6521,7 @@ export default function OutfitRecommendations() {
             </button>
           )}
 
-          {view !== "wardrobe" && view !== "profile" && view !== "saved" && (
+          {view !== "wardrobe" && view !== "profile" && view !== "saved" && view !== "garment" && (
             <div style={{
               display: "flex",
               background: "#F0EFED",
@@ -6217,40 +6572,61 @@ export default function OutfitRecommendations() {
         </div>
 
         {view === "outfit" && outfits.length > 0 && (
-          <div style={{
+          <div className="outfit-name-chips" style={{
             display: "flex",
-            alignItems: "center",
-            gap: 7,
+            gap: 8,
+            overflowX: "auto",
             marginBottom: "var(--space-dots-mb)",
+            WebkitOverflowScrolling: "touch",
           }}>
-            {outfits.map((_, i) => (
+            {outfits.map((o, i) => (
               <button
                 key={i}
+                ref={(el) => el && i === current && el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" })}
                 onClick={() => setCurrent(i)}
                 style={{
-                  width: current === i ? "var(--dot-active-width)" : "var(--dot-size)",
-                  height: "var(--dot-size)",
-                  borderRadius: "calc(var(--dot-size) / 2)",
-                  background: current === i ? "#1A1A1A" : "rgba(0,0,0,0.1)",
-                  border: "none",
-                  padding: 0,
+                  flexShrink: 0,
+                  padding: "6px 14px",
+                  borderRadius: 20,
+                  border: current === i ? "1px solid #1A1A1A" : "1px solid rgba(0,0,0,0.12)",
+                  background: "transparent",
+                  color: current === i ? "#1A1A1A" : "#999",
+                  fontWeight: current === i ? 600 : 400,
+                  fontSize: "var(--font-item-name)",
+                  fontFamily: "'DM Sans', sans-serif",
                   cursor: "pointer",
-                  transition: "all 0.3s ease",
+                  transition: "all 0.2s ease",
+                  whiteSpace: "nowrap",
                 }}
-              />
+              >
+                {o.vibe}
+              </button>
             ))}
-            <span style={{ fontSize: "var(--font-caption)", color: "#C0C0C0", marginLeft: 4 }}>
-              {current + 1} of {outfits.length}
-            </span>
           </div>
         )}
       </div>
 
       {/* Main content */}
-      {view === "wardrobe" ? (
+      {view === "garment" ? (
+        lightboxItem && (
+          <GarmentDetailPage
+            item={lightboxItem}
+            onDelete={garmentPreviousView === "wardrobe" ? handleDeleteWardrobeItem : null}
+            onEdit={garmentPreviousView === "wardrobe" ? handleUpdateWardrobeItem : null}
+            onEnhance={garmentPreviousView === "wardrobe" ? handleEnhanceWardrobeItemImage : null}
+            onStyleItem={() => {
+              setLightboxItem(null);
+              setGarmentPreviousView(null);
+              setView("chat");
+              handleSendMessage(`How should I style my ${lightboxItem.name}?`);
+            }}
+            isEnhancing={enhancingItems.has(lightboxItem.id)}
+          />
+        )
+      ) : view === "wardrobe" ? (
         <WardrobeView
           wardrobeItems={wardrobeItems}
-          onItemClick={(item) => setLightboxItem(item)}
+          onItemClick={navigateToGarment}
           onAddItemClick={() => setAddItemModalOpen(true)}
           enhancingItems={enhancingItems}
         />
@@ -6290,7 +6666,7 @@ export default function OutfitRecommendations() {
                 >
                   <OutfitView
                     outfit={outfit}
-                    onItemClick={(item) => setLightboxItem(item)}
+                    onItemClick={navigateToGarment}
                     hasReferencePhoto={!!profile.referencePhoto}
                     vizStatus={vizGenerations[outfit.id]?.status}
                     onVisualizeClick={handleVisualizeOutfit}
@@ -6317,7 +6693,7 @@ export default function OutfitRecommendations() {
       ) : view === "saved" ? (
         <SavedOutfitsView
           savedOutfits={savedOutfits}
-          onItemClick={(item) => setLightboxItem(item)}
+          onItemClick={navigateToGarment}
           onToggleSaved={handleToggleOutfitSaved}
           vizGenerations={vizGenerations}
           hasReferencePhoto={!!profile.referencePhoto}
