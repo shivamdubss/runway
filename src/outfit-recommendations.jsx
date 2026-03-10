@@ -6316,7 +6316,7 @@ function TripFormSheet({ onClose, onSave, initialValues, isEdit }) {
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }} onClick={onClose} />
-      <div style={{ position: 'relative', background: '#fff', borderRadius: '20px 20px 0 0', padding: '8px 20px calc(32px + var(--safe-bottom))' }}>
+      <div style={{ position: 'relative', background: '#fff', borderRadius: '20px 20px 0 0', padding: '8px 20px calc(32px + var(--safe-bottom))', overflow: 'hidden' }}>
         <div style={{ width: 40, height: 4, background: '#D4D4D4', borderRadius: 2, margin: '0 auto 16px' }} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <span style={{ fontSize: 17, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif" }}>{isEdit ? 'Edit Trip' : 'New Trip'}</span>
