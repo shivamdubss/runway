@@ -4,17 +4,6 @@ import './runway.css'
 import { AuthProvider, useAuth } from './lib/auth'
 import OutfitRecommendations from './outfit-recommendations'
 import AuthScreen from './components/AuthScreen'
-import SharedOutfitPage from './components/SharedOutfitPage'
-
-const SHARE_PATTERN = /^\/s\/([a-zA-Z0-9_-]{12})$/
-
-function ShareRouteGuard({ children }) {
-  const match = window.location.pathname.match(SHARE_PATTERN)
-  if (match) {
-    return <SharedOutfitPage token={match[1]} />
-  }
-  return children
-}
 
 function App() {
   const { user, loading } = useAuth()
@@ -45,10 +34,8 @@ function App() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <ShareRouteGuard>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </ShareRouteGuard>
+    <AuthProvider>
+      <App />
+    </AuthProvider>
   </React.StrictMode>
 )
