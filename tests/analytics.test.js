@@ -78,7 +78,6 @@ describe('track()', () => {
       'outfit_unsaved',
       'outfit_disliked',
       'outfit_undisliked',
-      'outfit_shared',
     ];
 
     for (const eventType of eventTypes) {

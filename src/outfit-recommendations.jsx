@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
-import { sendChatMessageStreaming, shareOutfit } from "./lib/api";
+import { sendChatMessageStreaming } from "./lib/api";
 import { track } from "./lib/analytics";
 import { uploadImage } from "./lib/upload";
 import { buildConversationHistory } from "./lib/conversation-history";
@@ -36,7 +36,6 @@ import {
   pruneVizRegistry,
 } from "./lib/visualization";
 import { useAuth } from "./lib/auth";
-import { isMobileShareDevice, shareOutfitLink } from "./lib/share";
 import { fetchWeatherForDisplay, weatherIconToEmoji, searchCities, detectLocationFromBrowser } from "./lib/weather";
 
 // Inject CSS animations for streaming states
@@ -2648,34 +2647,8 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
 }
 
 
-function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisualizeClick, onViewVisualization, onShare, onToggleSaved, onToggleDisliked }) {
+function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisualizeClick, onViewVisualization, onToggleSaved, onToggleDisliked }) {
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
-  const [shareState, setShareState] = useState('idle'); // 'idle' | 'loading' | 'copied'
-  const [showToast, setShowToast] = useState(false);
-  const prefersNativeShare = isMobileShareDevice();
-  const shareButtonLabel = shareState === 'copied'
-    ? 'Link copied!'
-    : prefersNativeShare ? 'Share outfit' : 'Copy outfit link';
-
-  const handleShare = async () => {
-    if (shareState === 'loading') return;
-    setShareState('loading');
-    try {
-      const result = await onShare(outfit.id);
-      if (result === 'copied') {
-        setShareState('copied');
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 2500);
-        setTimeout(() => setShareState('idle'), 2500);
-      } else {
-        // navigator.share was used (or some other share method)
-        setShareState('idle');
-      }
-    } catch (e) {
-      console.error('Share failed:', e);
-      setShareState('idle');
-    }
-  };
 
   const actionButtonStyle = {
     width: 44,
@@ -2698,29 +2671,6 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
       boxSizing: "border-box",
       position: "relative",
     }}>
-      {/* Toast notification */}
-      {showToast && (
-        <div style={{
-          position: "absolute",
-          top: -44,
-          left: "50%",
-          transform: "translateX(-50%)",
-          background: "#1A1A1A",
-          color: "#fff",
-          padding: "8px 16px",
-          borderRadius: 10,
-          fontSize: 13,
-          fontWeight: 500,
-          fontFamily: "'DM Sans', sans-serif",
-          whiteSpace: "nowrap",
-          zIndex: 100,
-          animation: "fadeInUp 0.2s ease",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-        }}>
-          Link copied to clipboard
-        </div>
-      )}
-
       <div style={{
         display: "flex",
         alignItems: "center",
@@ -2768,39 +2718,6 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
           >
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
           </svg>
-        </button>
-        <button
-          onClick={handleShare}
-          disabled={shareState === 'loading'}
-          style={{
-            ...actionButtonStyle,
-            background: shareState === 'copied' ? "rgba(0,0,0,0.04)" : "transparent",
-            cursor: shareState === 'loading' ? "wait" : "pointer",
-          }}
-          title={shareButtonLabel}
-          aria-label={shareButtonLabel}
-        >
-          {shareState === 'copied' ? (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          ) : shareState === 'loading' ? (
-            <span style={{
-              width: 16,
-              height: 16,
-              borderRadius: "50%",
-              border: "2px solid #D8D8D8",
-              borderTopColor: "#8A8A8A",
-              animation: "spin 0.8s linear infinite",
-              display: "block",
-            }} />
-          ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-              <polyline points="16 6 12 2 8 6" />
-              <line x1="12" y1="2" x2="12" y2="15" />
-            </svg>
-          )}
         </button>
         <div style={{ width: 1, height: 20, background: "rgba(0,0,0,0.12)", marginLeft: 2, marginRight: 2, flexShrink: 0 }} />
         <button
@@ -6671,15 +6588,6 @@ export default function OutfitRecommendations() {
                     vizStatus={vizGenerations[outfit.id]?.status}
                     onVisualizeClick={handleVisualizeOutfit}
                     onViewVisualization={(outfitId) => setVizModalOutfitId(outfitId)}
-                    onShare={async (outfitId) => {
-                      const { shareToken } = await shareOutfit(outfitId);
-                      track('outfit_shared', { outfit_id: outfitId });
-                      const shareUrl = `${window.location.origin}/s/${shareToken}`;
-                      return shareOutfitLink({
-                        url: shareUrl,
-                        title: 'Check out this outfit on Runway',
-                      });
-                    }}
                     onToggleSaved={handleToggleOutfitSaved}
                     onToggleDisliked={handleToggleOutfitDisliked}
                   />

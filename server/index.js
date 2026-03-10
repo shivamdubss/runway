@@ -14,8 +14,6 @@ import { handleAnalyzeOutfitPhoto } from './api/analyze-outfit-photo.js';
 import { handleGenerateItemImage } from './api/generate-item-image.js';
 import { handlePreprocessReference } from './api/preprocess-reference.js';
 import { handleEnhanceItemImage } from './api/enhance-item-image.js';
-import { handleShare } from './api/share.js';
-import { handleShareLookup } from './api/share-lookup.js';
 import { requireAuth } from './middleware/auth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -40,16 +38,8 @@ app.post('/api/preprocess-reference', requireAuth, handlePreprocessReference);
 app.post('/api/analyze-outfit-photo', requireAuth, handleAnalyzeOutfitPhoto);
 app.post('/api/generate-item-image', requireAuth, handleGenerateItemImage);
 app.post('/api/enhance-item-image', requireAuth, handleEnhanceItemImage);
-app.post('/api/share', requireAuth, handleShare);
-app.get('/api/share/:token', handleShareLookup);
-app.get('/api/share-lookup', handleShareLookup);
-
 // Serve static Vite build output
 app.use(express.static(distDir));
-
-app.get('/s/:token', (req, res) => {
-  res.sendFile(join(distDir, 'index.html'));
-});
 
 app.listen(PORT, () => {
   console.log(`Runway server running on http://localhost:${PORT}`);
