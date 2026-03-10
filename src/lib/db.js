@@ -342,6 +342,167 @@ export async function toggleOutfitDisliked(outfitId, currentDisliked) {
   return data;
 }
 
+// ── Trip Plans ────────────────────────────────────────────
+
+export function getTripDayCount(startDate, endDate) {
+  // Parse as local dates to avoid UTC offset issues
+  const [sy, sm, sd] = startDate.split('-').map(Number);
+  const [ey, em, ed] = endDate.split('-').map(Number);
+  const start = new Date(sy, sm - 1, sd);
+  const end = new Date(ey, em - 1, ed);
+  return Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+}
+
+export function getTripDayLabel(startDate, dayIndex) {
+  const [y, m, d] = startDate.split('-').map(Number);
+  const date = new Date(y, m - 1, d + dayIndex);
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+export function getSlotNamesForCount(slotsPerDay) {
+  if (slotsPerDay === 1) return ['morning'];
+  if (slotsPerDay === 2) return ['morning', 'evening'];
+  return ['morning', 'afternoon', 'evening'];
+}
+
+function toFrontendTripPlan(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    destination: row.destination || null,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    slotsPerDay: row.slots_per_day,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toFrontendTripSlot(row) {
+  return {
+    id: row.id,
+    tripPlanId: row.trip_plan_id,
+    dayIndex: row.day_index,
+    slotName: row.slot_name,
+    outfitId: row.outfit_id || null,
+    outfit: row.outfits ? {
+      id: row.outfits.id,
+      vibe: row.outfits.vibe,
+      reasoning: row.outfits.reasoning,
+      saved: row.outfits.saved,
+      disliked: row.outfits.disliked ?? false,
+      visualizationUrl: row.outfits.visualization_url || null,
+      visualizationUrls: row.outfits.visualization_urls || (row.outfits.visualization_url ? { front: row.outfits.visualization_url } : null),
+      items: [],
+    } : null,
+  };
+}
+
+export async function fetchTripPlans() {
+  const { data, error } = await supabase
+    .from('trip_plans')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(toFrontendTripPlan);
+}
+
+export async function createTripPlan({ title, destination, startDate, endDate, slotsPerDay }) {
+  if (new Date(endDate) < new Date(startDate)) {
+    throw new Error('end_date_before_start');
+  }
+  const { data, error } = await supabase
+    .from('trip_plans')
+    .insert({ title, destination: destination || null, start_date: startDate, end_date: endDate, slots_per_day: slotsPerDay })
+    .select()
+    .single();
+  if (error) throw error;
+  return toFrontendTripPlan(data);
+}
+
+export async function updateTripPlan(id, fields) {
+  const updates = {};
+  if (fields.title !== undefined) updates.title = fields.title;
+  if (fields.destination !== undefined) updates.destination = fields.destination;
+  const { data, error } = await supabase
+    .from('trip_plans')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toFrontendTripPlan(data);
+}
+
+export async function deleteTripPlan(id) {
+  const { error } = await supabase
+    .from('trip_plans')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchTripPlanWithSlots(id) {
+  const [planResult, slotsResult] = await Promise.all([
+    supabase.from('trip_plans').select('*').eq('id', id).single(),
+    supabase.from('trip_plan_slots').select('*, outfits(*)').eq('trip_plan_id', id).order('day_index').order('slot_name'),
+  ]);
+  if (planResult.error) throw planResult.error;
+  if (slotsResult.error) throw slotsResult.error;
+
+  const plan = toFrontendTripPlan(planResult.data);
+  const rawSlots = slotsResult.data || [];
+
+  // Fetch wardrobe items for each slot's outfit
+  const outfitIds = [...new Set(rawSlots.map(s => s.outfit_id).filter(Boolean))];
+  const outfitItemsMap = {};
+  if (outfitIds.length > 0) {
+    const { data: junctionRows, error: jErr } = await supabase
+      .from('outfit_items')
+      .select('outfit_id, position, wardrobe_items(*)')
+      .in('outfit_id', outfitIds)
+      .order('position', { ascending: true });
+    if (jErr) throw jErr;
+    for (const jr of junctionRows || []) {
+      if (!outfitItemsMap[jr.outfit_id]) outfitItemsMap[jr.outfit_id] = [];
+      if (jr.wardrobe_items) outfitItemsMap[jr.outfit_id].push(toFrontendItem(jr.wardrobe_items));
+    }
+  }
+
+  const slots = rawSlots.map(row => {
+    const slot = toFrontendTripSlot(row);
+    if (slot.outfit && slot.outfitId) {
+      slot.outfit.items = outfitItemsMap[slot.outfitId] || [];
+    }
+    return slot;
+  });
+
+  return { ...plan, slots };
+}
+
+export async function upsertTripSlot({ tripPlanId, dayIndex, slotName, outfitId }) {
+  const { data, error } = await supabase
+    .from('trip_plan_slots')
+    .upsert(
+      { trip_plan_id: tripPlanId, day_index: dayIndex, slot_name: slotName, outfit_id: outfitId },
+      { onConflict: 'trip_plan_id,day_index,slot_name' }
+    )
+    .select()
+    .single();
+  if (error) throw error;
+  return toFrontendTripSlot(data);
+}
+
+export async function removeTripSlot({ tripPlanId, dayIndex, slotName }) {
+  const { error } = await supabase
+    .from('trip_plan_slots')
+    .delete()
+    .eq('trip_plan_id', tripPlanId)
+    .eq('day_index', dayIndex)
+    .eq('slot_name', slotName);
+  if (error) throw error;
+}
+
 export async function fetchSavedOutfits() {
   const { data: outfitRows, error: outfitErr } = await supabase
     .from('outfits')

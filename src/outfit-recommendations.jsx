@@ -5352,7 +5352,745 @@ function ProfileView({ profile, onSave, focusLocation, onClearFocusLocation }) {
   );
 }
 
-function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, onOpenSaved, savedCount, chatHistory, onSelectChat, onToggleStar, onDeleteChat, onSignOut }) {
+// ── Trip Planning ────────────────────────────────────────────────────────────
+
+const SLOT_INFO = {
+  morning:   { emoji: '☀️', label: 'Morning' },
+  afternoon: { emoji: '🌤️', label: 'Afternoon' },
+  evening:   { emoji: '🌙', label: 'Evening' },
+};
+
+function TripVisualizationButton({ outfit, vizGenerations, hasReferencePhoto, onVisualizeClick, onViewVisualization }) {
+  const vizStatus = vizGenerations?.[outfit.id]?.status;
+  return (
+    <button
+      onClick={() => {
+        if (vizStatus === 'ready') onViewVisualization(outfit.id);
+        else if (vizStatus !== 'generating' && vizStatus !== 'queued') onVisualizeClick(outfit);
+      }}
+      disabled={!hasReferencePhoto || vizStatus === 'generating' || vizStatus === 'queued'}
+      style={{
+        width: '100%', padding: '11px 20px', marginTop: 12,
+        background: vizStatus === 'ready' ? '#1A1A1A' : 'transparent',
+        color: vizStatus === 'ready' ? '#fff' : hasReferencePhoto ? '#666' : '#bbb',
+        border: vizStatus === 'ready' ? 'none' : hasReferencePhoto ? '1px solid #E0E0E0' : '1px solid #EBEBEB',
+        borderRadius: 12, fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif",
+        fontWeight: vizStatus === 'ready' ? 600 : 500, cursor: hasReferencePhoto && vizStatus !== 'generating' && vizStatus !== 'queued' ? 'pointer' : 'not-allowed',
+        transition: 'all 0.2s ease', opacity: vizStatus === 'generating' || vizStatus === 'queued' ? 0.6 : 1,
+      }}
+    >
+      {vizStatus === 'generating' ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #D8D8D8', borderTopColor: '#8A8A8A', animation: 'spin 0.8s linear infinite' }} />
+        </span>
+      ) : vizStatus === 'queued' ? 'Hang tight...'
+        : vizStatus === 'ready' ? 'View your look'
+        : vizStatus === 'error' ? 'Try again'
+        : hasReferencePhoto ? 'See this on you 😎'
+        : 'Add a photo to try things on'}
+    </button>
+  );
+}
+
+function SlotDetailSheet({ dayIndex, slotName, outfit, trip, onClose, onRemove, onReplace, vizGenerations, hasReferencePhoto, onVisualizeClick, onViewVisualization, onItemClick }) {
+  const info = SLOT_INFO[slotName];
+  const dayLabel = db.getTripDayLabel(trip.startDate, dayIndex);
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }} onClick={onClose} />
+      <div style={{ position: 'relative', background: '#fff', borderRadius: '20px 20px 0 0', padding: '8px 20px 32px', maxHeight: '85vh', overflowY: 'auto' }}>
+        <div style={{ width: 40, height: 4, background: '#D4D4D4', borderRadius: 2, margin: '0 auto 16px' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <span style={{ fontSize: 13, color: '#999', fontFamily: "'DM Sans', sans-serif" }}>
+            {dayLabel} · {info.emoji} {info.label}
+          </span>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 16, border: 'none', background: 'rgba(0,0,0,0.05)', color: '#666', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+        </div>
+        <h2 style={{ fontSize: 20, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: '0 0 12px' }}>{outfit.vibe}</h2>
+        {outfit.items.length > 0 && (
+          <div className="item-card-grid" style={{ marginBottom: 12 }}>
+            {outfit.items.map((item, i) => <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />)}
+          </div>
+        )}
+        {outfit.reasoning && (
+          <p style={{ fontSize: 13, color: '#666', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5, margin: '0 0 12px' }}>{outfit.reasoning}</p>
+        )}
+        <TripVisualizationButton outfit={outfit} vizGenerations={vizGenerations} hasReferencePhoto={hasReferencePhoto} onVisualizeClick={onVisualizeClick} onViewVisualization={onViewVisualization} />
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <button
+            onClick={onReplace}
+            style={{ flex: 1, padding: '12px 0', background: '#F3F2F0', border: 'none', borderRadius: 12, fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif", fontWeight: 500, color: '#1A1A1A', cursor: 'pointer' }}
+            onPointerDown={(e) => e.currentTarget.style.opacity = '0.7'}
+            onPointerUp={(e) => e.currentTarget.style.opacity = '1'}
+            onPointerLeave={(e) => e.currentTarget.style.opacity = '1'}
+          >Replace</button>
+          <button
+            onClick={onRemove}
+            style={{ flex: 1, padding: '12px 0', background: '#FEE2E2', border: 'none', borderRadius: 12, fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif", fontWeight: 500, color: '#DC2626', cursor: 'pointer' }}
+            onPointerDown={(e) => e.currentTarget.style.opacity = '0.7'}
+            onPointerUp={(e) => e.currentTarget.style.opacity = '1'}
+            onPointerLeave={(e) => e.currentTarget.style.opacity = '1'}
+          >Remove</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SlotTile({ slotName, outfit, isSelected, onTap, width = 128 }) {
+  const info = SLOT_INFO[slotName];
+  const filled = !!outfit;
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif", marginBottom: 4, display: 'flex', alignItems: 'center', gap: 3 }}>
+        <span style={{ fontSize: 11 }}>{info.emoji}</span> {info.label}
+      </div>
+      <div
+        onClick={onTap}
+        style={{
+          width, height: 72, borderRadius: 10, cursor: 'pointer',
+          background: filled ? '#fff' : 'transparent',
+          border: isSelected ? '2px solid #8B7CF6' : filled ? '1px solid rgba(0,0,0,0.08)' : '1.5px dashed #D4D4D4',
+          boxShadow: filled ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+          display: 'flex', flexDirection: 'column', alignItems: filled ? 'flex-start' : 'center', justifyContent: filled ? 'space-between' : 'center',
+          padding: filled ? '8px 8px 6px' : 0,
+          transition: 'all 0.15s ease',
+          boxSizing: 'border-box',
+        }}
+        onPointerDown={(e) => e.currentTarget.style.opacity = '0.75'}
+        onPointerUp={(e) => e.currentTarget.style.opacity = '1'}
+        onPointerLeave={(e) => e.currentTarget.style.opacity = '1'}
+      >
+        {filled ? (
+          <>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+              {outfit.vibe}
+            </span>
+            <span style={{ fontSize: 13, letterSpacing: 1 }}>
+              {(outfit.items || []).slice(0, 4).map(item => item.emoji || '👕').join('')}
+            </span>
+          </>
+        ) : (
+          <span style={{ fontSize: 20, color: '#C0C0C0' }}>+</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const DAY_COLUMN_WIDTH = 136;
+
+function DayColumn({ trip, dayIndex, slotMap, selectedSlot, onSlotTap }) {
+  const slotNames = db.getSlotNamesForCount(trip.slotsPerDay);
+  const label = db.getTripDayLabel(trip.startDate, dayIndex);
+  const [weekday, ...rest] = label.split(', ');
+  return (
+    <div style={{ width: DAY_COLUMN_WIDTH, flexShrink: 0, paddingRight: 10 }}>
+      <div style={{ marginBottom: 10, paddingBottom: 8, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif" }}>{weekday}</div>
+        <div style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif" }}>{rest.join(', ')}</div>
+      </div>
+      {slotNames.map(slotName => {
+        const slot = slotMap[`${dayIndex}-${slotName}`];
+        const isSelected = selectedSlot?.dayIndex === dayIndex && selectedSlot?.slotName === slotName;
+        return (
+          <SlotTile
+            key={slotName}
+            slotName={slotName}
+            outfit={slot?.outfit || null}
+            isSelected={isSelected}
+            onTap={() => onSlotTap(dayIndex, slotName, slot?.outfit || null)}
+            width={DAY_COLUMN_WIDTH - 10}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function OutfitPickerCard({ outfit, usedBadge, onAssign, onItemClick }) {
+  return (
+    <div
+      style={{ background: '#fff', borderRadius: 12, border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', cursor: 'pointer', overflow: 'hidden', position: 'relative', transition: 'transform 0.15s ease' }}
+      onClick={() => onAssign(outfit)}
+      onPointerDown={(e) => e.currentTarget.style.transform = 'scale(0.97)'}
+      onPointerUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+      onPointerLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+    >
+      {usedBadge && (
+        <div style={{ position: 'absolute', top: 6, right: 6, background: '#1A1A1A', color: '#fff', borderRadius: 6, padding: '2px 6px', fontSize: 9, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", zIndex: 1, lineHeight: 1.4 }}>
+          {usedBadge}
+        </div>
+      )}
+      <div style={{ height: 80, background: '#F3F2F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, letterSpacing: 2 }}>
+        {(outfit.items || []).slice(0, 4).map(item => item.emoji || '👕').join('') || '👕'}
+      </div>
+      <div style={{ padding: '8px 10px 10px' }}>
+        <div style={{ fontSize: 'var(--font-item-name)', fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{outfit.vibe}</div>
+      </div>
+    </div>
+  );
+}
+
+function OutfitPickerPanel({ selectedSlot, trip, savedOutfits, recentOutfits, slotMap, wardrobeFlat, profile, onAssignOutfit, onToggleSaved }) {
+  const [tab, setTab] = useState('saved');
+  const [aiQuery, setAiQuery] = useState('');
+  const [aiResults, setAiResults] = useState([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const aiAbortRef = useRef(null);
+
+  // Badge text for a given outfit: which day/slot is it used in?
+  function getUsedBadge(outfitId) {
+    const slots = Object.values(slotMap).filter(s => s.outfitId === outfitId);
+    if (slots.length === 0) return null;
+    const s = slots[0];
+    const info = SLOT_INFO[s.slotName];
+    return `Day ${s.dayIndex + 1} ${info.emoji}`;
+  }
+
+  const handleAiSearch = (query) => {
+    if (!query.trim()) return;
+    if (aiAbortRef.current) aiAbortRef.current();
+    setAiLoading(true);
+    setAiResults([]);
+    let accMessage = '';
+    const slotContext = selectedSlot
+      ? `${SLOT_INFO[selectedSlot.slotName].label} on Day ${selectedSlot.dayIndex + 1} of my trip to ${trip.destination || trip.title}`
+      : `my trip to ${trip.destination || trip.title}`;
+    const systemMsg = `You are helping plan outfits for a trip. The user needs an outfit for: ${slotContext}. Suggest 2-3 outfits from their wardrobe. ${query}`;
+    aiAbortRef.current = sendChatMessageStreaming({
+      messages: [{ role: 'user', content: systemMsg }],
+      wardrobeItems: wardrobeFlat,
+      profile,
+      onToken: (token) => { accMessage += token; },
+      onComplete: ({ outfits }) => {
+        setAiResults(outfits || []);
+        setAiLoading(false);
+      },
+      onError: () => setAiLoading(false),
+    });
+  };
+
+  useEffect(() => () => { if (aiAbortRef.current) aiAbortRef.current(); }, []);
+
+  const tabStyle = (active) => ({
+    height: 'var(--tab-height)', padding: '0 var(--tab-padding-x)',
+    borderRadius: 'calc(var(--tab-height) / 2)', border: 'none',
+    background: active ? '#fff' : 'transparent', color: active ? '#1A1A1A' : '#999',
+    fontSize: 'var(--font-tab)', fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
+    cursor: 'pointer', transition: 'all 0.2s ease',
+    boxShadow: active ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+  });
+
+  const QUICK_CHIPS = ['Dinner out', 'Museum day', 'Brunch', 'Beach day', 'Business meeting'];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+      {/* Tab toggle */}
+      <div style={{ padding: '12px 16px 8px', flexShrink: 0 }}>
+        {selectedSlot && (
+          <div style={{ marginBottom: 8, padding: '5px 10px', background: '#F3F2F0', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#666', fontFamily: "'DM Sans', sans-serif" }}>
+            <span>{SLOT_INFO[selectedSlot.slotName].emoji}</span>
+            <span>Assigning to Day {selectedSlot.dayIndex + 1} · {SLOT_INFO[selectedSlot.slotName].label}</span>
+          </div>
+        )}
+        <div style={{ display: 'flex', background: '#F0EFED', borderRadius: 20, padding: 3, width: 'fit-content' }}>
+          {['saved', 'recent', 'ask'].map(t => (
+            <button key={t} style={tabStyle(tab === t)} onClick={() => setTab(t)}>
+              {t === 'saved' ? 'Saved' : t === 'recent' ? 'Recent' : 'Ask AI'}
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* Content */}
+      <div className="outfit-scroll-panel" style={{ flex: 1, overflowY: 'auto', padding: '0 16px 24px' }}>
+        {tab === 'saved' && (
+          savedOutfits.length === 0 ? (
+            <p style={{ fontSize: 13, color: '#999', fontFamily: "'DM Sans', sans-serif", textAlign: 'center', paddingTop: 24 }}>
+              No saved outfits yet. Save outfits from the Outfits tab to use them here.
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {savedOutfits.map(outfit => (
+                <OutfitPickerCard
+                  key={outfit.id}
+                  outfit={outfit}
+                  usedBadge={getUsedBadge(outfit.id)}
+                  onAssign={onAssignOutfit}
+                  onItemClick={() => {}}
+                />
+              ))}
+            </div>
+          )
+        )}
+        {tab === 'recent' && (
+          recentOutfits.length === 0 ? (
+            <p style={{ fontSize: 13, color: '#999', fontFamily: "'DM Sans', sans-serif", textAlign: 'center', paddingTop: 24 }}>
+              Ask for outfit recommendations in Chat, then come back here to add them to your trip.
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {recentOutfits.map(outfit => (
+                <OutfitPickerCard
+                  key={outfit.id}
+                  outfit={outfit}
+                  usedBadge={getUsedBadge(outfit.id)}
+                  onAssign={(o) => { onToggleSaved(o.id, o.saved); onAssignOutfit(o); }}
+                  onItemClick={() => {}}
+                />
+              ))}
+            </div>
+          )
+        )}
+        {tab === 'ask' && (
+          <div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <input
+                value={aiQuery}
+                onChange={e => setAiQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleAiSearch(aiQuery); }}
+                placeholder="What's the occasion?"
+                style={{ flex: 1, padding: '10px 14px', background: '#F3F2F0', border: 'none', borderRadius: 10, fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif", outline: 'none' }}
+              />
+              <button
+                onClick={() => handleAiSearch(aiQuery)}
+                disabled={aiLoading || !aiQuery.trim()}
+                style={{ width: 40, height: 40, borderRadius: 10, border: 'none', background: aiQuery.trim() ? '#1A1A1A' : '#E0E0E0', color: '#fff', cursor: aiQuery.trim() ? 'pointer' : 'not-allowed', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+              >
+                {aiLoading ? <span style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', animation: 'spin 0.8s linear infinite', display: 'block' }} /> : '→'}
+              </button>
+            </div>
+            {!aiResults.length && !aiLoading && (
+              <div>
+                <p style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif", marginBottom: 8 }}>— or try —</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {QUICK_CHIPS.map(chip => (
+                    <button
+                      key={chip}
+                      onClick={() => { setAiQuery(chip); handleAiSearch(chip); }}
+                      style={{ padding: '5px 12px', borderRadius: 20, border: '1px solid rgba(0,0,0,0.12)', background: 'transparent', fontSize: 12, fontFamily: "'DM Sans', sans-serif", color: '#555', cursor: 'pointer' }}
+                    >{chip}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {aiLoading && (
+              <p style={{ fontSize: 13, color: '#999', fontFamily: "'DM Sans', sans-serif", textAlign: 'center', paddingTop: 16 }}>Finding outfits...</p>
+            )}
+            {aiResults.length > 0 && (
+              <>
+                <p style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif", marginBottom: 8 }}>
+                  {selectedSlot ? `Tap an outfit to assign it to Day ${selectedSlot.dayIndex + 1} ${SLOT_INFO[selectedSlot.slotName].label}` : 'Tap an outfit to save it'}
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {aiResults.map((outfit, i) => (
+                    <OutfitPickerCard
+                      key={outfit.id || i}
+                      outfit={outfit}
+                      usedBadge={null}
+                      onAssign={(o) => { onToggleSaved(o.id, o.saved ?? false); onAssignOutfit(o); }}
+                      onItemClick={() => {}}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TripDetailView({ trip, savedOutfits, recentOutfits, wardrobeFlat, profile, vizGenerations, hasReferencePhoto, onVisualizeClick, onViewVisualization, onItemClick, onToggleSaved, onOpenSummary }) {
+  const [slots, setSlots] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [slotDetail, setSlotDetail] = useState(null); // {dayIndex, slotName}
+
+  useEffect(() => {
+    db.fetchTripPlanWithSlots(trip.id).then(data => {
+      setSlots(data.slots);
+      setLoading(false);
+    }).catch(err => {
+      console.error('Failed to load trip slots:', err);
+      setLoading(false);
+    });
+  }, [trip.id]);
+
+  const slotMap = {};
+  for (const s of slots) slotMap[`${s.dayIndex}-${s.slotName}`] = s;
+
+  const filledCount = slots.filter(s => s.outfitId).length;
+  const dayCount = db.getTripDayCount(trip.startDate, trip.endDate);
+  const totalSlots = dayCount * trip.slotsPerDay;
+
+  const handleSlotTap = (dayIndex, slotName, outfit) => {
+    if (outfit) {
+      setSlotDetail({ dayIndex, slotName });
+      setSelectedSlot(null);
+    } else {
+      setSelectedSlot(prev =>
+        prev?.dayIndex === dayIndex && prev?.slotName === slotName ? null : { dayIndex, slotName }
+      );
+    }
+  };
+
+  const handleAssignOutfit = async (outfit) => {
+    if (!selectedSlot) return;
+    const { dayIndex, slotName } = selectedSlot;
+    // Optimistic update
+    const newSlot = { id: null, tripPlanId: trip.id, dayIndex, slotName, outfitId: outfit.id, outfit };
+    setSlots(prev => [...prev.filter(s => !(s.dayIndex === dayIndex && s.slotName === slotName)), newSlot]);
+    setSelectedSlot(null);
+    try {
+      const saved = await db.upsertTripSlot({ tripPlanId: trip.id, dayIndex, slotName, outfitId: outfit.id });
+      setSlots(prev => prev.map(s => s.dayIndex === dayIndex && s.slotName === slotName ? { ...s, id: saved.id } : s));
+    } catch (err) {
+      console.error('Failed to assign outfit to slot:', err);
+    }
+  };
+
+  const handleRemoveSlot = async (dayIndex, slotName) => {
+    setSlots(prev => prev.filter(s => !(s.dayIndex === dayIndex && s.slotName === slotName)));
+    setSlotDetail(null);
+    try {
+      await db.removeTripSlot({ tripPlanId: trip.id, dayIndex, slotName });
+    } catch (err) {
+      console.error('Failed to remove slot:', err);
+    }
+  };
+
+  const handleReplaceSlot = (dayIndex, slotName) => {
+    setSlotDetail(null);
+    setSelectedSlot({ dayIndex, slotName });
+  };
+
+  const slotDetailData = slotDetail ? slotMap[`${slotDetail.dayIndex}-${slotDetail.slotName}`] : null;
+
+  if (loading) {
+    return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <span style={{ width: 24, height: 24, borderRadius: '50%', border: '2px solid #D8D8D8', borderTopColor: '#8A8A8A', animation: 'spin 0.8s linear infinite', display: 'block' }} />
+    </div>;
+  }
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {/* TOP ZONE: Calendar grid */}
+      <div style={{ flexShrink: 0, borderBottom: '1px solid rgba(0,0,0,0.06)', paddingBottom: 0 }}>
+        <div
+          className="outfit-scroll-panel"
+          style={{ overflowX: 'auto', display: 'flex', padding: '12px 16px 0', gap: 0, WebkitOverflowScrolling: 'touch' }}
+        >
+          {Array.from({ length: dayCount }, (_, i) => (
+            <DayColumn
+              key={i}
+              trip={trip}
+              dayIndex={i}
+              slotMap={slotMap}
+              selectedSlot={selectedSlot}
+              onSlotTap={handleSlotTap}
+            />
+          ))}
+        </div>
+        {/* Progress bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', gap: 8 }}>
+          <div style={{ flex: 1, height: 3, background: '#F0EFED', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ width: `${totalSlots > 0 ? (filledCount / totalSlots) * 100 : 0}%`, height: '100%', background: '#1A1A1A', borderRadius: 2, transition: 'width 0.3s ease' }} />
+          </div>
+          <span style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif", flexShrink: 0 }}>
+            {filledCount}/{totalSlots} outfits
+          </span>
+          <button
+            onClick={onOpenSummary}
+            style={{ padding: '3px 10px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.1)', background: 'transparent', fontSize: 11, fontFamily: "'DM Sans', sans-serif", color: '#666', cursor: 'pointer', flexShrink: 0 }}
+          >
+            Summary
+          </button>
+        </div>
+      </div>
+
+      {/* BOTTOM ZONE: Outfit picker */}
+      <OutfitPickerPanel
+        selectedSlot={selectedSlot}
+        trip={trip}
+        savedOutfits={savedOutfits}
+        recentOutfits={recentOutfits}
+        slotMap={slotMap}
+        wardrobeFlat={wardrobeFlat}
+        profile={profile}
+        onAssignOutfit={handleAssignOutfit}
+        onToggleSaved={onToggleSaved}
+      />
+
+      {/* Slot detail bottom sheet */}
+      {slotDetail && slotDetailData?.outfit && (
+        <SlotDetailSheet
+          dayIndex={slotDetail.dayIndex}
+          slotName={slotDetail.slotName}
+          outfit={slotDetailData.outfit}
+          trip={trip}
+          onClose={() => setSlotDetail(null)}
+          onRemove={() => handleRemoveSlot(slotDetail.dayIndex, slotDetail.slotName)}
+          onReplace={() => handleReplaceSlot(slotDetail.dayIndex, slotDetail.slotName)}
+          vizGenerations={vizGenerations}
+          hasReferencePhoto={hasReferencePhoto}
+          onVisualizeClick={onVisualizeClick}
+          onViewVisualization={onViewVisualization}
+          onItemClick={onItemClick}
+        />
+      )}
+    </div>
+  );
+}
+
+function TripSummaryView({ trip, onBack }) {
+  const [tripData, setTripData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    db.fetchTripPlanWithSlots(trip.id).then(data => {
+      setTripData(data);
+      setLoading(false);
+    }).catch(err => {
+      console.error(err);
+      setLoading(false);
+    });
+  }, [trip.id]);
+
+  if (loading) {
+    return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <span style={{ width: 24, height: 24, borderRadius: '50%', border: '2px solid #D8D8D8', borderTopColor: '#8A8A8A', animation: 'spin 0.8s linear infinite', display: 'block' }} />
+    </div>;
+  }
+
+  const { slots } = tripData;
+  const slotNames = db.getSlotNamesForCount(trip.slotsPerDay);
+  const dayCount = db.getTripDayCount(trip.startDate, trip.endDate);
+
+  // Build packing list: count how many times each item appears
+  const itemUsage = {};
+  for (const slot of slots) {
+    for (const item of slot.outfit?.items || []) {
+      const key = item.id;
+      if (!itemUsage[key]) itemUsage[key] = { item, count: 0 };
+      itemUsage[key].count++;
+    }
+  }
+  const packingList = Object.values(itemUsage).sort((a, b) => b.count - a.count);
+  const reusedItems = packingList.filter(p => p.count > 1);
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div className="outfit-scroll-panel" style={{ flex: 1, overflowY: 'auto', padding: '0 var(--container-padding-x) calc(24px + var(--safe-bottom))' }}>
+        {Array.from({ length: dayCount }, (_, dayIndex) => {
+          const dayLabel = db.getTripDayLabel(trip.startDate, dayIndex);
+          return (
+            <div key={dayIndex} style={{ marginBottom: 24 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: '0 0 4px' }}>
+                Day {dayIndex + 1} — {dayLabel}
+              </h2>
+              <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 12 }} />
+              {slotNames.map(slotName => {
+                const info = SLOT_INFO[slotName];
+                const slot = slots.find(s => s.dayIndex === dayIndex && s.slotName === slotName);
+                return (
+                  <div key={slotName} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif", marginBottom: 5 }}>
+                      {info.emoji} {info.label}
+                    </div>
+                    {slot?.outfit ? (
+                      <div style={{ background: '#fff', borderRadius: 10, padding: 12, border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>{slot.outfit.vibe}</div>
+                        <div style={{ fontSize: 12, color: '#666', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}>
+                          {(slot.outfit.items || []).map(item => `${item.emoji || '👕'} ${item.name}`).join('  ·  ')}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 12, color: '#bbb', fontFamily: "'DM Sans', sans-serif", fontStyle: 'italic' }}>Not planned yet</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+
+        {reusedItems.length > 0 && (
+          <div style={{ marginTop: 8, paddingTop: 16, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+            <h2 style={{ fontSize: 14, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: '0 0 4px' }}>
+              Packing list
+            </h2>
+            <p style={{ fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif", margin: '0 0 10px' }}>
+              {reusedItems.length} item{reusedItems.length !== 1 ? 's' : ''} worn in multiple outfits
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {reusedItems.map(({ item, count }) => (
+                <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff', borderRadius: 8, padding: '8px 12px', border: '1px solid rgba(0,0,0,0.06)' }}>
+                  <span style={{ fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: '#1A1A1A' }}>{item.emoji || '👕'} {item.name}</span>
+                  <span style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif" }}>×{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NewTripSheet({ onClose, onCreate }) {
+  const [title, setTitle] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [slotsPerDay, setSlotsPerDay] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleCreate = async () => {
+    if (!title.trim()) { setError('Please enter a trip name'); return; }
+    if (!startDate) { setError('Please select a start date'); return; }
+    if (!endDate) { setError('Please select an end date'); return; }
+    if (endDate < startDate) { setError('End date must be after start date'); return; }
+    setLoading(true);
+    setError('');
+    try {
+      const trip = await db.createTripPlan({ title: title.trim(), startDate, endDate, slotsPerDay });
+      onCreate(trip);
+    } catch (err) {
+      setError('Failed to create trip. Try again.');
+      setLoading(false);
+    }
+  };
+
+  const inputStyle = { width: '100%', padding: '12px 14px', background: '#F3F2F0', border: 'none', borderRadius: 10, fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif", outline: 'none', boxSizing: 'border-box' };
+  const labelStyle = { fontSize: 12, fontWeight: 500, color: '#999', fontFamily: "'DM Sans', sans-serif", marginBottom: 6, display: 'block' };
+  const slotsLabel = slotsPerDay === 1 ? 'Morning only' : slotsPerDay === 2 ? 'Morning + Evening' : 'Morning, Afternoon + Evening';
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }} onClick={onClose} />
+      <div style={{ position: 'relative', background: '#fff', borderRadius: '20px 20px 0 0', padding: '8px 20px calc(32px + var(--safe-bottom))' }}>
+        <div style={{ width: 40, height: 4, background: '#D4D4D4', borderRadius: 2, margin: '0 auto 16px' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <span style={{ fontSize: 17, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif" }}>New Trip</span>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 16, border: 'none', background: 'rgba(0,0,0,0.05)', color: '#666', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>Trip name</label>
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. NYC Work Trip" style={inputStyle} />
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>Start</label>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={inputStyle} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>End</label>
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={inputStyle} />
+          </div>
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <label style={labelStyle}>Outfits per day</label>
+          <div style={{ display: 'flex', background: '#F3F2F0', borderRadius: 22, padding: 3, gap: 2 }}>
+            {[1, 2, 3].map(n => (
+              <button key={n} onClick={() => setSlotsPerDay(n)} style={{ flex: 1, height: 34, borderRadius: 18, border: 'none', background: slotsPerDay === n ? '#1A1A1A' : 'transparent', color: slotsPerDay === n ? '#fff' : '#999', fontSize: 14, fontFamily: "'DM Sans', sans-serif", fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s ease' }}>{n}</button>
+            ))}
+          </div>
+          <p style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif", margin: '6px 0 0', textAlign: 'center' }}>{slotsLabel}</p>
+        </div>
+        {error && <p style={{ fontSize: 13, color: '#DC2626', fontFamily: "'DM Sans', sans-serif", margin: '-8px 0 12px', textAlign: 'center' }}>{error}</p>}
+        <button
+          onClick={handleCreate}
+          disabled={loading}
+          style={{ width: '100%', height: 48, borderRadius: 12, border: 'none', background: loading ? '#999' : '#1A1A1A', color: '#fff', fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif", fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer' }}
+        >
+          {loading ? 'Creating...' : 'Create Trip'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TripCard({ trip, onOpen, onDelete }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const dayCount = db.getTripDayCount(trip.startDate, trip.endDate);
+  const startLabel = new Date(trip.startDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const endLabel = new Date(trip.endDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const dayCircles = Array.from({ length: Math.min(dayCount, 7) }, (_, i) => i);
+
+  return (
+    <div
+      style={{ background: '#fff', borderRadius: 12, padding: 16, border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', marginBottom: 10, position: 'relative' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}
+        onClick={onOpen}
+      >
+        <div style={{ flex: 1, cursor: 'pointer' }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif" }}>{trip.title}</div>
+          <div style={{ fontSize: 13, color: '#999', fontFamily: "'DM Sans', sans-serif", marginTop: 2 }}>
+            {startLabel} – {endLabel} · {dayCount} day{dayCount !== 1 ? 's' : ''}
+            {trip.destination && <span> · {trip.destination}</span>}
+          </div>
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); setMenuOpen(m => !m); }}
+          style={{ width: 28, height: 28, borderRadius: 8, border: 'none', background: 'transparent', color: '#999', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+        >···</button>
+      </div>
+      <div style={{ display: 'flex', gap: 6 }} onClick={onOpen}>
+        {dayCircles.map(i => (
+          <div key={i} style={{ width: 28, height: 28, borderRadius: 14, background: '#F3F2F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, color: '#666', fontFamily: "'DM Sans', sans-serif", cursor: 'pointer', flexShrink: 0 }}>
+            {i + 1}
+          </div>
+        ))}
+        {dayCount > 7 && <div style={{ width: 28, height: 28, borderRadius: 14, background: '#F3F2F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#999', fontFamily: "'DM Sans', sans-serif" }}>+{dayCount - 7}</div>}
+      </div>
+      {menuOpen && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setMenuOpen(false)} />
+          <div style={{ position: 'absolute', top: 44, right: 12, background: '#fff', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.15)', border: '1px solid rgba(0,0,0,0.08)', zIndex: 50, overflow: 'hidden', minWidth: 120 }}>
+            <button onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete(trip.id); }}
+              style={{ width: '100%', padding: '11px 16px', border: 'none', background: 'transparent', color: '#DC2626', fontSize: 14, fontFamily: "'DM Sans', sans-serif", fontWeight: 500, cursor: 'pointer', textAlign: 'left' }}>
+              Delete trip
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function TripsListView({ tripPlans, onOpenTrip, onDeleteTrip, onNewTrip }) {
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div className="outfit-scroll-panel" style={{ flex: 1, overflowY: 'auto', padding: `0 var(--container-padding-x) calc(24px + var(--safe-bottom))` }}>
+        {tripPlans.length === 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 24px', textAlign: 'center' }}>
+            <span style={{ fontSize: 48, marginBottom: 16 }}>🧳</span>
+            <p style={{ fontSize: 20, fontFamily: "'Instrument Serif', serif", fontWeight: 400, color: '#1A1A1A', margin: '0 0 8px' }}>Plan a trip</p>
+            <p style={{ fontSize: 'var(--font-body)', color: '#999', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5, maxWidth: 260, margin: '0 0 24px' }}>
+              Assign outfits to each day of your upcoming trips.
+            </p>
+            <button
+              onClick={onNewTrip}
+              style={{ padding: '12px 24px', borderRadius: 12, border: 'none', background: '#1A1A1A', color: '#fff', fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif", fontWeight: 600, cursor: 'pointer' }}
+              onPointerDown={(e) => e.currentTarget.style.opacity = '0.8'}
+              onPointerUp={(e) => e.currentTarget.style.opacity = '1'}
+              onPointerLeave={(e) => e.currentTarget.style.opacity = '1'}
+            >+ New Trip</button>
+          </div>
+        ) : (
+          tripPlans.map(trip => (
+            <TripCard key={trip.id} trip={trip} onOpen={() => onOpenTrip(trip)} onDelete={onDeleteTrip} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, onOpenSaved, onOpenTrips, savedCount, chatHistory, onSelectChat, onToggleStar, onDeleteChat, onSignOut }) {
   const starredChats = chatHistory.filter((c) => c.starred);
   const recentChats = chatHistory.filter((c) => !c.starred);
 
@@ -5507,6 +6245,39 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, 
           </button>
 
           <button
+            onClick={onOpenTrips}
+            style={{
+              width: "100%",
+              height: 40,
+              borderRadius: 8,
+              border: "none",
+              background: "transparent",
+              color: "#1A1A1A",
+              fontSize: "var(--font-body)",
+              fontWeight: 500,
+              fontFamily: "'DM Sans', sans-serif",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-start",
+              padding: "0 12px",
+              gap: 8,
+              transition: "background 0.15s ease",
+            }}
+            onPointerDown={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.05)"}
+            onPointerUp={(e) => e.currentTarget.style.background = "transparent"}
+            onPointerLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="7" width="20" height="14" rx="2" />
+              <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+              <line x1="12" y1="12" x2="12" y2="16" />
+              <line x1="10" y1="14" x2="14" y2="14" />
+            </svg>
+            Trips
+          </button>
+
+          <button
             onClick={onOpenProfile}
             style={{
               width: "100%",
@@ -5647,6 +6418,9 @@ export default function OutfitRecommendations() {
   const [weather, setWeather] = useState(null);
   const [savedOutfits, setSavedOutfits] = useState([]);
   const [focusLocation, setFocusLocation] = useState(false);
+  const [tripPlans, setTripPlans] = useState([]);
+  const [activeTrip, setActiveTrip] = useState(null); // the trip object for trip-detail/summary
+  const [showNewTripSheet, setShowNewTripSheet] = useState(false);
   const chatSessionRef = useRef(0);
   const streamAbortRef = useRef(null);
 
@@ -5714,17 +6488,19 @@ export default function OutfitRecommendations() {
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const [grouped, flat, chats, dbProfile, saved] = await Promise.all([
+        const [grouped, flat, chats, dbProfile, saved, trips] = await Promise.all([
           db.fetchWardrobeItems(),
           db.fetchWardrobeItemsFlat(),
           db.fetchChats(),
           db.fetchProfile(),
           db.fetchSavedOutfits(),
+          db.fetchTripPlans(),
         ]);
         setWardrobeItems(grouped);
         setWardrobeFlat(flat);
         setChatHistory(chats);
         setSavedOutfits(saved);
+        setTripPlans(trips);
 
         if (dbProfile && Object.keys(dbProfile).length > 0) {
           setProfile(prev => ({ ...prev, ...dbProfile }));
@@ -6436,6 +7212,32 @@ export default function OutfitRecommendations() {
     }
   }, []);
 
+  const handleOpenTrip = useCallback((trip) => {
+    setActiveTrip(trip);
+    setView("trip-detail");
+    setSidePanelOpen(false);
+  }, []);
+
+  const handleCreateTrip = useCallback((trip) => {
+    setTripPlans(prev => [trip, ...prev]);
+    setShowNewTripSheet(false);
+    setActiveTrip(trip);
+    setView("trip-detail");
+  }, []);
+
+  const handleDeleteTrip = useCallback(async (tripId) => {
+    try {
+      await db.deleteTripPlan(tripId);
+      setTripPlans(prev => prev.filter(t => t.id !== tripId));
+      if (activeTrip?.id === tripId) {
+        setActiveTrip(null);
+        setView("trips");
+      }
+    } catch (err) {
+      console.error("Failed to delete trip:", err);
+    }
+  }, [activeTrip]);
+
   const navigateToGarment = useCallback((item) => {
     setLightboxItem(item);
     setGarmentPreviousView(view);
@@ -6470,6 +7272,12 @@ export default function OutfitRecommendations() {
           onBulkAdd={handleBulkAddItems}
         />
       )}
+      {showNewTripSheet && (
+        <NewTripSheet
+          onClose={() => setShowNewTripSheet(false)}
+          onCreate={handleCreateTrip}
+        />
+      )}
       {vizModalOutfitId && vizGenerations[vizModalOutfitId] && (
         <OutfitVisualizationModal
           poses={vizGenerations[vizModalOutfitId].poses}
@@ -6486,6 +7294,7 @@ export default function OutfitRecommendations() {
         onOpenWardrobe={() => { setView("wardrobe"); setSidePanelOpen(false); }}
         onOpenProfile={() => { setView("profile"); setSidePanelOpen(false); }}
         onOpenSaved={() => { setView("saved"); setSidePanelOpen(false); }}
+        onOpenTrips={() => { setView("trips"); setSidePanelOpen(false); }}
         savedCount={savedOutfits.length}
         chatHistory={chatHistory}
         onSelectChat={handleSelectChat}
@@ -6506,8 +7315,13 @@ export default function OutfitRecommendations() {
           marginBottom: "var(--space-header-mb)",
         }}>
           <button
-            onClick={view === "garment" ? handleGarmentBack : () => setSidePanelOpen(true)}
-            aria-label={view === "garment" ? "Go back" : "Open menu"}
+            onClick={
+              view === "garment" ? handleGarmentBack
+              : view === "trip-detail" ? () => setView("trips")
+              : view === "trip-summary" ? () => setView("trip-detail")
+              : () => setSidePanelOpen(true)
+            }
+            aria-label={view === "garment" || view === "trip-detail" || view === "trip-summary" ? "Go back" : "Open menu"}
             style={{
               width: 40,
               height: 40,
@@ -6525,7 +7339,7 @@ export default function OutfitRecommendations() {
               marginRight: 8,
             }}
           >
-            {view === "garment" ? (
+            {(view === "garment" || view === "trip-detail" || view === "trip-summary") ? (
               <span style={{ fontSize: 22, lineHeight: 1, color: "#1A1A1A" }}>←</span>
             ) : (
               <>
@@ -6544,8 +7358,15 @@ export default function OutfitRecommendations() {
             lineHeight: 1.1,
             flex: 1,
           }}>
-            {view === "garment" ? (lightboxItem?.name ?? "Item") : view === "wardrobe" ? "My Wardrobe" : view === "saved" ? "Saved Outfits" : view === "outfit" ? (outfits.length > 0 ? outfits[current].vibe : "Outfits") : view === "profile" ? "My Profile" : "Chat"}
+            {view === "garment" ? (lightboxItem?.name ?? "Item") : view === "wardrobe" ? "My Wardrobe" : view === "saved" ? "Saved Outfits" : view === "outfit" ? (outfits.length > 0 ? outfits[current].vibe : "Outfits") : view === "profile" ? "My Profile" : view === "trips" ? "Trips" : view === "trip-detail" ? (activeTrip?.title ?? "Trip") : view === "trip-summary" ? "Summary" : "Chat"}
           </h1>
+
+          {view === "trips" && (
+            <button
+              onClick={() => setShowNewTripSheet(true)}
+              style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: '#1A1A1A', color: '#fff', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            >+</button>
+          )}
 
           {weather && (view === "chat" || view === "outfit") && (
             <button
@@ -6572,7 +7393,7 @@ export default function OutfitRecommendations() {
             </button>
           )}
 
-          {view !== "wardrobe" && view !== "profile" && view !== "saved" && view !== "garment" && (
+          {view !== "wardrobe" && view !== "profile" && view !== "saved" && view !== "garment" && view !== "trips" && view !== "trip-detail" && view !== "trip-summary" && (
             <div style={{
               display: "flex",
               background: "#F0EFED",
@@ -6742,6 +7563,33 @@ export default function OutfitRecommendations() {
           hasReferencePhoto={!!profile.referencePhoto}
           onVisualizeClick={handleVisualizeOutfit}
           onViewVisualization={(outfitId) => setVizModalOutfitId(outfitId)}
+        />
+      ) : view === "trips" ? (
+        <TripsListView
+          tripPlans={tripPlans}
+          onOpenTrip={handleOpenTrip}
+          onDeleteTrip={handleDeleteTrip}
+          onNewTrip={() => setShowNewTripSheet(true)}
+        />
+      ) : view === "trip-detail" && activeTrip ? (
+        <TripDetailView
+          trip={activeTrip}
+          savedOutfits={savedOutfits}
+          recentOutfits={outfits}
+          wardrobeFlat={wardrobeFlat}
+          profile={profile}
+          vizGenerations={vizGenerations}
+          hasReferencePhoto={!!profile.referencePhoto}
+          onVisualizeClick={handleVisualizeOutfit}
+          onViewVisualization={(outfitId) => setVizModalOutfitId(outfitId)}
+          onItemClick={navigateToGarment}
+          onToggleSaved={handleToggleOutfitSaved}
+          onOpenSummary={() => setView("trip-summary")}
+        />
+      ) : view === "trip-summary" && activeTrip ? (
+        <TripSummaryView
+          trip={activeTrip}
+          onBack={() => setView("trip-detail")}
         />
       ) : view === "profile" ? (
         <ProfileView
