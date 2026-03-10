@@ -5553,7 +5553,7 @@ function DaySlotCard({ slotName, outfit, isSelected, onTap }) {
             ? '2px solid #8B7CF6'
             : filled ? '1px solid rgba(0,0,0,0.08)' : '1.5px dashed #D4D4D4',
           boxShadow: filled ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-          minHeight: 80,
+          minHeight: 120,
           overflow: 'hidden',
           transition: 'all 0.15s ease',
         }}
@@ -5563,7 +5563,7 @@ function DaySlotCard({ slotName, outfit, isSelected, onTap }) {
       >
         {filled ? (
           <>
-            <div style={{ width: 80, height: 80, flexShrink: 0 }}>
+            <div style={{ width: 120, height: 120, flexShrink: 0 }}>
               <GarmentPhotoGrid items={outfit.items} />
             </div>
             <div style={{ padding: '0 12px', flex: 1 }}>
@@ -5630,7 +5630,7 @@ function OutfitPickerCard({ outfit, usedBadge, onAssign, onItemClick }) {
           {usedBadge}
         </div>
       )}
-      <div style={{ height: 80, background: '#F3F2F0', overflow: 'hidden' }}>
+      <div style={{ height: 120, background: '#F3F2F0', overflow: 'hidden' }}>
         <GarmentPhotoGrid items={outfit.items} />
       </div>
       <div style={{ padding: '8px 10px 10px' }}>
@@ -5810,7 +5810,56 @@ function OutfitPickerPanel({ selectedSlot, trip, savedOutfits, recentOutfits, sl
   );
 }
 
-function TripDetailView({ trip, savedOutfits, recentOutfits, wardrobeFlat, profile, vizGenerations, hasReferencePhoto, onVisualizeClick, onViewVisualization, onItemClick, onToggleSaved, onOpenSummary }) {
+function OutfitSelectionSheet({ selectedSlot, savedOutfits, slotMap, onAssign, onClose }) {
+  function getUsedBadge(outfitId) {
+    const slots = Object.values(slotMap).filter(s => s.outfitId === outfitId);
+    if (slots.length === 0) return null;
+    const s = slots[0];
+    const info = SLOT_INFO[s.slotName];
+    return `Day ${s.dayIndex + 1} ${info.emoji}`;
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }} onClick={onClose} />
+      <div style={{ position: 'relative', background: '#fff', borderRadius: '20px 20px 0 0', padding: '8px 20px 32px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ width: 40, height: 4, background: '#D4D4D4', borderRadius: 2, margin: '0 auto 16px' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexShrink: 0 }}>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: 0 }}>Choose an outfit</h2>
+            {selectedSlot && (
+              <p style={{ fontSize: 13, color: '#999', fontFamily: "'DM Sans', sans-serif", margin: '4px 0 0' }}>
+                Day {selectedSlot.dayIndex + 1} · {SLOT_INFO[selectedSlot.slotName].emoji} {SLOT_INFO[selectedSlot.slotName].label}
+              </p>
+            )}
+          </div>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 16, border: 'none', background: 'rgba(0,0,0,0.05)', color: '#666', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+          {savedOutfits.length === 0 ? (
+            <p style={{ fontSize: 13, color: '#999', fontFamily: "'DM Sans', sans-serif", textAlign: 'center', paddingTop: 24 }}>
+              No saved outfits yet. Save outfits from the Outfits tab to use them here.
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {savedOutfits.map(outfit => (
+                <OutfitPickerCard
+                  key={outfit.id}
+                  outfit={outfit}
+                  usedBadge={getUsedBadge(outfit.id)}
+                  onAssign={onAssign}
+                  onItemClick={() => {}}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto, onVisualizeClick, onViewVisualization, onItemClick, onOpenSummary }) {
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSlot, setSelectedSlot] = useState(null);
@@ -5918,18 +5967,16 @@ function TripDetailView({ trip, savedOutfits, recentOutfits, wardrobeFlat, profi
         })}
       </div>
 
-      {/* BOTTOM ZONE: Outfit picker */}
-      <OutfitPickerPanel
-        selectedSlot={selectedSlot}
-        trip={trip}
-        savedOutfits={savedOutfits}
-        recentOutfits={recentOutfits}
-        slotMap={slotMap}
-        wardrobeFlat={wardrobeFlat}
-        profile={profile}
-        onAssignOutfit={handleAssignOutfit}
-        onToggleSaved={onToggleSaved}
-      />
+      {/* Outfit selection sheet */}
+      {selectedSlot && (
+        <OutfitSelectionSheet
+          selectedSlot={selectedSlot}
+          savedOutfits={savedOutfits}
+          slotMap={slotMap}
+          onAssign={handleAssignOutfit}
+          onClose={() => setSelectedSlot(null)}
+        />
+      )}
 
       {/* Slot detail bottom sheet */}
       {slotDetail && slotDetailData?.outfit && (
@@ -7683,15 +7730,11 @@ export default function OutfitRecommendations() {
         <TripDetailView
           trip={activeTrip}
           savedOutfits={savedOutfits}
-          recentOutfits={outfits}
-          wardrobeFlat={wardrobeFlat}
-          profile={profile}
           vizGenerations={vizGenerations}
           hasReferencePhoto={!!profile.referencePhoto}
           onVisualizeClick={handleVisualizeOutfit}
           onViewVisualization={(outfitId) => setVizModalOutfitId(outfitId)}
           onItemClick={navigateToGarment}
-          onToggleSaved={handleToggleOutfitSaved}
           onOpenSummary={() => setView("trip-summary")}
         />
       ) : view === "trip-summary" && activeTrip ? (
