@@ -5478,6 +5478,114 @@ function SlotTile({ slotName, outfit, isSelected, onTap, width = 128 }) {
   );
 }
 
+function DayTabBar({ trip, activeDayIndex, onSelectDay }) {
+  const dayCount = db.getTripDayCount(trip.startDate, trip.endDate);
+  return (
+    <div style={{ overflowX: 'auto', display: 'flex', gap: 8, padding: '12px 16px', WebkitOverflowScrolling: 'touch' }}>
+      {Array.from({ length: dayCount }, (_, i) => {
+        const label = db.getTripDayLabel(trip.startDate, i);
+        const [weekday, ...rest] = label.split(', ');
+        const active = i === activeDayIndex;
+        return (
+          <button
+            key={i}
+            onClick={() => onSelectDay(i)}
+            style={{
+              flexShrink: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              padding: '6px 14px', borderRadius: 20,
+              background: active ? '#1A1A1A' : 'transparent',
+              border: active ? 'none' : '1px solid rgba(0,0,0,0.12)',
+              cursor: 'pointer',
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 600, color: active ? '#fff' : '#1A1A1A', lineHeight: 1.3 }}>{weekday}</span>
+            <span style={{ fontSize: 11, color: active ? 'rgba(255,255,255,0.7)' : '#999', lineHeight: 1.3 }}>{rest.join(', ')}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function GarmentPhotoGrid({ items }) {
+  const cells = (items || []).slice(0, 4);
+  const count = cells.length;
+  if (count === 0) return <span style={{ fontSize: 22 }}>👕</span>;
+  const gridCols = count === 1 ? 1 : 2;
+  const gridRows = count <= 2 ? 1 : 2;
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
+      gridTemplateRows: `repeat(${gridRows}, 1fr)`,
+      width: '100%', height: '100%', overflow: 'hidden',
+      gap: 1,
+    }}>
+      {cells.map((item, idx) => {
+        const span = count === 3 && idx === 2 ? { gridColumn: '1 / -1' } : {};
+        return (
+          <div key={idx} style={{ ...span, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#EAE9E7' }}>
+            {item.image
+              ? <img src={item.image} alt={item.name || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <span style={{ fontSize: 18 }}>{item.emoji || '👕'}</span>
+            }
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DaySlotCard({ slotName, outfit, isSelected, onTap }) {
+  const info = SLOT_INFO[slotName];
+  const filled = !!outfit;
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div
+        onClick={onTap}
+        style={{
+          display: 'flex', alignItems: 'center',
+          borderRadius: 12, cursor: 'pointer',
+          background: filled ? '#fff' : 'transparent',
+          border: isSelected
+            ? '2px solid #8B7CF6'
+            : filled ? '1px solid rgba(0,0,0,0.08)' : '1.5px dashed #D4D4D4',
+          boxShadow: filled ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+          minHeight: 80,
+          overflow: 'hidden',
+          transition: 'all 0.15s ease',
+        }}
+        onPointerDown={(e) => e.currentTarget.style.opacity = '0.75'}
+        onPointerUp={(e) => e.currentTarget.style.opacity = '1'}
+        onPointerLeave={(e) => e.currentTarget.style.opacity = '1'}
+      >
+        {filled ? (
+          <>
+            <div style={{ width: 80, height: 80, flexShrink: 0 }}>
+              <GarmentPhotoGrid items={outfit.items} />
+            </div>
+            <div style={{ padding: '0 12px', flex: 1 }}>
+              <div style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif", marginBottom: 3 }}>
+                {info.emoji} {info.label}
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.3 }}>
+                {outfit.vibe}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '16px 0' }}>
+            <span style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif" }}>{info.emoji} {info.label}</span>
+            <span style={{ fontSize: 20, color: '#C0C0C0' }}>+</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const DAY_COLUMN_WIDTH = 136;
 
 function DayColumn({ trip, dayIndex, slotMap, selectedSlot, onSlotTap }) {
@@ -5522,8 +5630,8 @@ function OutfitPickerCard({ outfit, usedBadge, onAssign, onItemClick }) {
           {usedBadge}
         </div>
       )}
-      <div style={{ height: 80, background: '#F3F2F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, letterSpacing: 2 }}>
-        {(outfit.items || []).slice(0, 4).map(item => item.emoji || '👕').join('') || '👕'}
+      <div style={{ height: 80, background: '#F3F2F0', overflow: 'hidden' }}>
+        <GarmentPhotoGrid items={outfit.items} />
       </div>
       <div style={{ padding: '8px 10px 10px' }}>
         <div style={{ fontSize: 'var(--font-item-name)', fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{outfit.vibe}</div>
@@ -5707,6 +5815,7 @@ function TripDetailView({ trip, savedOutfits, recentOutfits, wardrobeFlat, profi
   const [loading, setLoading] = useState(true);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [slotDetail, setSlotDetail] = useState(null); // {dayIndex, slotName}
+  const [activeDayIndex, setActiveDayIndex] = useState(0);
 
   useEffect(() => {
     db.fetchTripPlanWithSlots(trip.id).then(data => {
@@ -5774,40 +5883,39 @@ function TripDetailView({ trip, savedOutfits, recentOutfits, wardrobeFlat, profi
     </div>;
   }
 
+  const slotNames = db.getSlotNamesForCount(trip.slotsPerDay);
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      {/* TOP ZONE: Calendar grid */}
-      <div style={{ flexShrink: 0, borderBottom: '1px solid rgba(0,0,0,0.06)', paddingBottom: 0 }}>
-        <div
-          className="outfit-scroll-panel"
-          style={{ overflowX: 'auto', display: 'flex', padding: '12px 16px 0', gap: 0, WebkitOverflowScrolling: 'touch' }}
-        >
-          {Array.from({ length: dayCount }, (_, i) => (
-            <DayColumn
-              key={i}
-              trip={trip}
-              dayIndex={i}
-              slotMap={slotMap}
-              selectedSlot={selectedSlot}
-              onSlotTap={handleSlotTap}
-            />
-          ))}
-        </div>
+      {/* Day tab bar */}
+      <div style={{ flexShrink: 0, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+        <DayTabBar trip={trip} activeDayIndex={activeDayIndex} onSelectDay={setActiveDayIndex} />
         {/* Progress bar */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px 10px' }}>
           <div style={{ flex: 1, height: 3, background: '#F0EFED', borderRadius: 2, overflow: 'hidden' }}>
             <div style={{ width: `${totalSlots > 0 ? (filledCount / totalSlots) * 100 : 0}%`, height: '100%', background: '#1A1A1A', borderRadius: 2, transition: 'width 0.3s ease' }} />
           </div>
           <span style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif", flexShrink: 0 }}>
             {filledCount}/{totalSlots} outfits
           </span>
-          <button
-            onClick={onOpenSummary}
-            style={{ padding: '3px 10px', borderRadius: 6, border: '1px solid rgba(0,0,0,0.1)', background: 'transparent', fontSize: 11, fontFamily: "'DM Sans', sans-serif", color: '#666', cursor: 'pointer', flexShrink: 0 }}
-          >
-            Summary
-          </button>
         </div>
+      </div>
+
+      {/* Day slot cards */}
+      <div style={{ flexShrink: 0, padding: '12px 16px 0' }}>
+        {slotNames.map(slotName => {
+          const slot = slotMap[`${activeDayIndex}-${slotName}`];
+          const isSelected = selectedSlot?.dayIndex === activeDayIndex && selectedSlot?.slotName === slotName;
+          return (
+            <DaySlotCard
+              key={slotName}
+              slotName={slotName}
+              outfit={slot?.outfit || null}
+              isSelected={isSelected}
+              onTap={() => handleSlotTap(activeDayIndex, slotName, slot?.outfit || null)}
+            />
+          );
+        })}
       </div>
 
       {/* BOTTOM ZONE: Outfit picker */}
