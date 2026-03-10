@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getTripDayCount } from '../src/lib/db.js';
+import { getTripDayCount, slotNameForIndex, slotIndexFromName, MAX_OUTFITS_PER_DAY } from '../src/lib/db.js';
 
 describe('trip editing — date reconciliation logic', () => {
   it('detects when trip is shortened', () => {
@@ -16,26 +16,26 @@ describe('trip editing — date reconciliation logic', () => {
 
   it('identifies orphaned slots when trip is shortened', () => {
     const slots = [
-      { dayIndex: 0, slotName: 'morning', outfitId: 'a' },
-      { dayIndex: 1, slotName: 'morning', outfitId: 'b' },
-      { dayIndex: 2, slotName: 'morning', outfitId: 'c' },
-      { dayIndex: 3, slotName: 'evening', outfitId: 'd' },
-      { dayIndex: 4, slotName: 'morning', outfitId: null }, // empty slot
+      { dayIndex: 0, slotName: 'slot_0', outfitId: 'a' },
+      { dayIndex: 1, slotName: 'slot_0', outfitId: 'b' },
+      { dayIndex: 2, slotName: 'slot_0', outfitId: 'c' },
+      { dayIndex: 3, slotName: 'slot_1', outfitId: 'd' },
+      { dayIndex: 4, slotName: 'slot_0', outfitId: null },
     ];
-    const newDayCount = 3; // days 0, 1, 2 survive
+    const newDayCount = 3;
     const orphanedWithOutfits = slots.filter(s => s.dayIndex >= newDayCount && s.outfitId);
-    expect(orphanedWithOutfits).toHaveLength(1); // day 3 evening
+    expect(orphanedWithOutfits).toHaveLength(1);
     expect(orphanedWithOutfits[0].outfitId).toBe('d');
   });
 
   it('filters out slots beyond new day count', () => {
     const slots = [
-      { dayIndex: 0, slotName: 'morning', outfitId: 'a' },
-      { dayIndex: 0, slotName: 'evening', outfitId: 'b' },
-      { dayIndex: 1, slotName: 'morning', outfitId: 'c' },
-      { dayIndex: 2, slotName: 'afternoon', outfitId: 'd' },
+      { dayIndex: 0, slotName: 'slot_0', outfitId: 'a' },
+      { dayIndex: 0, slotName: 'slot_1', outfitId: 'b' },
+      { dayIndex: 1, slotName: 'slot_0', outfitId: 'c' },
+      { dayIndex: 2, slotName: 'slot_2', outfitId: 'd' },
     ];
-    const newDayCount = 2; // only days 0 and 1 survive
+    const newDayCount = 2;
     const surviving = slots.filter(s => s.dayIndex < newDayCount);
     expect(surviving).toHaveLength(3);
     expect(surviving.every(s => s.dayIndex < 2)).toBe(true);
@@ -82,21 +82,33 @@ describe('trip form validation', () => {
   });
 });
 
-describe('always 3 slots per day', () => {
-  it('all slot types are available for every day', () => {
-    const allSlotNames = ['morning', 'afternoon', 'evening'];
-    expect(allSlotNames).toHaveLength(3);
-    expect(allSlotNames).toContain('morning');
-    expect(allSlotNames).toContain('afternoon');
-    expect(allSlotNames).toContain('evening');
+describe('dynamic slot indexing (up to 5 per day)', () => {
+  it('finds next available slot index', () => {
+    const daySlots = [
+      { slotName: 'slot_0', outfitId: 'a' },
+      { slotName: 'slot_1', outfitId: 'b' },
+    ];
+    const usedIndices = daySlots.map(s => slotIndexFromName(s.slotName));
+    let nextIndex = 0;
+    while (usedIndices.includes(nextIndex) && nextIndex < MAX_OUTFITS_PER_DAY) nextIndex++;
+    expect(nextIndex).toBe(2);
+    expect(slotNameForIndex(nextIndex)).toBe('slot_2');
+  });
+
+  it('caps at MAX_OUTFITS_PER_DAY', () => {
+    const daySlots = Array.from({ length: 5 }, (_, i) => ({ slotName: slotNameForIndex(i), outfitId: `outfit_${i}` }));
+    const usedIndices = daySlots.map(s => slotIndexFromName(s.slotName));
+    let nextIndex = 0;
+    while (usedIndices.includes(nextIndex) && nextIndex < MAX_OUTFITS_PER_DAY) nextIndex++;
+    expect(nextIndex).toBe(MAX_OUTFITS_PER_DAY); // no more room
   });
 
   it('progress counts only filled slots', () => {
     const slots = [
-      { dayIndex: 0, slotName: 'morning', outfitId: 'a' },
-      { dayIndex: 0, slotName: 'afternoon', outfitId: null },
-      { dayIndex: 0, slotName: 'evening', outfitId: 'b' },
-      { dayIndex: 1, slotName: 'morning', outfitId: null },
+      { dayIndex: 0, slotName: 'slot_0', outfitId: 'a' },
+      { dayIndex: 0, slotName: 'slot_1', outfitId: null },
+      { dayIndex: 0, slotName: 'slot_2', outfitId: 'b' },
+      { dayIndex: 1, slotName: 'slot_0', outfitId: null },
     ];
     const filledCount = slots.filter(s => s.outfitId).length;
     expect(filledCount).toBe(2);

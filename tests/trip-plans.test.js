@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getTripDayCount, getTripDayLabel, getSlotNamesForCount } from '../src/lib/db.js';
+import { getTripDayCount, getTripDayLabel, slotNameForIndex, slotIndexFromName, MAX_OUTFITS_PER_DAY } from '../src/lib/db.js';
 
 describe('getTripDayCount', () => {
   it('returns 1 for same start and end date', () => {
@@ -39,16 +39,26 @@ describe('getTripDayLabel', () => {
   });
 });
 
-describe('getSlotNamesForCount', () => {
-  it('returns morning only for 1 slot', () => {
-    expect(getSlotNamesForCount(1)).toEqual(['morning']);
+describe('slotNameForIndex / slotIndexFromName', () => {
+  it('converts index to slot name', () => {
+    expect(slotNameForIndex(0)).toBe('slot_0');
+    expect(slotNameForIndex(4)).toBe('slot_4');
   });
 
-  it('returns morning and evening for 2 slots', () => {
-    expect(getSlotNamesForCount(2)).toEqual(['morning', 'evening']);
+  it('converts slot name to index', () => {
+    expect(slotIndexFromName('slot_0')).toBe(0);
+    expect(slotIndexFromName('slot_3')).toBe(3);
   });
 
-  it('returns all three slots for 3', () => {
-    expect(getSlotNamesForCount(3)).toEqual(['morning', 'afternoon', 'evening']);
+  it('round-trips correctly', () => {
+    for (let i = 0; i < MAX_OUTFITS_PER_DAY; i++) {
+      expect(slotIndexFromName(slotNameForIndex(i))).toBe(i);
+    }
+  });
+});
+
+describe('MAX_OUTFITS_PER_DAY', () => {
+  it('is 5', () => {
+    expect(MAX_OUTFITS_PER_DAY).toBe(5);
   });
 });

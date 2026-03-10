@@ -359,10 +359,14 @@ export function getTripDayLabel(startDate, dayIndex) {
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-export function getSlotNamesForCount(slotsPerDay) {
-  if (slotsPerDay === 1) return ['morning'];
-  if (slotsPerDay === 2) return ['morning', 'evening'];
-  return ['morning', 'afternoon', 'evening'];
+export const MAX_OUTFITS_PER_DAY = 5;
+
+export function slotNameForIndex(index) {
+  return `slot_${index}`;
+}
+
+export function slotIndexFromName(slotName) {
+  return parseInt(slotName.replace('slot_', ''), 10);
 }
 
 function toFrontendTripPlan(row) {
@@ -372,7 +376,6 @@ function toFrontendTripPlan(row) {
     destination: row.destination || null,
     startDate: row.start_date,
     endDate: row.end_date,
-    slotsPerDay: row.slots_per_day,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -384,6 +387,7 @@ function toFrontendTripSlot(row) {
     tripPlanId: row.trip_plan_id,
     dayIndex: row.day_index,
     slotName: row.slot_name,
+    slotIndex: slotIndexFromName(row.slot_name),
     outfitId: row.outfit_id || null,
     outfit: row.outfits ? {
       id: row.outfits.id,

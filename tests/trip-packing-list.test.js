@@ -37,7 +37,7 @@ describe('buildPackingList', () => {
   });
 
   it('returns empty list for slots with no outfits', () => {
-    const slots = [{ dayIndex: 0, slotName: 'morning', outfit: null }];
+    const slots = [{ dayIndex: 0, slotName: 'slot_0', outfit: null }];
     expect(buildPackingList(slots)).toEqual([]);
   });
 
@@ -45,8 +45,8 @@ describe('buildPackingList', () => {
     const shirt = { id: '1', name: 'White Shirt', category: 'Tops', emoji: '👔' };
     const pants = { id: '2', name: 'Blue Jeans', category: 'Bottoms', emoji: '👖' };
     const slots = [
-      { dayIndex: 0, slotName: 'morning', outfit: { items: [shirt, pants] } },
-      { dayIndex: 1, slotName: 'morning', outfit: { items: [shirt] } },
+      { dayIndex: 0, slotName: 'slot_0', outfit: { items: [shirt, pants] } },
+      { dayIndex: 1, slotName: 'slot_0', outfit: { items: [shirt] } },
     ];
     const result = buildPackingList(slots);
     expect(result).toHaveLength(2);
@@ -59,9 +59,9 @@ describe('buildPackingList', () => {
   it('counts item usage across multiple slots on different days', () => {
     const jacket = { id: '3', name: 'Denim Jacket', category: 'Outerwear', emoji: '🧥' };
     const slots = [
-      { dayIndex: 0, slotName: 'morning', outfit: { items: [jacket] } },
-      { dayIndex: 0, slotName: 'evening', outfit: { items: [jacket] } },
-      { dayIndex: 1, slotName: 'morning', outfit: { items: [jacket] } },
+      { dayIndex: 0, slotName: 'slot_0', outfit: { items: [jacket] } },
+      { dayIndex: 0, slotName: 'slot_1', outfit: { items: [jacket] } },
+      { dayIndex: 1, slotName: 'slot_0', outfit: { items: [jacket] } },
     ];
     const result = buildPackingList(slots);
     expect(result).toHaveLength(1);
@@ -70,7 +70,7 @@ describe('buildPackingList', () => {
 
   it('handles outfits with empty items array', () => {
     const slots = [
-      { dayIndex: 0, slotName: 'morning', outfit: { items: [] } },
+      { dayIndex: 0, slotName: 'slot_0', outfit: { items: [] } },
     ];
     expect(buildPackingList(slots)).toEqual([]);
   });
@@ -80,9 +80,9 @@ describe('buildPackingList', () => {
     const b = { id: '2', name: 'B', category: 'Bottoms' };
     const c = { id: '3', name: 'C', category: 'Shoes' };
     const slots = [
-      { dayIndex: 0, slotName: 'morning', outfit: { items: [a, b, c] } },
-      { dayIndex: 0, slotName: 'evening', outfit: { items: [b, c] } },
-      { dayIndex: 1, slotName: 'morning', outfit: { items: [c] } },
+      { dayIndex: 0, slotName: 'slot_0', outfit: { items: [a, b, c] } },
+      { dayIndex: 0, slotName: 'slot_1', outfit: { items: [b, c] } },
+      { dayIndex: 1, slotName: 'slot_0', outfit: { items: [c] } },
     ];
     const result = buildPackingList(slots);
     expect(result.map(r => r.item.id)).toEqual(['3', '2', '1']); // c=3, b=2, a=1
