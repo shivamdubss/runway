@@ -35,7 +35,7 @@ body {
   --container-padding-y: 20px;
 
   /* Spacing */
-  --space-top-bar: 48px;
+  --space-top-bar: 40px;
   --space-section-gap: 10px;
   --space-card-padding: 6px 8px 7px;
   --space-reasoning-margin-top: 12px;
@@ -83,7 +83,7 @@ body {
   :root {
     --container-padding-x: 20px;
     --container-padding-y: 24px;
-    --space-top-bar: 52px;
+    --space-top-bar: 44px;
     --space-card-padding: 6px 10px 7px;
     --space-reasoning-padding: 10px 14px;
     --space-chat-padding-x: 20px;
@@ -100,7 +100,7 @@ body {
     --container-padding-y: 28px;
     --card-grid-columns: 3;
     --card-grid-gap: 10px;
-    --space-top-bar: 40px;
+    --space-top-bar: 32px;
     --space-chat-input-pb: 20px;
   }
 }
@@ -113,7 +113,7 @@ body {
     --container-padding-y: 32px;
     --card-grid-columns: 4;
     --card-grid-gap: 10px;
-    --space-top-bar: 32px;
+    --space-top-bar: 24px;
   }
 }
 
