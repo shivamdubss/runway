@@ -5478,14 +5478,16 @@ function SlotTile({ slotName, outfit, isSelected, onTap, width = 128 }) {
   );
 }
 
-function DayTabBar({ trip, activeDayIndex, onSelectDay }) {
+function DayTabBar({ trip, activeDayIndex, onSelectDay, slots }) {
   const dayCount = db.getTripDayCount(trip.startDate, trip.endDate);
+  const allSlotNames = ['morning', 'afternoon', 'evening'];
   return (
     <div style={{ overflowX: 'auto', display: 'flex', gap: 8, padding: '12px 16px', WebkitOverflowScrolling: 'touch' }}>
       {Array.from({ length: dayCount }, (_, i) => {
         const label = db.getTripDayLabel(trip.startDate, i);
         const [weekday, ...rest] = label.split(', ');
         const active = i === activeDayIndex;
+        const filledSlots = slots ? allSlotNames.filter(sn => slots.some(s => s.dayIndex === i && s.slotName === sn && s.outfitId)) : [];
         return (
           <button
             key={i}
@@ -5502,6 +5504,13 @@ function DayTabBar({ trip, activeDayIndex, onSelectDay }) {
           >
             <span style={{ fontSize: 12, fontWeight: 600, color: active ? '#fff' : '#1A1A1A', lineHeight: 1.3 }}>{weekday}</span>
             <span style={{ fontSize: 11, color: active ? 'rgba(255,255,255,0.7)' : '#999', lineHeight: 1.3 }}>{rest.join(', ')}</span>
+            {slots && (
+              <div style={{ display: 'flex', gap: 3, marginTop: 4 }}>
+                {allSlotNames.map(sn => (
+                  <div key={sn} style={{ width: 5, height: 5, borderRadius: '50%', background: filledSlots.includes(sn) ? (active ? '#fff' : '#1A1A1A') : (active ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.12)') }} />
+                ))}
+              </div>
+            )}
           </button>
         );
       })}
@@ -5859,12 +5868,13 @@ function OutfitSelectionSheet({ selectedSlot, savedOutfits, slotMap, onAssign, o
   );
 }
 
-function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto, onVisualizeClick, onViewVisualization, onItemClick, onOpenSummary }) {
+function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto, onVisualizeClick, onViewVisualization, onItemClick, onOpenSummary, onEditTrip }) {
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [slotDetail, setSlotDetail] = useState(null); // {dayIndex, slotName}
   const [activeDayIndex, setActiveDayIndex] = useState(0);
+  const [showEditSheet, setShowEditSheet] = useState(false);
 
   useEffect(() => {
     db.fetchTripPlanWithSlots(trip.id).then(data => {
@@ -5880,8 +5890,6 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
   for (const s of slots) slotMap[`${s.dayIndex}-${s.slotName}`] = s;
 
   const filledCount = slots.filter(s => s.outfitId).length;
-  const dayCount = db.getTripDayCount(trip.startDate, trip.endDate);
-  const totalSlots = dayCount * trip.slotsPerDay;
 
   const handleSlotTap = (dayIndex, slotName, outfit) => {
     if (outfit) {
@@ -5932,27 +5940,31 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
     </div>;
   }
 
-  const slotNames = db.getSlotNamesForCount(trip.slotsPerDay);
+  const allSlotNames = ['morning', 'afternoon', 'evening'];
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Day tab bar */}
       <div style={{ flexShrink: 0, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-        <DayTabBar trip={trip} activeDayIndex={activeDayIndex} onSelectDay={setActiveDayIndex} />
-        {/* Progress bar */}
+        <DayTabBar trip={trip} activeDayIndex={activeDayIndex} onSelectDay={setActiveDayIndex} slots={slots} />
+        {/* Progress + edit */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px 10px' }}>
-          <div style={{ flex: 1, height: 3, background: '#F0EFED', borderRadius: 2, overflow: 'hidden' }}>
-            <div style={{ width: `${totalSlots > 0 ? (filledCount / totalSlots) * 100 : 0}%`, height: '100%', background: '#1A1A1A', borderRadius: 2, transition: 'width 0.3s ease' }} />
-          </div>
           <span style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif", flexShrink: 0 }}>
-            {filledCount}/{totalSlots} outfits
+            {filledCount} outfit{filledCount !== 1 ? 's' : ''} planned
           </span>
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={() => setShowEditSheet(true)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif" }}
+          >
+            Edit trip
+          </button>
         </div>
       </div>
 
       {/* Day slot cards */}
       <div style={{ flexShrink: 0, padding: '12px 16px 0' }}>
-        {slotNames.map(slotName => {
+        {allSlotNames.map(slotName => {
           const slot = slotMap[`${activeDayIndex}-${slotName}`];
           const isSelected = selectedSlot?.dayIndex === activeDayIndex && selectedSlot?.slotName === slotName;
           return (
@@ -5995,6 +6007,30 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
           onItemClick={onItemClick}
         />
       )}
+
+      {showEditSheet && (
+        <TripFormSheet
+          isEdit
+          initialValues={trip}
+          onClose={() => setShowEditSheet(false)}
+          onSave={async (fields) => {
+            const oldDayCount = db.getTripDayCount(trip.startDate, trip.endDate);
+            const newDayCount = db.getTripDayCount(fields.startDate, fields.endDate);
+            const willLoseDays = newDayCount < oldDayCount;
+            const slotsOnRemovedDays = willLoseDays ? slots.filter(s => s.dayIndex >= newDayCount && s.outfitId) : [];
+            if (slotsOnRemovedDays.length > 0 && !window.confirm(`Shortening this trip will remove ${slotsOnRemovedDays.length} planned outfit${slotsOnRemovedDays.length !== 1 ? 's' : ''} from the removed days. Continue?`)) {
+              throw new Error('cancelled');
+            }
+            const updated = await db.updateTripPlan(trip.id, fields);
+            if (willLoseDays) {
+              setSlots(prev => prev.filter(s => s.dayIndex < newDayCount));
+              if (activeDayIndex >= newDayCount) setActiveDayIndex(newDayCount - 1);
+            }
+            onEditTrip(updated);
+            setShowEditSheet(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -6002,6 +6038,11 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
 function TripSummaryView({ trip, onBack }) {
   const [tripData, setTripData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [checkedItems, setCheckedItems] = useState({});
+  const [extras, setExtras] = useState([]);
+  const [newExtra, setNewExtra] = useState('');
+
+  const storageKey = `trip-packing-${trip.id}`;
 
   useEffect(() => {
     db.fetchTripPlanWithSlots(trip.id).then(data => {
@@ -6011,7 +6052,47 @@ function TripSummaryView({ trip, onBack }) {
       console.error(err);
       setLoading(false);
     });
+    // Load persisted packing state
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+      if (saved.checked) setCheckedItems(saved.checked);
+      if (saved.extras) setExtras(saved.extras);
+    } catch {}
   }, [trip.id]);
+
+  const persistState = (checked, extrasList) => {
+    try { localStorage.setItem(storageKey, JSON.stringify({ checked, extras: extrasList })); } catch {}
+  };
+
+  const toggleItem = (key) => {
+    setCheckedItems(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      persistState(next, extras);
+      return next;
+    });
+  };
+
+  const toggleExtra = (idx) => {
+    setExtras(prev => {
+      const next = prev.map((e, i) => i === idx ? { ...e, checked: !e.checked } : e);
+      persistState(checkedItems, next);
+      return next;
+    });
+  };
+
+  const addExtra = () => {
+    if (!newExtra.trim()) return;
+    const next = [...extras, { text: newExtra.trim(), checked: false }];
+    setExtras(next);
+    setNewExtra('');
+    persistState(checkedItems, next);
+  };
+
+  const removeExtra = (idx) => {
+    const next = extras.filter((_, i) => i !== idx);
+    setExtras(next);
+    persistState(checkedItems, next);
+  };
 
   if (loading) {
     return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -6020,10 +6101,10 @@ function TripSummaryView({ trip, onBack }) {
   }
 
   const { slots } = tripData;
-  const slotNames = db.getSlotNamesForCount(trip.slotsPerDay);
+  const allSlotNames = ['morning', 'afternoon', 'evening'];
   const dayCount = db.getTripDayCount(trip.startDate, trip.endDate);
 
-  // Build packing list: count how many times each item appears
+  // Build packing list: count how many times each item appears, grouped by category
   const itemUsage = {};
   for (const slot of slots) {
     for (const item of slot.outfit?.items || []) {
@@ -6033,37 +6114,59 @@ function TripSummaryView({ trip, onBack }) {
     }
   }
   const packingList = Object.values(itemUsage).sort((a, b) => b.count - a.count);
-  const reusedItems = packingList.filter(p => p.count > 1);
+
+  // Group by category
+  const categoryOrder = ['Tops', 'Bottoms', 'Outerwear', 'Dresses', 'Shoes', 'Accessories', 'Other'];
+  const categoryMap = {};
+  for (const { item, count } of packingList) {
+    const cat = item.category || 'Other';
+    // Normalize category name
+    const normalized = categoryOrder.find(c => c.toLowerCase() === cat.toLowerCase())
+      || cat.charAt(0).toUpperCase() + cat.slice(1);
+    if (!categoryMap[normalized]) categoryMap[normalized] = [];
+    categoryMap[normalized].push({ item, count });
+  }
+  const sortedCategories = categoryOrder.filter(c => categoryMap[c]).concat(
+    Object.keys(categoryMap).filter(c => !categoryOrder.includes(c))
+  );
+
+  const totalPackingItems = packingList.length + extras.length;
+  const checkedCount = packingList.filter(p => checkedItems[p.item.id]).length + extras.filter(e => e.checked).length;
+
+  const checkboxStyle = (checked) => ({
+    width: 20, height: 20, borderRadius: 6, border: checked ? 'none' : '1.5px solid #D4D4D4',
+    background: checked ? '#1A1A1A' : 'transparent', color: '#fff', fontSize: 12,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+    flexShrink: 0, transition: 'all 0.15s ease',
+  });
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div className="outfit-scroll-panel" style={{ flex: 1, overflowY: 'auto', padding: '0 var(--container-padding-x) calc(24px + var(--safe-bottom))' }}>
+        {/* Day-by-day summary */}
         {Array.from({ length: dayCount }, (_, dayIndex) => {
           const dayLabel = db.getTripDayLabel(trip.startDate, dayIndex);
+          const daySlots = allSlotNames.map(sn => ({ slotName: sn, slot: slots.find(s => s.dayIndex === dayIndex && s.slotName === sn) })).filter(d => d.slot?.outfit);
+          if (daySlots.length === 0) return null;
           return (
             <div key={dayIndex} style={{ marginBottom: 24 }}>
               <h2 style={{ fontSize: 15, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: '0 0 4px' }}>
                 Day {dayIndex + 1} — {dayLabel}
               </h2>
               <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 12 }} />
-              {slotNames.map(slotName => {
+              {daySlots.map(({ slotName, slot }) => {
                 const info = SLOT_INFO[slotName];
-                const slot = slots.find(s => s.dayIndex === dayIndex && s.slotName === slotName);
                 return (
                   <div key={slotName} style={{ marginBottom: 10 }}>
                     <div style={{ fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif", marginBottom: 5 }}>
                       {info.emoji} {info.label}
                     </div>
-                    {slot?.outfit ? (
-                      <div style={{ background: '#fff', borderRadius: 10, padding: 12, border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>{slot.outfit.vibe}</div>
-                        <div style={{ fontSize: 12, color: '#666', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}>
-                          {(slot.outfit.items || []).map(item => `${item.emoji || '👕'} ${item.name}`).join('  ·  ')}
-                        </div>
+                    <div style={{ background: '#fff', borderRadius: 10, padding: 12, border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>{slot.outfit.vibe}</div>
+                      <div style={{ fontSize: 12, color: '#666', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}>
+                        {(slot.outfit.items || []).map(item => `${item.emoji || '👕'} ${item.name}`).join('  ·  ')}
                       </div>
-                    ) : (
-                      <div style={{ fontSize: 12, color: '#bbb', fontFamily: "'DM Sans', sans-serif", fontStyle: 'italic' }}>Not planned yet</div>
-                    )}
+                    </div>
                   </div>
                 );
               })}
@@ -6071,21 +6174,104 @@ function TripSummaryView({ trip, onBack }) {
           );
         })}
 
-        {reusedItems.length > 0 && (
+        {/* Packing list */}
+        {packingList.length > 0 && (
           <div style={{ marginTop: 8, paddingTop: 16, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-            <h2 style={{ fontSize: 14, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: '0 0 4px' }}>
-              Packing list
-            </h2>
-            <p style={{ fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif", margin: '0 0 10px' }}>
-              {reusedItems.length} item{reusedItems.length !== 1 ? 's' : ''} worn in multiple outfits
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <h2 style={{ fontSize: 14, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: 0 }}>
+                Packing list
+              </h2>
+              {totalPackingItems > 0 && (
+                <span style={{ fontSize: 12, color: checkedCount === totalPackingItems ? '#22C55E' : '#999', fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>
+                  {checkedCount}/{totalPackingItems} packed
+                </span>
+              )}
+            </div>
+            <div style={{ height: 3, background: '#F0EFED', borderRadius: 2, overflow: 'hidden', marginBottom: 16 }}>
+              <div style={{ width: `${totalPackingItems > 0 ? (checkedCount / totalPackingItems) * 100 : 0}%`, height: '100%', background: checkedCount === totalPackingItems ? '#22C55E' : '#1A1A1A', borderRadius: 2, transition: 'width 0.3s ease' }} />
+            </div>
+
+            {sortedCategories.map(category => (
+              <div key={category} style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#999', fontFamily: "'DM Sans', sans-serif", textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                  {category}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {categoryMap[category].map(({ item, count }) => (
+                    <div key={item.id} onClick={() => toggleItem(item.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 8, padding: '8px 12px', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer' }}>
+                      <div style={checkboxStyle(!!checkedItems[item.id])}>
+                        {checkedItems[item.id] && '✓'}
+                      </div>
+                      <span style={{ fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: checkedItems[item.id] ? '#999' : '#1A1A1A', textDecoration: checkedItems[item.id] ? 'line-through' : 'none', flex: 1, transition: 'all 0.15s ease' }}>
+                        {item.emoji || '👕'} {item.name}
+                      </span>
+                      {count > 1 && <span style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif" }}>×{count}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {/* Extras section */}
+            <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#999', fontFamily: "'DM Sans', sans-serif", textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                Extras
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {extras.map((extra, idx) => (
+                  <div key={idx} onClick={() => toggleExtra(idx)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 8, padding: '8px 12px', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer' }}>
+                    <div style={checkboxStyle(extra.checked)}>
+                      {extra.checked && '✓'}
+                    </div>
+                    <span style={{ fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: extra.checked ? '#999' : '#1A1A1A', textDecoration: extra.checked ? 'line-through' : 'none', flex: 1 }}>
+                      {extra.text}
+                    </span>
+                    <button onClick={(e) => { e.stopPropagation(); removeExtra(idx); }} style={{ background: 'none', border: 'none', color: '#ccc', fontSize: 14, cursor: 'pointer', padding: '0 2px' }}>✕</button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <input
+                  value={newExtra}
+                  onChange={e => setNewExtra(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addExtra()}
+                  placeholder="Add item (charger, toiletries...)"
+                  style={{ flex: 1, padding: '10px 12px', background: '#F3F2F0', border: 'none', borderRadius: 8, fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: 'none' }}
+                />
+                <button onClick={addExtra} style={{ padding: '0 14px', borderRadius: 8, border: 'none', background: '#1A1A1A', color: '#fff', fontSize: 13, fontFamily: "'DM Sans', sans-serif", fontWeight: 600, cursor: 'pointer' }}>Add</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Show extras even if no outfits planned yet */}
+        {packingList.length === 0 && (
+          <div style={{ marginTop: 8, paddingTop: 16 }}>
+            <h2 style={{ fontSize: 14, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: '0 0 4px' }}>Packing list</h2>
+            <p style={{ fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif", margin: '0 0 12px' }}>
+              Plan some outfits to build your packing list.
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {reusedItems.map(({ item, count }) => (
-                <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff', borderRadius: 8, padding: '8px 12px', border: '1px solid rgba(0,0,0,0.06)' }}>
-                  <span style={{ fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: '#1A1A1A' }}>{item.emoji || '👕'} {item.name}</span>
-                  <span style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif" }}>×{count}</span>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#999', fontFamily: "'DM Sans', sans-serif", textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+              Extras
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {extras.map((extra, idx) => (
+                <div key={idx} onClick={() => toggleExtra(idx)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 8, padding: '8px 12px', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer' }}>
+                  <div style={checkboxStyle(extra.checked)}>{extra.checked && '✓'}</div>
+                  <span style={{ fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: extra.checked ? '#999' : '#1A1A1A', textDecoration: extra.checked ? 'line-through' : 'none', flex: 1 }}>{extra.text}</span>
+                  <button onClick={(e) => { e.stopPropagation(); removeExtra(idx); }} style={{ background: 'none', border: 'none', color: '#ccc', fontSize: 14, cursor: 'pointer', padding: '0 2px' }}>✕</button>
                 </div>
               ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <input
+                value={newExtra}
+                onChange={e => setNewExtra(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addExtra()}
+                placeholder="Add item (charger, toiletries...)"
+                style={{ flex: 1, padding: '10px 12px', background: '#F3F2F0', border: 'none', borderRadius: 8, fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: 'none' }}
+              />
+              <button onClick={addExtra} style={{ padding: '0 14px', borderRadius: 8, border: 'none', background: '#1A1A1A', color: '#fff', fontSize: 13, fontFamily: "'DM Sans', sans-serif", fontWeight: 600, cursor: 'pointer' }}>Add</button>
             </div>
           </div>
         )}
@@ -6094,15 +6280,15 @@ function TripSummaryView({ trip, onBack }) {
   );
 }
 
-function NewTripSheet({ onClose, onCreate }) {
-  const [title, setTitle] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [slotsPerDay, setSlotsPerDay] = useState(1);
+function TripFormSheet({ onClose, onSave, initialValues, isEdit }) {
+  const [title, setTitle] = useState(initialValues?.title || '');
+  const [destination, setDestination] = useState(initialValues?.destination || '');
+  const [startDate, setStartDate] = useState(initialValues?.startDate || '');
+  const [endDate, setEndDate] = useState(initialValues?.endDate || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleCreate = async () => {
+  const handleSubmit = async () => {
     if (!title.trim()) { setError('Please enter a trip name'); return; }
     if (!startDate) { setError('Please select a start date'); return; }
     if (!endDate) { setError('Please select an end date'); return; }
@@ -6110,17 +6296,15 @@ function NewTripSheet({ onClose, onCreate }) {
     setLoading(true);
     setError('');
     try {
-      const trip = await db.createTripPlan({ title: title.trim(), startDate, endDate, slotsPerDay });
-      onCreate(trip);
+      await onSave({ title: title.trim(), destination: destination.trim() || null, startDate, endDate });
     } catch (err) {
-      setError('Failed to create trip. Try again.');
+      setError(isEdit ? 'Failed to save changes. Try again.' : 'Failed to create trip. Try again.');
       setLoading(false);
     }
   };
 
   const inputStyle = { width: '100%', padding: '12px 14px', background: '#F3F2F0', border: 'none', borderRadius: 10, fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif", outline: 'none', boxSizing: 'border-box' };
   const labelStyle = { fontSize: 12, fontWeight: 500, color: '#999', fontFamily: "'DM Sans', sans-serif", marginBottom: 6, display: 'block' };
-  const slotsLabel = slotsPerDay === 1 ? 'Morning only' : slotsPerDay === 2 ? 'Morning + Evening' : 'Morning, Afternoon + Evening';
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
@@ -6128,14 +6312,18 @@ function NewTripSheet({ onClose, onCreate }) {
       <div style={{ position: 'relative', background: '#fff', borderRadius: '20px 20px 0 0', padding: '8px 20px calc(32px + var(--safe-bottom))' }}>
         <div style={{ width: 40, height: 4, background: '#D4D4D4', borderRadius: 2, margin: '0 auto 16px' }} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <span style={{ fontSize: 17, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif" }}>New Trip</span>
+          <span style={{ fontSize: 17, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif" }}>{isEdit ? 'Edit Trip' : 'New Trip'}</span>
           <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 16, border: 'none', background: 'rgba(0,0,0,0.05)', color: '#666', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
         </div>
         <div style={{ marginBottom: 16 }}>
           <label style={labelStyle}>Trip name</label>
           <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. NYC Work Trip" style={inputStyle} />
         </div>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>Destination</label>
+          <input value={destination} onChange={e => setDestination(e.target.value)} placeholder="e.g. New York City" style={inputStyle} />
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
           <div style={{ flex: 1 }}>
             <label style={labelStyle}>Start</label>
             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={inputStyle} />
@@ -6145,22 +6333,13 @@ function NewTripSheet({ onClose, onCreate }) {
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={inputStyle} />
           </div>
         </div>
-        <div style={{ marginBottom: 20 }}>
-          <label style={labelStyle}>Outfits per day</label>
-          <div style={{ display: 'flex', background: '#F3F2F0', borderRadius: 22, padding: 3, gap: 2 }}>
-            {[1, 2, 3].map(n => (
-              <button key={n} onClick={() => setSlotsPerDay(n)} style={{ flex: 1, height: 34, borderRadius: 18, border: 'none', background: slotsPerDay === n ? '#1A1A1A' : 'transparent', color: slotsPerDay === n ? '#fff' : '#999', fontSize: 14, fontFamily: "'DM Sans', sans-serif", fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s ease' }}>{n}</button>
-            ))}
-          </div>
-          <p style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif", margin: '6px 0 0', textAlign: 'center' }}>{slotsLabel}</p>
-        </div>
         {error && <p style={{ fontSize: 13, color: '#DC2626', fontFamily: "'DM Sans', sans-serif", margin: '-8px 0 12px', textAlign: 'center' }}>{error}</p>}
         <button
-          onClick={handleCreate}
+          onClick={handleSubmit}
           disabled={loading}
           style={{ width: '100%', height: 48, borderRadius: 12, border: 'none', background: loading ? '#999' : '#1A1A1A', color: '#fff', fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif", fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer' }}
         >
-          {loading ? 'Creating...' : 'Create Trip'}
+          {loading ? (isEdit ? 'Saving...' : 'Creating...') : (isEdit ? 'Save Changes' : 'Create Trip')}
         </button>
       </div>
     </div>
@@ -7380,6 +7559,11 @@ export default function OutfitRecommendations() {
     setView("trip-detail");
   }, []);
 
+  const handleEditTrip = useCallback((updatedTrip) => {
+    setActiveTrip(updatedTrip);
+    setTripPlans(prev => prev.map(t => t.id === updatedTrip.id ? updatedTrip : t));
+  }, []);
+
   const handleDeleteTrip = useCallback(async (tripId) => {
     try {
       await db.deleteTripPlan(tripId);
@@ -7428,9 +7612,12 @@ export default function OutfitRecommendations() {
         />
       )}
       {showNewTripSheet && (
-        <NewTripSheet
+        <TripFormSheet
           onClose={() => setShowNewTripSheet(false)}
-          onCreate={handleCreateTrip}
+          onSave={async (fields) => {
+            const trip = await db.createTripPlan(fields);
+            handleCreateTrip(trip);
+          }}
         />
       )}
       {vizModalOutfitId && vizGenerations[vizModalOutfitId] && (
@@ -7736,6 +7923,7 @@ export default function OutfitRecommendations() {
           onViewVisualization={(outfitId) => setVizModalOutfitId(outfitId)}
           onItemClick={navigateToGarment}
           onOpenSummary={() => setView("trip-summary")}
+          onEditTrip={handleEditTrip}
         />
       ) : view === "trip-summary" && activeTrip ? (
         <TripSummaryView
