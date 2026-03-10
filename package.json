@@ -17,7 +17,6 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
     "@vercel/blob": "^2.2.0",
-    "agentation": "^2.3.2",
     "express": "^5.2.1",
     "multer": "^2.0.2",
     "openai": "^6.21.0",
@@ -26,6 +25,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "agentation": "^2.3.2",
     "dotenv": "^17.2.4",
     "vite": "^6.0.0",
     "vitest": "^4.0.18"
