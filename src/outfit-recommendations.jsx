@@ -237,11 +237,35 @@ function Lightbox({ item, onClose, onDelete, onEdit, onEnhance, onStyleItem, isE
         >
           ✕
         </button>
+        {canEdit && !isEditing && (
+          <button
+            onClick={() => setIsEditing(true)}
+            style={{
+              position: "absolute",
+              top: 12,
+              left: 12,
+              zIndex: 1,
+              width: "var(--lightbox-close-size)",
+              height: "var(--lightbox-close-size)",
+              borderRadius: "calc(var(--lightbox-close-size) / 2)",
+              border: "none",
+              background: "rgba(0,0,0,0.4)",
+              color: "#fff",
+              fontSize: 16,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            ✏️
+          </button>
+        )}
         <div style={{
           width: "100%",
           aspectRatio: "3 / 4",
           maxHeight: "min(60dvh, calc(100dvh - 2 * var(--space-lightbox-padding) - 200px))",
-          background: "#F3F2F0",
+          background: "#fff",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -258,8 +282,8 @@ function Lightbox({ item, onClose, onDelete, onEdit, onEnhance, onStyleItem, isE
                 style={{
                   width: "100%",
                   height: "100%",
-                  objectFit: images[activeIdx]?.includes('/enhanced/') ? "contain" : "cover",
-                  padding: images[activeIdx]?.includes('/enhanced/') ? "16px" : 0,
+                  objectFit: "contain",
+                  padding: "16px",
                   boxSizing: "border-box",
                 }}
               />
@@ -304,31 +328,6 @@ function Lightbox({ item, onClose, onDelete, onEdit, onEnhance, onStyleItem, isE
                     }} />
                   ))}
                 </div>
-              )}
-              {onEnhance && !isEditing && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!isEnhancing) onEnhance(item.id, images[activeIdx], item);
-                  }}
-                  disabled={isEnhancing}
-                  style={{
-                    position: "absolute", bottom: 10, left: 10,
-                    height: 28, padding: "0 10px", borderRadius: 14,
-                    border: "none",
-                    background: isEnhancing ? "rgba(0,0,0,0.25)" : "rgba(0,0,0,0.45)",
-                    color: "#fff",
-                    fontSize: 11, fontWeight: 600,
-                    fontFamily: "'DM Sans', sans-serif",
-                    cursor: isEnhancing ? "default" : "pointer",
-                    display: "flex", alignItems: "center", gap: 4,
-                    backdropFilter: "blur(4px)",
-                    WebkitBackdropFilter: "blur(4px)",
-                    transition: "background 0.2s ease",
-                  }}
-                >
-                  ✨ {isEnhancing ? "Enhancing…" : "Enhance"}
-                </button>
               )}
             </>
           ) : (
@@ -463,12 +462,12 @@ function Lightbox({ item, onClose, onDelete, onEdit, onEnhance, onStyleItem, isE
               }}>
                 {item.name}
               </div>
-              {(canEdit || onStyleItem || (item.id && onDelete)) && (() => {
+              {(onStyleItem || (item.id && onDelete) || onEnhance) && (() => {
                 const pillBase = (extraStyle = {}) => ({
                   flex: 1,
-                  height: 36,
+                  height: 40,
                   padding: "0 12px",
-                  borderRadius: 18,
+                  borderRadius: 20,
                   border: "1px solid rgba(0,0,0,0.10)",
                   background: "transparent",
                   color: "#555",
@@ -481,44 +480,65 @@ function Lightbox({ item, onClose, onDelete, onEdit, onEnhance, onStyleItem, isE
                   ...extraStyle,
                 });
                 return (
-                  <div style={{
-                    display: "flex",
-                    gap: 8,
-                    borderTop: "1px solid rgba(0,0,0,0.06)",
-                    marginTop: 12,
-                    padding: "12px 16px",
-                  }}>
-                    {canEdit && (
-                      <button onClick={() => setIsEditing(true)} style={pillBase()}>
-                        Edit
-                      </button>
+                  <>
+                    <div style={{
+                      display: "flex",
+                      gap: 8,
+                      borderTop: "1px solid rgba(0,0,0,0.06)",
+                      marginTop: 12,
+                      padding: "12px 16px 0",
+                    }}>
+                      {item.id && onDelete && (
+                        <button
+                          onClick={() => { onDelete(item.id); onClose(); }}
+                          style={pillBase({
+                            flex: "none",
+                            width: 40,
+                            padding: 0,
+                            fontSize: 18,
+                            color: "#C85A5A",
+                            border: "1px solid rgba(200,90,90,0.25)",
+                          })}
+                        >
+                          🗑️
+                        </button>
+                      )}
+                      {onStyleItem && (
+                        <button
+                          onClick={onStyleItem}
+                          style={pillBase({
+                            fontWeight: 700,
+                            background: "#1A1A1A",
+                            color: "#fff",
+                            border: "none",
+                          })}
+                        >
+                          Style Item
+                        </button>
+                      )}
+                    </div>
+                    {onEnhance && !isEditing && (
+                      <div style={{ padding: "8px 16px 16px" }}>
+                        <button
+                          onClick={() => { if (!isEnhancing) onEnhance(item.id, images[activeIdx], item); }}
+                          disabled={isEnhancing}
+                          style={pillBase({
+                            width: "100%",
+                            background: isEnhancing ? "rgba(0,0,0,0.04)" : "rgba(0,0,0,0.06)",
+                            color: isEnhancing ? "#aaa" : "#555",
+                            border: "none",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 6,
+                            cursor: isEnhancing ? "default" : "pointer",
+                          })}
+                        >
+                          ✨ {isEnhancing ? "Enhancing…" : "Enhance"}
+                        </button>
+                      </div>
                     )}
-                    {onStyleItem && (
-                      <button
-                        onClick={onStyleItem}
-                        style={pillBase({
-                          flex: 2,
-                          fontWeight: 700,
-                          background: "#1A1A1A",
-                          color: "#fff",
-                          border: "none",
-                        })}
-                      >
-                        Style this Item
-                      </button>
-                    )}
-                    {item.id && onDelete && (
-                      <button
-                        onClick={() => { onDelete(item.id); onClose(); }}
-                        style={pillBase({
-                          color: "#C85A5A",
-                          border: "1px solid rgba(200,90,90,0.25)",
-                        })}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
+                  </>
                 );
               })()}
             </>

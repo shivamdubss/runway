@@ -39,6 +39,17 @@ LLM-judge evals live in `evals/` and run as part of `npm test` when `OPENAI_API_
 - Run coherence eval: `npm run eval:coherence`
 - Calibration scenarios use `prebuiltOutfits` to bypass generation and go straight to judging
 
+## Edge Cases
+
+Think through edge cases during implementation, not after. Before considering a feature complete:
+
+- **Inputs**: What happens with empty, null, zero, or extremely large values? What if required data is missing?
+- **API/network**: What if the request fails, times out, or returns malformed data?
+- **State**: What if the user triggers an action twice? What if data changes mid-flow?
+- **UI**: Does every loading, empty, and error state render correctly?
+
+Edge cases discovered should become test cases — not just one-off fixes.
+
 ## Commands
 
 - `npm run dev` — Start dev server
