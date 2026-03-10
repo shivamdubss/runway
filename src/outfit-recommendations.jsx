@@ -6310,7 +6310,7 @@ function TripFormSheet({ onClose, onSave, initialValues, isEdit }) {
     }
   };
 
-  const inputStyle = { width: '100%', maxWidth: '100%', padding: '12px 14px', background: '#F3F2F0', border: 'none', borderRadius: 10, fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif", outline: 'none', boxSizing: 'border-box' };
+  const inputStyle = { display: 'block', width: '100%', maxWidth: '100%', padding: '12px 14px', background: '#F3F2F0', border: 'none', borderRadius: 10, fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif", outline: 'none', boxSizing: 'border-box' };
   const labelStyle = { fontSize: 12, fontWeight: 500, color: '#999', fontFamily: "'DM Sans', sans-serif", marginBottom: 6, display: 'block' };
 
   return (
@@ -6330,13 +6330,13 @@ function TripFormSheet({ onClose, onSave, initialValues, isEdit }) {
           <label style={labelStyle}>Destination</label>
           <input value={destination} onChange={e => setDestination(e.target.value)} placeholder="e.g. New York City" style={inputStyle} />
         </div>
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16, overflow: 'hidden' }}>
           <label style={labelStyle}>Start date</label>
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={inputStyle} />
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ ...inputStyle, WebkitAppearance: 'none', appearance: 'none' }} />
         </div>
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 20, overflow: 'hidden' }}>
           <label style={labelStyle}>End date</label>
-          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={inputStyle} />
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ ...inputStyle, WebkitAppearance: 'none', appearance: 'none' }} />
         </div>
         {error && <p style={{ fontSize: 13, color: '#DC2626', fontFamily: "'DM Sans', sans-serif", margin: '-8px 0 12px', textAlign: 'center' }}>{error}</p>}
         <button
