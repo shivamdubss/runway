@@ -17,6 +17,7 @@ function toFrontendItem(row) {
     images,
     image: images[0] || null,
     category: row.category,
+    notes: row.notes || '',
   };
 }
 
@@ -104,6 +105,7 @@ export async function updateWardrobeItem(id, fields) {
     updates.category = fields.category;
     updates.label = fields.label;
   }
+  if (fields.notes !== undefined) updates.notes = fields.notes;
   const { data, error } = await supabase
     .from('wardrobe_items')
     .update(updates)

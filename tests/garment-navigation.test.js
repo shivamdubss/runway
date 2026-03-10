@@ -22,9 +22,10 @@ function handleGarmentBack(garmentPreviousView) {
 
 function garmentPageProps(garmentPreviousView, handlers) {
   return {
-    onDelete: garmentPreviousView === "wardrobe" ? handlers.handleDeleteWardrobeItem : null,
-    onEdit: garmentPreviousView === "wardrobe" ? handlers.handleUpdateWardrobeItem : null,
-    onEnhance: garmentPreviousView === "wardrobe" ? handlers.handleEnhanceWardrobeItemImage : null,
+    onDelete: handlers.handleDeleteWardrobeItem,
+    onEdit: handlers.handleUpdateWardrobeItem,
+    onEnhance: handlers.handleEnhanceWardrobeItemImage,
+    onSaveNotes: handlers.handleUpdateWardrobeItemNotes,
     onStyleItem: handlers.handleStyleItem,
   };
 }
@@ -51,6 +52,7 @@ const mockHandlers = {
   handleDeleteWardrobeItem: () => {},
   handleUpdateWardrobeItem: () => {},
   handleEnhanceWardrobeItemImage: () => {},
+  handleUpdateWardrobeItemNotes: () => {},
   handleStyleItem: () => {},
 };
 
@@ -116,24 +118,30 @@ describe("GarmentDetailPage prop guards", () => {
     expect(props.onEnhance).toBe(mockHandlers.handleEnhanceWardrobeItemImage);
   });
 
-  it("withholds edit/delete/enhance when opened from outfit view", () => {
+  it("passes edit/delete/enhance when opened from outfit view", () => {
     const props = garmentPageProps("outfit", mockHandlers);
-    expect(props.onDelete).toBeNull();
-    expect(props.onEdit).toBeNull();
-    expect(props.onEnhance).toBeNull();
+    expect(props.onDelete).toBe(mockHandlers.handleDeleteWardrobeItem);
+    expect(props.onEdit).toBe(mockHandlers.handleUpdateWardrobeItem);
+    expect(props.onEnhance).toBe(mockHandlers.handleEnhanceWardrobeItemImage);
   });
 
-  it("withholds edit/delete/enhance when opened from saved view", () => {
+  it("passes edit/delete/enhance when opened from saved view", () => {
     const props = garmentPageProps("saved", mockHandlers);
-    expect(props.onDelete).toBeNull();
-    expect(props.onEdit).toBeNull();
-    expect(props.onEnhance).toBeNull();
+    expect(props.onDelete).toBe(mockHandlers.handleDeleteWardrobeItem);
+    expect(props.onEdit).toBe(mockHandlers.handleUpdateWardrobeItem);
+    expect(props.onEnhance).toBe(mockHandlers.handleEnhanceWardrobeItemImage);
   });
 
   it("always passes onStyleItem regardless of origin", () => {
     expect(garmentPageProps("wardrobe", mockHandlers).onStyleItem).toBe(mockHandlers.handleStyleItem);
     expect(garmentPageProps("outfit", mockHandlers).onStyleItem).toBe(mockHandlers.handleStyleItem);
     expect(garmentPageProps("saved", mockHandlers).onStyleItem).toBe(mockHandlers.handleStyleItem);
+  });
+
+  it("always passes onSaveNotes regardless of origin", () => {
+    expect(garmentPageProps("wardrobe", mockHandlers).onSaveNotes).toBe(mockHandlers.handleUpdateWardrobeItemNotes);
+    expect(garmentPageProps("outfit", mockHandlers).onSaveNotes).toBe(mockHandlers.handleUpdateWardrobeItemNotes);
+    expect(garmentPageProps("saved", mockHandlers).onSaveNotes).toBe(mockHandlers.handleUpdateWardrobeItemNotes);
   });
 });
 

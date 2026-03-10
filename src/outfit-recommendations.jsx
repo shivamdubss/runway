@@ -548,12 +548,15 @@ function Lightbox({ item, onClose, onDelete, onEdit, onEnhance, onStyleItem, isE
   );
 }
 
-function GarmentDetailPage({ item, onDelete, onEdit, onEnhance, onStyleItem, isEnhancing = false }) {
+function GarmentDetailPage({ item, onDelete, onEdit, onEnhance, onStyleItem, onSaveNotes, isEnhancing = false }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(item.name);
   const [editCategory, setEditCategory] = useState(item.category);
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [notesValue, setNotesValue] = useState(item.notes || '');
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
   const images = item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : []);
   const hasMultiple = images.length > 1;
   const canEdit = item.id && onEdit;
@@ -579,6 +582,22 @@ function GarmentDetailPage({ item, onDelete, onEdit, onEnhance, onStyleItem, isE
     setEditName(item.name);
     setEditCategory(item.category);
     setIsEditing(false);
+  };
+
+  const handleSaveNotes = async () => {
+    if (!onSaveNotes) return;
+    setIsSavingNotes(true);
+    try {
+      await onSaveNotes(item.id, notesValue.trim());
+      setIsEditingNotes(false);
+    } finally {
+      setIsSavingNotes(false);
+    }
+  };
+
+  const handleCancelNotes = () => {
+    setNotesValue(item.notes || '');
+    setIsEditingNotes(false);
   };
 
   return (
@@ -814,10 +833,110 @@ function GarmentDetailPage({ item, onDelete, onEdit, onEnhance, onStyleItem, isE
               color: "#1A1A1A",
               fontFamily: "'DM Sans', sans-serif",
               lineHeight: 1.25,
-              marginBottom: 20,
+              marginBottom: 16,
             }}>
               {item.name}
             </div>
+
+            {/* Notes section */}
+            {isEditingNotes ? (
+              <div style={{ marginBottom: 16 }}>
+                <textarea
+                  value={notesValue}
+                  onChange={(e) => setNotesValue(e.target.value)}
+                  placeholder="Add a note about this item..."
+                  autoFocus
+                  style={{
+                    width: "100%",
+                    minHeight: 80,
+                    borderRadius: 10,
+                    border: "1px solid rgba(0,0,0,0.12)",
+                    padding: "10px 12px",
+                    fontSize: "var(--font-caption)",
+                    fontFamily: "'DM Sans', sans-serif",
+                    color: "#1A1A1A",
+                    boxSizing: "border-box",
+                    resize: "none",
+                    outline: "none",
+                    background: "#fff",
+                    lineHeight: 1.5,
+                  }}
+                />
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <button
+                    onClick={handleCancelNotes}
+                    style={{
+                      flex: 1,
+                      height: 36,
+                      borderRadius: 10,
+                      border: "1px solid rgba(0,0,0,0.12)",
+                      background: "#fff",
+                      color: "#555",
+                      fontSize: "var(--font-caption)",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveNotes}
+                    disabled={isSavingNotes}
+                    style={{
+                      flex: 2,
+                      height: 36,
+                      borderRadius: 10,
+                      border: "none",
+                      background: isSavingNotes ? "#EEEDEB" : "#1A1A1A",
+                      color: isSavingNotes ? "#ccc" : "#fff",
+                      fontSize: "var(--font-caption)",
+                      fontWeight: 600,
+                      cursor: isSavingNotes ? "default" : "pointer",
+                      fontFamily: "'DM Sans', sans-serif",
+                    }}
+                  >
+                    {isSavingNotes ? "Saving..." : "Save Note"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div
+                onClick={onSaveNotes ? () => setIsEditingNotes(true) : undefined}
+                style={{
+                  marginBottom: 16,
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  background: item.notes ? "rgba(0,0,0,0.03)" : "transparent",
+                  border: item.notes ? "1px solid rgba(0,0,0,0.07)" : "1px dashed rgba(0,0,0,0.15)",
+                  cursor: onSaveNotes ? "pointer" : "default",
+                  minHeight: 40,
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                {item.notes ? (
+                  <span style={{
+                    fontSize: "var(--font-caption)",
+                    color: "#444",
+                    fontFamily: "'DM Sans', sans-serif",
+                    lineHeight: 1.5,
+                    whiteSpace: "pre-wrap",
+                  }}>
+                    {item.notes}
+                  </span>
+                ) : (
+                  <span style={{
+                    fontSize: "var(--font-caption)",
+                    color: "#bbb",
+                    fontFamily: "'DM Sans', sans-serif",
+                  }}>
+                    {onSaveNotes ? "Add a note..." : "No notes"}
+                  </span>
+                )}
+              </div>
+            )}
+
             <div style={{
               borderTop: "1px solid rgba(0,0,0,0.06)",
               paddingTop: 16,
@@ -2734,7 +2853,7 @@ function OutfitView({ outfit, onItemClick, hasReferencePhoto, vizStatus, onVisua
             height: 44,
             padding: "0 14px",
             background: vizStatus === 'ready'
-              ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+              ? "#1A1A1A"
               : "transparent",
             color: vizStatus === 'ready'
               ? "#fff"
@@ -3111,7 +3230,7 @@ function SavedOutfitsView({ savedOutfits, onItemClick, onToggleSaved, vizGenerat
                   padding: "12px 20px",
                   marginTop: 16,
                   background: vizStatus === 'ready'
-                    ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                    ? "#1A1A1A"
                     : "transparent",
                   color: vizStatus === 'ready'
                     ? "#fff"
@@ -6302,6 +6421,21 @@ export default function OutfitRecommendations() {
     }
   }, []);
 
+  const handleUpdateWardrobeItemNotes = useCallback(async (itemId, notes) => {
+    try {
+      const updated = await db.updateWardrobeItem(itemId, { notes });
+      const [grouped, flat] = await Promise.all([
+        db.fetchWardrobeItems(),
+        db.fetchWardrobeItemsFlat(),
+      ]);
+      setWardrobeItems(grouped);
+      setWardrobeFlat(flat);
+      setLightboxItem(updated);
+    } catch (err) {
+      console.error("Failed to save notes:", err);
+    }
+  }, []);
+
   const navigateToGarment = useCallback((item) => {
     setLightboxItem(item);
     setGarmentPreviousView(view);
@@ -6528,9 +6662,10 @@ export default function OutfitRecommendations() {
         lightboxItem && (
           <GarmentDetailPage
             item={lightboxItem}
-            onDelete={garmentPreviousView === "wardrobe" ? handleDeleteWardrobeItem : null}
-            onEdit={garmentPreviousView === "wardrobe" ? handleUpdateWardrobeItem : null}
-            onEnhance={garmentPreviousView === "wardrobe" ? handleEnhanceWardrobeItemImage : null}
+            onDelete={handleDeleteWardrobeItem}
+            onEdit={handleUpdateWardrobeItem}
+            onEnhance={handleEnhanceWardrobeItemImage}
+            onSaveNotes={handleUpdateWardrobeItemNotes}
             onStyleItem={() => {
               setLightboxItem(null);
               setGarmentPreviousView(null);

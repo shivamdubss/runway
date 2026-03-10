@@ -101,6 +101,7 @@ describe('updateWardrobeItem', () => {
       images: ['https://example.com/blazer.jpg'],
       image: 'https://example.com/blazer.jpg',
       category: 'Layers',
+      notes: '',
     });
   });
 
