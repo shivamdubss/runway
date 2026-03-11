@@ -411,6 +411,19 @@ export async function fetchTripPlans() {
   return (data || []).map(toFrontendTripPlan);
 }
 
+export async function fetchTripSlotCounts() {
+  const { data, error } = await supabase
+    .from('trip_slots')
+    .select('trip_plan_id')
+    .not('outfit_id', 'is', null);
+  if (error) throw error;
+  const counts = {};
+  for (const row of (data || [])) {
+    counts[row.trip_plan_id] = (counts[row.trip_plan_id] || 0) + 1;
+  }
+  return counts;
+}
+
 export async function createTripPlan({ title, destination, startDate, endDate }) {
   if (new Date(endDate) < new Date(startDate)) {
     throw new Error('end_date_before_start');
