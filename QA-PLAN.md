@@ -15,7 +15,7 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 5. [Wardrobe Management](#5-wardrobe-management)
 6. [Outfit Visualization](#6-outfit-visualization)
 7. [Outfit Saving](#7-outfit-saving)
-8. [Outfit Sharing](#8-outfit-sharing)
+8. [Trip Planning](#8-trip-planning)
 9. [Profile Settings](#9-profile-settings)
 10. [Weather Integration](#10-weather-integration)
 11. [API Endpoints](#11-api-endpoints)
@@ -149,7 +149,7 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 |----|----------|----------|-------|-----------------|
 | REC-08 | P1 | Save outfit (bookmark) | 1. Click 📖 on an outfit | Icon fills; outfit added to saved collection |
 | REC-09 | P1 | Unsave outfit | 1. Click filled 📖 on a saved outfit | Icon unfills; outfit removed from saved collection |
-| REC-10 | P1 | Share outfit | 1. Click share button (↑) on an outfit | Share link generated; "Link copied!" confirmation shown; link in clipboard |
+| REC-10 | P1 | Dislike outfit | 1. Click dislike button on an outfit | Outfit marked as disliked; `disliked` flag set in database |
 | REC-11 | P1 | Visualize button states | 1. View outfit with reference photo set | Button shows "See this on you 😎" with gradient background |
 | REC-12 | P1 | Visualize without reference photo | 1. View outfit without reference photo in profile | Button shows "Add photo in profile to visualize" and is disabled |
 | REC-13 | P1 | Visualize button — generating | 1. Click visualize 2. During generation | Button shows spinner; disabled during generation |
@@ -180,8 +180,8 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 
 | ID | Priority | Scenario | Steps | Expected Result |
 |----|----------|----------|-------|-----------------|
-| WRD-01 | P1 | Full wardrobe display | 1. Navigate to Full Wardrobe (🪞) | All items shown grouped by category sections (Tops, Layers, Bottoms, Shoes, Accessories) |
-| WRD-02 | P1 | Category filter pills | 1. View filter pill bar | "All" (default), "Tops", "Layers", "Bottoms", "Shoes", "Accessories" pills |
+| WRD-01 | P1 | Full wardrobe display | 1. Navigate to Full Wardrobe (🪞) | All items shown grouped by category sections (Tops, Layers, Bottoms, Shoes, Accessories, Dresses & Jumpsuits) |
+| WRD-02 | P1 | Category filter pills | 1. View filter pill bar | "All" (default), "Tops", "Layers", "Bottoms", "Shoes", "Accessories", "Dresses & Jumpsuits" pills |
 | WRD-03 | P1 | Filter by category | 1. Tap a category pill (e.g., "Shoes") | Only items in selected category shown; pill has active styling |
 | WRD-04 | P1 | "All" filter | 1. Tap "All" pill | All categories shown with section headers and item counts |
 | WRD-05 | P2 | Category item count badge | 1. View wardrobe with "All" selected | Each category header shows item count |
@@ -231,6 +231,15 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 | WRD-29 | P1 | Cancel edit | 1. Open edit mode 2. Click Cancel | Changes discarded; original values restored |
 | WRD-30 | P1 | Delete item | 1. Open item lightbox 2. Click "Remove from Wardrobe" | Item deleted from database; removed from wardrobe view |
 | WRD-31 | P2 | Delete item used in outfits | 1. Delete an item that's part of existing outfits | Item removed; outfits handle missing item gracefully (CASCADE) |
+
+### 5.6 Garment Notes
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| WRD-32 | P1 | Add notes to item | 1. Open item detail 2. Enter notes text 3. Save | Notes saved to database; visible in item detail |
+| WRD-33 | P1 | Edit existing notes | 1. Open item with notes 2. Edit notes text 3. Save | Updated notes persisted |
+| WRD-34 | P1 | Notes included in AI context | 1. Add notes to item (e.g., "only wear for formal events") 2. Request outfit recommendation | AI system prompt includes garment notes for context |
+| WRD-35 | P2 | Empty notes | 1. Open item without notes | Notes field shows placeholder text; no empty string stored |
 
 ---
 
@@ -291,28 +300,54 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 
 ---
 
-## 8. Outfit Sharing
+## 8. Trip Planning
 
-### 8.1 Share Link Generation
-
-| ID | Priority | Scenario | Steps | Expected Result |
-|----|----------|----------|-------|-----------------|
-| SHARE-01 | P0 | Generate share link | 1. Click share button (↑) on an outfit | 12-character share token generated; full URL copied to clipboard; "Link copied!" confirmation |
-| SHARE-02 | P1 | Idempotent sharing | 1. Share same outfit twice | Same share token returned; no duplicate tokens created |
-| SHARE-03 | P1 | Share token format | 1. Generate a share link | Token is exactly 12 characters, base64url (alphanumeric + hyphens + underscores) |
-| SHARE-04 | P1 | Only owner can share | 1. Attempt to share another user's outfit via API | 403 Forbidden returned |
-
-### 8.2 Public Share Page
+### 8.1 Trip Creation
 
 | ID | Priority | Scenario | Steps | Expected Result |
 |----|----------|----------|-------|-----------------|
-| SHARE-05 | P0 | View shared outfit (unauthenticated) | 1. Open share URL in incognito/new browser | Public page shows: Runway logo, outfit vibe title, reasoning, item grid |
-| SHARE-06 | P1 | Visualization on shared page | 1. Share outfit with generated visualizations 2. View share link | Visualization image displayed on public page |
-| SHARE-07 | P1 | Items displayed on shared page | 1. View shared outfit | 2-column item grid with images, names, categories |
-| SHARE-08 | P1 | "Sign up free" CTA | 1. View shared outfit | "Sign up free" button visible in header |
-| SHARE-09 | P1 | Invalid share token | 1. Navigate to `/s/invalidtoken` | "This outfit link is no longer available" message; "Try Runway for free" CTA |
-| SHARE-10 | P1 | Token validation | 1. Try tokens with wrong length or invalid characters | 404 returned; page shows not-found state |
-| SHARE-11 | P0 | No authentication required | 1. Access share URL without any auth | Page loads successfully — no login required |
+| TRIP-01 | P0 | Create a new trip | 1. Open trip planning 2. Click "New Trip" 3. Enter title, destination, start/end dates 4. Save | Trip created; day-tab calendar displays with correct number of days |
+| TRIP-02 | P1 | Date validation | 1. Create trip 2. Set end date before start date | Validation error prevents creation; end date must be after start date |
+| TRIP-03 | P1 | Required fields | 1. Try to create trip without title or dates | Save button disabled or validation error shown |
+| TRIP-04 | P2 | Trip list display | 1. Create multiple trips | All trips listed with title, destination, and date range |
+
+### 8.2 Day Navigation
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| TRIP-05 | P1 | Day tab bar | 1. Open a multi-day trip | Horizontal tabs for each day; first day selected by default |
+| TRIP-06 | P1 | Switch between days | 1. Tap a different day tab | View updates to show that day's outfit slots |
+| TRIP-07 | P2 | Day tab shows date | 1. View day tabs | Each tab displays the calendar date |
+| TRIP-08 | P2 | Day tab shows outfit count | 1. Assign outfits to some days | Tabs show number of assigned outfits per day |
+
+### 8.3 Outfit Slots
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| TRIP-09 | P0 | Add outfit to slot | 1. Tap an empty slot 2. Select an outfit from picker | Outfit assigned to slot; slot shows outfit preview |
+| TRIP-10 | P1 | Outfit picker panel | 1. Tap empty slot | Picker shows saved and recent outfits with images |
+| TRIP-11 | P1 | Remove outfit from slot | 1. Tap a filled slot 2. Remove/clear the outfit | Slot returns to empty state |
+| TRIP-12 | P1 | Up to 5 slots per day | 1. Add slots to a day | Maximum of 5 slots allowed (slot_0 through slot_4) |
+| TRIP-13 | P1 | Slot detail sheet | 1. Tap a filled slot | Detail sheet opens showing outfit visualization, vibe label, and item grid |
+| TRIP-14 | P2 | Empty slot display | 1. View day with no outfits assigned | Empty slots shown with add/plus indicator |
+
+### 8.4 Trip Editing
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| TRIP-15 | P1 | Edit trip title | 1. Open trip 2. Edit title 3. Save | Title updated in database and UI |
+| TRIP-16 | P1 | Edit destination | 1. Open trip 2. Edit destination 3. Save | Destination updated |
+| TRIP-17 | P1 | Edit date range | 1. Open trip 2. Change start/end dates 3. Save | Date range updated; day tabs adjust accordingly |
+| TRIP-18 | P1 | Delete trip | 1. Open trip 2. Delete trip | Trip and all associated slots removed |
+| TRIP-19 | P2 | Date edit validation | 1. Edit trip dates to set end before start | Validation prevents invalid range |
+
+### 8.5 Smart Packing List
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| TRIP-20 | P0 | View packing list | 1. Open trip with assigned outfits 2. View trip summary | Deduplicated list of all items across all days |
+| TRIP-21 | P1 | Items sorted by usage | 1. View packing list | Items that appear in the most outfits are listed first |
+| TRIP-22 | P2 | Empty packing list | 1. View packing list for trip with no outfits | Empty state message shown |
 
 ---
 
@@ -470,25 +505,21 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 | API-35 | P1 | File size limit (10MB) | Upload file >10MB | Rejected with error |
 | API-36 | P0 | No file attached | Send request without image field | Error returned |
 
-### 11.8 POST /api/share
+### 11.8 POST /api/enhance-item-image
 
 | ID | Priority | Scenario | Steps | Expected Result |
 |----|----------|----------|-------|-----------------|
-| API-37 | P0 | Generate share token | Send request with valid outfitId | 200 OK; returns shareToken (12 chars) and shareUrl |
-| API-38 | P1 | Idempotent — existing token | Share same outfit again | Same shareToken returned |
-| API-39 | P1 | Not owner — 403 | Share outfit belonging to another user | 403 Forbidden |
-| API-40 | P0 | Missing outfitId | Send request without outfitId | 400 Bad Request |
-| API-41 | P2 | Token uniqueness | Generate many tokens | No collisions; retry logic handles unique constraint violations |
+| API-37 | P0 | Enhance wardrobe item photo | Send request with valid imageUrl and item details | 200 OK; returns enhanced imageUrl |
+| API-38 | P0 | Missing imageUrl | Send request without imageUrl | 400 Bad Request |
+| API-39 | P1 | No auth token | Send request without Authorization header | 401 Unauthorized |
 
-### 11.9 GET /api/share/[token]
+### 11.9 POST /api/preprocess-reference
 
 | ID | Priority | Scenario | Steps | Expected Result |
 |----|----------|----------|-------|-----------------|
-| API-42 | P0 | Valid token lookup | GET /api/share/{validToken} | 200 OK; returns vibe, reasoning, visualizationUrls, items array |
-| API-43 | P0 | No authentication required | Call without Authorization header | 200 OK — public endpoint |
-| API-44 | P1 | Invalid token format | Token with wrong length or special characters | 404 Not Found |
-| API-45 | P1 | Non-existent token | Valid format but token not in database | 404 Not Found |
-| API-46 | P1 | Items resolved correctly | Check items in response | Each item has id, label, name, color, accent, emoji, images |
+| API-40 | P0 | Valid reference photo | Send request with valid reference photo URL | 200 OK; returns validation result |
+| API-41 | P0 | Invalid/inaccessible photo | Send request with broken URL | Error response with descriptive message |
+| API-42 | P1 | No auth token | Send request without Authorization header | 401 Unauthorized |
 
 ---
 
@@ -556,7 +587,7 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 | **Auth** | Google OAuth test account |
 | **API Keys** | OPENAI_API_KEY, OPENWEATHERMAP_API_KEY, runway_READ_WRITE_TOKEN |
 | **Database** | Supabase instance with schema.sql + all migrations applied |
-| **Automated Tests** | `npm test` — 18 Vitest test files covering parsing, caching, API validation, streaming, weather, sharing, saving |
+| **Automated Tests** | `npm test` — ~49 Vitest test files covering parsing, caching, API validation, streaming, weather, saving, trip planning, wardrobe operations |
 
 ---
 
@@ -579,6 +610,8 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 | `visualization-timeout-alignment.test.js` | Timeout consistency |
 | `wardrobe-edit.test.js` | Item name/category updates |
 | `save-outfit.test.js` | Save toggle and fetch |
-| `share-api.test.js` | Share token generation |
-| `share-lookup.test.js` | Public share page lookup |
-| `share-route-guard.test.js` | Share URL pattern validation |
+| `trip-plans.test.js` | Trip CRUD and slot management |
+| `trip-packing-list.test.js` | Packing list deduplication and sorting |
+| `trip-editing.test.js` | Trip editing and date validation |
+| `wardrobe-notes.test.js` | Garment notes CRUD |
+| `wardrobe-categories.test.js` | Category management including Dresses & Jumpsuits |

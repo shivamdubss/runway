@@ -141,7 +141,7 @@ Users build a digital wardrobe of their real clothing items. Three methods to ad
 1. Upload one or more photos (drag-and-drop or file picker).
 2. AI automatically analyzes the image and extracts: name, category, primary color (hex), accent color (hex), emoji.
 3. User can override any AI-detected field.
-4. Category selector: Tops, Layers, Bottoms, Shoes, Accessories.
+4. Category selector: Tops, Layers, Bottoms, Shoes, Accessories, Dresses & Jumpsuits.
 5. Multiple photos per item supported (primary image + additional angles).
 
 #### Method 2: Bulk Import
@@ -159,10 +159,11 @@ Users build a digital wardrobe of their real clothing items. Three methods to ad
 
 #### Wardrobe View
 - Grid layout organized by category.
-- Category filter pills at top: All, Tops, Layers, Bottoms, Shoes, Accessories.
+- Category filter pills at top: All, Tops, Layers, Bottoms, Shoes, Accessories, Dresses & Jumpsuits.
 - Responsive columns: 1 (mobile), 2 (tablet), 3 (desktop).
 - "+ Add to Wardrobe" button at the top.
 - Each card shows: image (or emoji fallback), category label, item name, multi-image badge if applicable.
+- Garment notes: free-text notes field per item for personal details (fabric, fit, occasions). Notes are included in AI recommendation context.
 
 #### Item Detail (Lightbox)
 - Full-screen modal with backdrop blur.
@@ -201,7 +202,48 @@ Accessible from the side panel. An "incomplete" warning banner appears until hei
 
 ---
 
-### 7. Chat History & Navigation
+### 7. Outfit Feedback
+
+Users can save or dislike outfits to refine future recommendations.
+
+- **Save:** Tap the bookmark icon to add an outfit to the Saved Outfits collection. Saved outfits persist across chat sessions and are accessible from the sidebar.
+- **Dislike:** Tap the dislike button to signal negative preference. Disliked outfits are tracked for telemetry and future recommendation refinement.
+- **Analytics:** Save, unsave, and dislike actions are tracked as events for telemetry.
+
+---
+
+### 8. Trip Planning
+
+Users can plan outfits for multi-day trips with a visual calendar interface.
+
+#### Trip Creation
+- Set a title, destination, and date range (start/end dates).
+- Date validation prevents end date before start date.
+
+#### Day Navigation
+- Horizontal day-tab bar for navigating between trip days.
+- Each day shows its date and number of assigned outfits.
+
+#### Outfit Slots
+- Each day supports 1-5 outfit slots (slot_0 through slot_4).
+- Slots are flexible — users can add or remove slots per day.
+- Assign saved or recent outfits to any slot via the outfit picker panel.
+
+#### Slot Detail
+- Tapping a filled slot opens a detail sheet showing the outfit visualization, vibe label, and item grid.
+
+#### Smart Packing List
+- Trip summary view with a deduplicated list of all items across the trip.
+- Items sorted by usage count (most-used items first).
+- Shows which days/slots each item appears in.
+
+#### Trip Editing
+- Edit trip title, destination, and date range after creation.
+- Delete trips entirely.
+
+---
+
+### 9. Chat History & Navigation
 
 #### Side Panel
 - Slides in from the left via hamburger menu.
@@ -223,8 +265,11 @@ Accessible from the side panel. An "incomplete" warning banner appears until hei
 | `wardrobe_items` | Individual clothing items | `name`, `category`, `label`, `color`, `accent_color`, `emoji`, `image_urls` (JSONB array) |
 | `chats` | Conversation sessions | `title`, `subtitle`, `starred`, `user_id` |
 | `messages` | Messages within a chat | `chat_id` (FK), `role` (user/assistant/system), `content`, `image_url` |
-| `outfits` | Generated outfit recommendations | `chat_id` (FK), `vibe`, `reasoning`, `visualization_url` |
+| `outfits` | Generated outfit recommendations | `chat_id` (FK), `vibe`, `reasoning`, `visualization_urls` (JSONB), `saved`, `disliked` |
 | `outfit_items` | Junction: outfit ↔ wardrobe item | `outfit_id` (FK), `wardrobe_item_id` (FK), `position` |
+| `trip_plans` | Multi-day trip plans | `title`, `destination`, `start_date`, `end_date`, `slots_per_day`, `user_id` |
+| `trip_plan_slots` | Outfit slots within trips | `trip_plan_id` (FK), `day_index`, `slot_name`, `outfit_id` (FK) |
+| `events` | Analytics telemetry | `event_type`, `event_data` (JSONB), `user_id` |
 
 All tables use row-level security scoped to the authenticated user.
 
@@ -261,9 +306,9 @@ All tables use row-level security scoped to the authenticated user.
 - **One image per chat message.** Users cannot attach multiple images in a single message.
 - **10-item cap on outfit photo analysis.** The import-from-photo feature detects a maximum of 10 items per photo.
 - **No offline support.** All features require an internet connection.
-- **No sharing or multi-user.** Outfits and wardrobes are private to each user. No social features, sharing links, or collaborative styling.
+- **No multi-user.** Outfits and wardrobes are private to each user. No social features or collaborative styling.
 - **No undo for wardrobe deletion.** Removing an item from the wardrobe is permanent.
 - **Weather is city-level only.** No GPS/geolocation — users must manually type a city name.
 - **Single reference photo.** Users can only have one reference photo at a time for virtual try-on.
-- **No outfit saving/favoriting.** Outfits are tied to the chat that generated them. There is no standalone "saved outfits" collection outside of chat history.
+- **No outfit editing.** Saved outfits cannot be manually edited (swap items, rename). They reflect the AI's original recommendation.
 - **English only.** All UI text and AI prompts are in English.

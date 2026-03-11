@@ -16,7 +16,7 @@ Runway is a mobile-first web app that turns your closet into a personal stylist.
 2. Describe what you need — "date night outfit", "job interview", or tap a quick-start chip
 3. Get up to 3 outfit recommendations with styling rationale
 4. Visualize any outfit on yourself with AI-generated try-on images (3 poses)
-5. Save favorites and share outfits via public links
+5. Save favorites and plan outfits for upcoming trips
 
 ---
 
@@ -34,9 +34,6 @@ Three ways to build your digital closet:
 - **Bulk import** — Upload multiple images with sequential analysis and progress tracking
 - **From outfit photo** — Upload a full-body photo and AI extracts individual items, generating product photos for each
 
-### Outfit Sharing
-Generate public share links (`/s/{token}`) for any outfit. Shared pages display the visualization, item grid, and styling reasoning — no authentication required to view.
-
 ### Saved Outfits
 Star outfits to save them to a dedicated collection that persists across chat sessions.
 
@@ -45,6 +42,9 @@ Set your city in profile settings. Current weather (temperature, conditions, win
 
 ### User Profile
 Configure body type, height, size preference, gender/style presentation, preferred styles (Classic, Minimalist, Bohemian, etc.), color preferences, and free-text style notes. Upload a reference photo for virtual try-on.
+
+### Trip Planning
+Create multi-day trip plans with destination and date range. Assign outfits to up to 5 slots per day, navigate days via a tab calendar, and view a smart packing list with deduplicated items sorted by usage.
 
 ### Chat History
 All conversations persist to the database. Star important chats, browse recents, and switch between past sessions from the side panel.
@@ -74,8 +74,7 @@ runway/
 │   ├── outfit-recommendations.jsx # Main application component
 │   ├── runway.css                # Global styles (CSS custom properties)
 │   ├── components/
-│   │   ├── AuthScreen.jsx        # Google OAuth sign-in
-│   │   └── SharedOutfitPage.jsx  # Public outfit share view
+│   │   └── AuthScreen.jsx        # Google OAuth sign-in
 │   └── lib/
 │       ├── auth.jsx              # AuthContext provider & useAuth hook
 │       ├── supabase.js           # Supabase client init
@@ -85,7 +84,10 @@ runway/
 │       ├── analyze.js            # Image analysis & item detection
 │       ├── visualization.js      # Visualization generation & caching
 │       ├── weather.js            # Weather fetch & city search
-│       └── import-from-photo.js  # Batch outfit photo import
+│       ├── import-from-photo.js  # Batch outfit photo import
+│       ├── compress-image.js     # Client-side image compression
+│       ├── analytics.js          # Event tracking
+│       └── api-queue.js          # Rate-limited API call queue
 │
 ├── api/                          # Vercel serverless functions (production)
 │   ├── chat.js                   # Outfit recommendations
@@ -95,9 +97,8 @@ runway/
 │   ├── analyze-outfit-photo.js   # Full-body outfit item extraction
 │   ├── generate-outfit-visualization.js # Virtual try-on generation
 │   ├── generate-item-image.js    # Product photo generation
-│   ├── share/
-│   │   ├── index.js              # Generate share token
-│   │   └── [token].js            # Fetch shared outfit (public)
+│   ├── enhance-item-image.js     # AI photo enhancement
+│   ├── preprocess-reference.js   # Reference photo validation
 │   └── _lib/                     # Shared server utilities
 │       ├── auth.js               # JWT verification
 │       ├── openai.js             # OpenAI client factory
@@ -185,7 +186,7 @@ Create a `.env.local` file in the project root:
 
 ## API Endpoints
 
-All endpoints except the public share lookup require a `Bearer` token in the `Authorization` header.
+All endpoints require a `Bearer` token in the `Authorization` header.
 
 | Method | Route | Description |
 |--------|-------|-------------|
@@ -196,8 +197,8 @@ All endpoints except the public share lookup require a `Bearer` token in the `Au
 | `POST` | `/api/analyze-outfit-photo` | Extract items from a full-body outfit photo |
 | `POST` | `/api/generate-outfit-visualization` | Generate virtual try-on image (60s timeout) |
 | `POST` | `/api/generate-item-image` | Generate a product-style photo for an item |
-| `POST` | `/api/share` | Create a share token for an outfit |
-| `GET` | `/api/share/:token` | Fetch a shared outfit (public, no auth) |
+| `POST` | `/api/enhance-item-image` | AI enhancement of wardrobe item photos |
+| `POST` | `/api/preprocess-reference` | Validate and preprocess reference photos |
 
 ---
 
@@ -211,8 +212,11 @@ All tables use Row-Level Security (RLS) scoped to the authenticated user.
 | `wardrobe_items` | Clothing items | `name`, `category`, `label`, `color`, `accent_color`, `emoji`, `image_urls` (JSONB) |
 | `chats` | Conversation sessions | `title`, `subtitle`, `starred`, `user_id` |
 | `messages` | Messages within a chat | `chat_id` (FK), `role`, `content`, `image_url` |
-| `outfits` | Outfit recommendations | `chat_id` (FK), `vibe`, `reasoning`, `visualization_url`, `share_token`, `saved` |
+| `outfits` | Outfit recommendations | `chat_id` (FK), `vibe`, `reasoning`, `visualization_urls` (JSONB), `saved`, `disliked` |
 | `outfit_items` | Junction: outfit to wardrobe item | `outfit_id` (FK), `wardrobe_item_id` (FK), `position` |
+| `trip_plans` | Multi-day trip plans | `title`, `destination`, `start_date`, `end_date`, `slots_per_day` |
+| `trip_plan_slots` | Outfit slots within trips | `trip_plan_id` (FK), `day_index`, `slot_name`, `outfit_id` (FK) |
+| `events` | Analytics telemetry | `event_type`, `event_data` (JSONB), `user_id` |
 
 A trigger auto-creates a `profiles` row when a new user signs up. Timestamps are auto-managed via `update_updated_at_column` trigger.
 

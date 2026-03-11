@@ -29,6 +29,14 @@ Follow the patterns in existing test files:
 
 When mocking browser APIs (localStorage, fetch), use `vi.stubGlobal()`. When mocking modules, use `vi.mock()` before dynamic `import()`.
 
+### Smoke Tests
+
+`tests/smoke.js` is a standalone script (not Vitest) that checks a live deployment. It verifies all API endpoints return 401 for unauthenticated requests and 405 for wrong methods, plus the frontend loads. Pass the base URL as an argument or set `SMOKE_BASE_URL` env var:
+
+```bash
+npm run test:smoke -- https://your-app.vercel.app
+```
+
 ## Evals
 
 LLM-judge evals live in `evals/` and run as part of `npm test` when `OPENAI_API_KEY` is set (tests skip silently otherwise). See `evals/PATTERN.md` for the full pattern guide.
@@ -56,6 +64,7 @@ Edge cases discovered should become test cases — not just one-off fixes.
 - `npm run build` — Production build
 - `npm test` — Run all tests
 - `npm run test:watch` — Tests in watch mode
+- `npm run test:smoke -- <base-url>` — Smoke test a live deployment
 
 ## Allowed auto-run commands
 
@@ -75,3 +84,15 @@ Every feature must be developed on its own branch and merged to main via a PR �
 **Naming convention:** `feature/<short-kebab-case-description>` (e.g. `feature/garment-tagging`)
 
 **Never commit directly to main.**
+
+## Documentation
+
+When shipping features, keep these docs in sync:
+
+- **CHANGELOG.md** — Add an entry for every user-facing change. Group by date, use `###` for feature name, bullet points for details. Write for someone who uses the app, not someone who reads the code.
+- **ARCHITECTURE.md** — Update when adding new tables, API endpoints, external integrations, or changing system-level patterns (caching, auth, data flow). Don't update for feature-level UI changes.
+- **PRODUCT.md** — Update the Feature Inventory and Data Model sections when adding or removing features. Keep the "Current Limitations" section accurate.
+- **README.md** — Update the API Endpoints table and Project Structure tree when adding new routes or significant files.
+- **QA-PLAN.md** — Add test scenarios for every new feature. Remove scenarios for removed features. Follow the existing table format (ID, Priority, Scenario, Steps, Expected Result). Add new sections to the Table of Contents.
+
+When in doubt about whether a change warrants a doc update: if someone reading the doc would be misled by the current text, update it.

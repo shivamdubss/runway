@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "eval:coherence": "node evals/coherence/run.js",
-    "eval": "node evals/coherence/run.js"
+    "eval": "node evals/coherence/run.js",
+    "test:smoke": "node tests/smoke.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",

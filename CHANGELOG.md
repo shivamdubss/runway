@@ -1,0 +1,75 @@
+# Changelog
+
+## 2026-03-11
+
+### Dynamic Trip Outfit Slots
+- Support 1-5 outfits per day (was fixed at 3 named slots: morning/afternoon/evening)
+- Flexible per-day configuration via indexed slots (slot_0 through slot_4)
+
+### Trip Editing
+- Edit trip title, destination, and date range after creation
+- Date validation prevents end before start
+
+### Smart Packing List
+- Trip summary view with deduplicated item list sorted by usage count
+- Shows which days/slots each item appears in
+
+## 2026-03-10
+
+### Trip Planning MVP
+- Create multi-day trips with destination and date range
+- Day-tab calendar interface for navigating trip days
+- Outfit picker panel to assign saved/recent outfits to slots
+- Slot detail sheets showing outfit visualization and items
+
+### Garment Notes
+- Add free-text notes to any wardrobe item
+- Notes included in AI context for better recommendations
+
+### AI Image Enhancement
+- Enhance wardrobe item photos with AI-powered image improvement
+
+## 2026-03-08
+
+### Dresses & Jumpsuits Category
+- New wardrobe category for one-piece garments
+
+## 2026-03-05
+
+### Analytics & Event Tracking
+- Track wardrobe additions, outfit saves/unsaves, dislike actions
+- Events table with JSONB payload for flexible telemetry
+
+## 2026-03-04
+
+### Outfit Feedback (Dislike)
+- Dislike outfits to signal negative preference
+- Indexed for fast queries
+
+## 2026-03-02
+
+### Multi-Pose Visualizations
+- Three-pose system: front view, 3/4 angle, seated
+- Poses generated in parallel, stored as JSONB array
+- Carousel navigation with arrow buttons and dot indicators
+
+### Message Metadata
+- JSONB metadata on messages for persisting CTA button states across sessions
+
+## 2026-02-27
+
+### Saved Outfits
+- Star/save outfits to a dedicated collection
+- Persists across chat sessions
+- Accessible from sidebar navigation
+
+## Earlier (Feb 2026)
+
+### Core Platform Launch
+- Chat-based outfit recommendations with streaming SSE
+- Wardrobe management (single, bulk, from-photo import)
+- Virtual try-on visualization (OpenAI Image Edit API)
+- User profiles (body type, style preferences, reference photo)
+- Weather-aware recommendations (OpenWeatherMap integration)
+- Chat history with star/delete management
+- Google OAuth authentication via Supabase
