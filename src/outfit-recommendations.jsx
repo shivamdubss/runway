@@ -36,7 +36,7 @@ import {
   pruneVizRegistry,
 } from "./lib/visualization";
 import { useAuth } from "./lib/auth";
-import { fetchWeatherForDisplay, weatherIconToEmoji, searchCities, detectLocationFromBrowser } from "./lib/weather";
+import { fetchWeatherForDisplay, weatherIconToEmoji, searchCities, detectLocationFromBrowser, fetchForecastForTrip, wmoCodeToEmoji } from "./lib/weather";
 
 // Inject CSS animations for streaming states
 const style = document.createElement('style');
@@ -5390,7 +5390,7 @@ function TripVisualizationButton({ outfit, vizGenerations, hasReferencePhoto, on
   );
 }
 
-function SlotDetailSheet({ dayIndex, slotIndex, outfit, trip, onClose, onRemove, onReplace, vizGenerations, hasReferencePhoto, onVisualizeClick, onViewVisualization, onItemClick }) {
+function SlotDetailSheet({ dayIndex, slotIndex, outfit, trip, onClose, onRemove, vizGenerations, hasReferencePhoto, onVisualizeClick, onViewVisualization, onItemClick }) {
   const dayLabel = db.getTripDayLabel(trip.startDate, dayIndex);
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
@@ -5409,26 +5409,14 @@ function SlotDetailSheet({ dayIndex, slotIndex, outfit, trip, onClose, onRemove,
             {outfit.items.map((item, i) => <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />)}
           </div>
         )}
-        {outfit.reasoning && (
-          <p style={{ fontSize: 13, color: '#666', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5, margin: '0 0 12px' }}>{outfit.reasoning}</p>
-        )}
         <TripVisualizationButton outfit={outfit} vizGenerations={vizGenerations} hasReferencePhoto={hasReferencePhoto} onVisualizeClick={onVisualizeClick} onViewVisualization={onViewVisualization} />
-        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <button
-            onClick={onReplace}
-            style={{ flex: 1, padding: '12px 0', background: '#F3F2F0', border: 'none', borderRadius: 12, fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif", fontWeight: 500, color: '#1A1A1A', cursor: 'pointer' }}
-            onPointerDown={(e) => e.currentTarget.style.opacity = '0.7'}
-            onPointerUp={(e) => e.currentTarget.style.opacity = '1'}
-            onPointerLeave={(e) => e.currentTarget.style.opacity = '1'}
-          >Replace</button>
-          <button
-            onClick={onRemove}
-            style={{ flex: 1, padding: '12px 0', background: '#FEE2E2', border: 'none', borderRadius: 12, fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif", fontWeight: 500, color: '#DC2626', cursor: 'pointer' }}
-            onPointerDown={(e) => e.currentTarget.style.opacity = '0.7'}
-            onPointerUp={(e) => e.currentTarget.style.opacity = '1'}
-            onPointerLeave={(e) => e.currentTarget.style.opacity = '1'}
-          >Remove</button>
-        </div>
+        <button
+          onClick={onRemove}
+          style={{ width: '100%', padding: '12px 0', background: '#FEE2E2', border: 'none', borderRadius: 12, fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif", fontWeight: 500, color: '#DC2626', cursor: 'pointer', marginTop: 8 }}
+          onPointerDown={(e) => e.currentTarget.style.opacity = '0.7'}
+          onPointerUp={(e) => e.currentTarget.style.opacity = '1'}
+          onPointerLeave={(e) => e.currentTarget.style.opacity = '1'}
+        >🗑️ Remove</button>
       </div>
     </div>
   );
@@ -5474,7 +5462,7 @@ function SlotTile({ slotIndex, outfit, isSelected, onTap, width = 128 }) {
   );
 }
 
-function DayTabBar({ trip, activeDayIndex, onSelectDay, slots }) {
+function DayTabBar({ trip, activeDayIndex, onSelectDay, slots, forecast }) {
   const dayCount = db.getTripDayCount(trip.startDate, trip.endDate);
   return (
     <div style={{ overflowX: 'auto', display: 'flex', gap: 8, padding: '12px 16px', WebkitOverflowScrolling: 'touch' }}>
@@ -5482,7 +5470,10 @@ function DayTabBar({ trip, activeDayIndex, onSelectDay, slots }) {
         const label = db.getTripDayLabel(trip.startDate, i);
         const [weekday, ...rest] = label.split(', ');
         const active = i === activeDayIndex;
-        const filledCount = slots ? slots.filter(s => s.dayIndex === i && s.outfitId).length : 0;
+        const dayDate = new Date(trip.startDate + 'T00:00:00');
+        dayDate.setDate(dayDate.getDate() + i);
+        const dateStr = dayDate.toISOString().slice(0, 10);
+        const dayForecast = forecast?.find(f => f.date === dateStr);
         return (
           <button
             key={i}
@@ -5499,12 +5490,10 @@ function DayTabBar({ trip, activeDayIndex, onSelectDay, slots }) {
           >
             <span style={{ fontSize: 12, fontWeight: 600, color: active ? '#fff' : '#1A1A1A', lineHeight: 1.3 }}>{weekday}</span>
             <span style={{ fontSize: 11, color: active ? 'rgba(255,255,255,0.7)' : '#999', lineHeight: 1.3 }}>{rest.join(', ')}</span>
-            {slots && filledCount > 0 && (
-              <div style={{ display: 'flex', gap: 3, marginTop: 4 }}>
-                {Array.from({ length: filledCount }, (_, j) => (
-                  <div key={j} style={{ width: 5, height: 5, borderRadius: '50%', background: active ? '#fff' : '#1A1A1A' }} />
-                ))}
-              </div>
+            {dayForecast && (
+              <span style={{ fontSize: 10, marginTop: 2, color: active ? 'rgba(255,255,255,0.8)' : '#666', lineHeight: 1 }}>
+                {wmoCodeToEmoji(dayForecast.weatherCode)} {dayForecast.tempMax}°
+              </span>
             )}
           </button>
         );
@@ -5866,6 +5855,7 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
   const [slotDetail, setSlotDetail] = useState(null); // {dayIndex, slotName, slotIndex}
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [showEditSheet, setShowEditSheet] = useState(false);
+  const [forecast, setForecast] = useState(null);
 
   useEffect(() => {
     db.fetchTripPlanWithSlots(trip.id).then(data => {
@@ -5876,6 +5866,14 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
       setLoading(false);
     });
   }, [trip.id]);
+
+  useEffect(() => {
+    if (trip.destination) {
+      fetchForecastForTrip(trip.destination, trip.startDate, trip.endDate)
+        .then(setForecast)
+        .catch(() => setForecast(null));
+    }
+  }, [trip.id, trip.destination, trip.startDate, trip.endDate]);
 
   const slotMap = {};
   for (const s of slots) slotMap[`${s.dayIndex}-${s.slotName}`] = s;
@@ -5928,11 +5926,6 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
     }
   };
 
-  const handleReplaceSlot = (dayIndex, slotName) => {
-    setSlotDetail(null);
-    setSelectedSlot({ dayIndex, slotName });
-  };
-
   const slotDetailData = slotDetail ? slotMap[`${slotDetail.dayIndex}-${slotDetail.slotName}`] : null;
 
   if (loading) {
@@ -5948,7 +5941,7 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Day tab bar */}
       <div style={{ flexShrink: 0, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-        <DayTabBar trip={trip} activeDayIndex={activeDayIndex} onSelectDay={setActiveDayIndex} slots={slots} />
+        <DayTabBar trip={trip} activeDayIndex={activeDayIndex} onSelectDay={setActiveDayIndex} slots={slots} forecast={forecast} />
         {/* Progress + edit */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px 10px' }}>
           <span style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif", flexShrink: 0 }}>
@@ -6010,7 +6003,6 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
           trip={trip}
           onClose={() => setSlotDetail(null)}
           onRemove={() => handleRemoveSlot(slotDetail.dayIndex, slotDetail.slotName)}
-          onReplace={() => handleReplaceSlot(slotDetail.dayIndex, slotDetail.slotName)}
           vizGenerations={vizGenerations}
           hasReferencePhoto={hasReferencePhoto}
           onVisualizeClick={onVisualizeClick}
@@ -6352,7 +6344,6 @@ function TripFormSheet({ onClose, onSave, initialValues, isEdit }) {
 }
 
 function TripCard({ trip, onOpen, onDelete }) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const dayCount = db.getTripDayCount(trip.startDate, trip.endDate);
   const startLabel = new Date(trip.startDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const endLabel = new Date(trip.endDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -6373,9 +6364,9 @@ function TripCard({ trip, onOpen, onDelete }) {
           </div>
         </div>
         <button
-          onClick={(e) => { e.stopPropagation(); setMenuOpen(m => !m); }}
-          style={{ width: 28, height: 28, borderRadius: 8, border: 'none', background: 'transparent', color: '#999', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-        >···</button>
+          onClick={(e) => { e.stopPropagation(); onDelete(trip.id); }}
+          style={{ width: 28, height: 28, borderRadius: 8, border: 'none', background: 'transparent', color: '#999', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+        >🗑️</button>
       </div>
       <div style={{ display: 'flex', gap: 6 }} onClick={onOpen}>
         {dayCircles.map(i => (
@@ -6385,17 +6376,6 @@ function TripCard({ trip, onOpen, onDelete }) {
         ))}
         {dayCount > 7 && <div style={{ width: 28, height: 28, borderRadius: 14, background: '#F3F2F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#999', fontFamily: "'DM Sans', sans-serif" }}>+{dayCount - 7}</div>}
       </div>
-      {menuOpen && (
-        <>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setMenuOpen(false)} />
-          <div style={{ position: 'absolute', top: 44, right: 12, background: '#fff', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.15)', border: '1px solid rgba(0,0,0,0.08)', zIndex: 50, overflow: 'hidden', minWidth: 120 }}>
-            <button onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete(trip.id); }}
-              style={{ width: '100%', padding: '11px 16px', border: 'none', background: 'transparent', color: '#DC2626', fontSize: 14, fontFamily: "'DM Sans', sans-serif", fontWeight: 500, cursor: 'pointer', textAlign: 'left' }}>
-              Delete trip
-            </button>
-          </div>
-        </>
-      )}
     </div>
   );
 }

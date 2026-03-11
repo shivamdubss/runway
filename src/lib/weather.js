@@ -125,3 +125,91 @@ export function weatherIconToEmoji(icon) {
   };
   return map[icon] || '🌡️';
 }
+
+/**
+ * Map WMO weather code to an emoji (used by Open-Meteo API).
+ */
+export function wmoCodeToEmoji(code) {
+  if (code == null) return '';
+  if (code === 0) return '☀️';
+  if (code <= 3) return '⛅';
+  if (code <= 48) return '🌫️';
+  if (code <= 57) return '🌧️';
+  if (code <= 67) return '🌧️';
+  if (code <= 77) return '🌨️';
+  if (code <= 82) return '🌧️';
+  if (code <= 86) return '🌨️';
+  if (code >= 95) return '⛈️';
+  return '🌡️';
+}
+
+const FORECAST_CACHE_KEY = 'runway_forecast_cache';
+const FORECAST_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+/**
+ * Fetch daily weather forecast for a trip using Open-Meteo (free, no API key).
+ *
+ * @param {string} city - Destination city name
+ * @param {string} startDate - YYYY-MM-DD
+ * @param {string} endDate - YYYY-MM-DD
+ * @returns {Promise<Array<{date: string, weatherCode: number, tempMax: number, tempMin: number}>|null>}
+ */
+export async function fetchForecastForTrip(city, startDate, endDate) {
+  if (!city || !startDate || !endDate) return null;
+
+  const cacheKey = `${city}|${startDate}|${endDate}`;
+
+  // Check cache
+  try {
+    const cached = localStorage.getItem(FORECAST_CACHE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed.key === cacheKey && Date.now() - parsed.fetchedAt < FORECAST_CACHE_TTL_MS) {
+        return parsed.data;
+      }
+    }
+  } catch { /* ignore corrupt cache */ }
+
+  try {
+    // Geocode city to get coordinates
+    const geoRes = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`
+    );
+    if (!geoRes.ok) return null;
+    const geoData = await geoRes.json();
+    const loc = geoData.results?.[0];
+    if (!loc) return null;
+
+    // Fetch forecast
+    const forecastRes = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto&start_date=${startDate}&end_date=${endDate}`
+    );
+    if (!forecastRes.ok) return null;
+    const forecastData = await forecastRes.json();
+
+    const dates = forecastData.daily?.time || [];
+    const codes = forecastData.daily?.weathercode || [];
+    const maxTemps = forecastData.daily?.temperature_2m_max || [];
+    const minTemps = forecastData.daily?.temperature_2m_min || [];
+
+    const data = dates.map((date, i) => ({
+      date,
+      weatherCode: codes[i],
+      tempMax: Math.round(maxTemps[i]),
+      tempMin: Math.round(minTemps[i]),
+    }));
+
+    // Cache the result
+    try {
+      localStorage.setItem(FORECAST_CACHE_KEY, JSON.stringify({
+        key: cacheKey,
+        data,
+        fetchedAt: Date.now(),
+      }));
+    } catch { /* quota exceeded, ignore */ }
+
+    return data;
+  } catch {
+    return null;
+  }
+}

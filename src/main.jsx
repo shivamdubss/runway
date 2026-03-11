@@ -1,5 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { Agentation } from 'agentation'
 import './runway.css'
 import { AuthProvider, useAuth } from './lib/auth'
 import OutfitRecommendations from './outfit-recommendations'
@@ -37,5 +38,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <AuthProvider>
       <App />
     </AuthProvider>
+    {import.meta.env.DEV && <Agentation />}
   </React.StrictMode>
 )
