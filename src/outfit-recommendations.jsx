@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
+import { Pencil, Trash2, Wand2, Eye, Loader2 } from "lucide-react";
 import { sendChatMessageStreaming } from "./lib/api";
 import { track } from "./lib/analytics";
 import { uploadImage } from "./lib/upload";
@@ -257,7 +258,7 @@ function Lightbox({ item, onClose, onDelete, onEdit, onEnhance, onStyleItem, isE
               justifyContent: "center",
             }}
           >
-            ✏️
+            <Pencil size={16} />
           </button>
         )}
         <div style={{
@@ -499,7 +500,7 @@ function Lightbox({ item, onClose, onDelete, onEdit, onEnhance, onStyleItem, isE
                             border: "1px solid rgba(200,90,90,0.25)",
                           })}
                         >
-                          🗑️
+                          <Trash2 size={18} />
                         </button>
                       )}
                       {onStyleItem && (
@@ -533,7 +534,7 @@ function Lightbox({ item, onClose, onDelete, onEdit, onEnhance, onStyleItem, isE
                             cursor: isEnhancing ? "default" : "pointer",
                           })}
                         >
-                          ✨ {isEnhancing ? "Enhancing…" : "Enhance"}
+                          <Wand2 size={16} /> {isEnhancing ? "Refining…" : "Refine"}
                         </button>
                       </div>
                     )}
@@ -554,9 +555,7 @@ function GarmentDetailPage({ item, onDelete, onEdit, onEnhance, onStyleItem, onS
   const [editName, setEditName] = useState(item.name);
   const [editCategory, setEditCategory] = useState(item.category);
   const [isSaving, setIsSaving] = useState(false);
-  const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notesValue, setNotesValue] = useState(item.notes || '');
-  const [isSavingNotes, setIsSavingNotes] = useState(false);
   const images = item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : []);
   const hasMultiple = images.length > 1;
   const canEdit = item.id && onEdit;
@@ -584,21 +583,6 @@ function GarmentDetailPage({ item, onDelete, onEdit, onEnhance, onStyleItem, onS
     setIsEditing(false);
   };
 
-  const handleSaveNotes = async () => {
-    if (!onSaveNotes) return;
-    setIsSavingNotes(true);
-    try {
-      await onSaveNotes(item.id, notesValue.trim());
-      setIsEditingNotes(false);
-    } finally {
-      setIsSavingNotes(false);
-    }
-  };
-
-  const handleCancelNotes = () => {
-    setNotesValue(item.notes || '');
-    setIsEditingNotes(false);
-  };
 
   return (
     <div style={{
@@ -621,7 +605,7 @@ function GarmentDetailPage({ item, onDelete, onEdit, onEnhance, onStyleItem, onS
         justifyContent: "center",
         overflow: "hidden",
         aspectRatio: "4 / 3",
-        maxHeight: "55dvh",
+        maxHeight: "40dvh",
       }}>
         {images.length > 0 ? (
           <>
@@ -632,7 +616,7 @@ function GarmentDetailPage({ item, onDelete, onEdit, onEnhance, onStyleItem, onS
                 width: "100%",
                 height: "100%",
                 objectFit: "contain",
-                padding: "24px",
+                padding: "32px",
                 boxSizing: "border-box",
               }}
             />
@@ -702,7 +686,7 @@ function GarmentDetailPage({ item, onDelete, onEdit, onEnhance, onStyleItem, onS
               justifyContent: "center",
             }}
           >
-            ✏️
+            <Pencil size={16} />
           </button>
         )}
       </div>
@@ -839,103 +823,35 @@ function GarmentDetailPage({ item, onDelete, onEdit, onEnhance, onStyleItem, onS
             </div>
 
             {/* Notes section */}
-            {isEditingNotes ? (
-              <div style={{ marginBottom: 16 }}>
-                <textarea
-                  value={notesValue}
-                  onChange={(e) => setNotesValue(e.target.value)}
-                  placeholder="Add a note about this item..."
-                  autoFocus
-                  style={{
-                    width: "100%",
-                    minHeight: 80,
-                    borderRadius: 10,
-                    border: "1px solid rgba(0,0,0,0.12)",
-                    padding: "10px 12px",
-                    fontSize: "var(--font-caption)",
-                    fontFamily: "'DM Sans', sans-serif",
-                    color: "#1A1A1A",
-                    boxSizing: "border-box",
-                    resize: "none",
-                    outline: "none",
-                    background: "#fff",
-                    lineHeight: 1.5,
-                  }}
-                />
-                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                  <button
-                    onClick={handleCancelNotes}
-                    style={{
-                      flex: 1,
-                      height: 36,
-                      borderRadius: 10,
-                      border: "1px solid rgba(0,0,0,0.12)",
-                      background: "#fff",
-                      color: "#555",
-                      fontSize: "var(--font-caption)",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      fontFamily: "'DM Sans', sans-serif",
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveNotes}
-                    disabled={isSavingNotes}
-                    style={{
-                      flex: 2,
-                      height: 36,
-                      borderRadius: 10,
-                      border: "none",
-                      background: isSavingNotes ? "#EEEDEB" : "#1A1A1A",
-                      color: isSavingNotes ? "#ccc" : "#fff",
-                      fontSize: "var(--font-caption)",
-                      fontWeight: 600,
-                      cursor: isSavingNotes ? "default" : "pointer",
-                      fontFamily: "'DM Sans', sans-serif",
-                    }}
-                  >
-                    {isSavingNotes ? "Saving..." : "Save Note"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div
-                onClick={onSaveNotes ? () => setIsEditingNotes(true) : undefined}
-                style={{
-                  marginBottom: 16,
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  background: item.notes ? "rgba(0,0,0,0.03)" : "transparent",
-                  border: item.notes ? "1px solid rgba(0,0,0,0.07)" : "1px dashed rgba(0,0,0,0.15)",
-                  cursor: onSaveNotes ? "pointer" : "default",
-                  minHeight: 40,
-                  display: "flex",
-                  alignItems: "center",
+            <div style={{ marginBottom: 16 }}>
+              <textarea
+                value={notesValue}
+                onChange={(e) => setNotesValue(e.target.value)}
+                onBlur={() => {
+                  if (onSaveNotes && notesValue.trim() !== (item.notes || '')) {
+                    onSaveNotes(item.id, notesValue.trim());
+                  }
                 }}
-              >
-                {item.notes ? (
-                  <span style={{
-                    fontSize: "var(--font-caption)",
-                    color: "#444",
-                    fontFamily: "'DM Sans', sans-serif",
-                    lineHeight: 1.5,
-                    whiteSpace: "pre-wrap",
-                  }}>
-                    {item.notes}
-                  </span>
-                ) : (
-                  <span style={{
-                    fontSize: "var(--font-caption)",
-                    color: "#bbb",
-                    fontFamily: "'DM Sans', sans-serif",
-                  }}>
-                    {onSaveNotes ? "Add a note..." : "No notes"}
-                  </span>
-                )}
-              </div>
-            )}
+                placeholder="Add a note..."
+                readOnly={!onSaveNotes}
+                style={{
+                  width: "100%",
+                  minHeight: 60,
+                  borderRadius: 10,
+                  border: "1px solid rgba(0,0,0,0.08)",
+                  padding: "10px 12px",
+                  fontSize: "var(--font-caption)",
+                  fontFamily: "'DM Sans', sans-serif",
+                  color: "#1A1A1A",
+                  boxSizing: "border-box",
+                  resize: "none",
+                  outline: "none",
+                  background: "rgba(0,0,0,0.02)",
+                  lineHeight: 1.5,
+                  cursor: onSaveNotes ? "text" : "default",
+                }}
+              />
+            </div>
 
             <div style={{
               borderTop: "1px solid rgba(0,0,0,0.06)",
@@ -963,7 +879,7 @@ function GarmentDetailPage({ item, onDelete, onEdit, onEnhance, onStyleItem, onS
                       flexShrink: 0,
                     }}
                   >
-                    🗑️
+                    <Trash2 size={18} />
                   </button>
                 )}
                 {onStyleItem && (
@@ -1007,7 +923,7 @@ function GarmentDetailPage({ item, onDelete, onEdit, onEnhance, onStyleItem, onS
                     gap: 6,
                   }}
                 >
-                  ✨ {isEnhancing ? "Enhancing…" : "Enhance"}
+                  <Wand2 size={16} /> {isEnhancing ? "Refining…" : "Refine"}
                 </button>
               )}
             </div>
@@ -3173,108 +3089,127 @@ function SavedOutfitsView({ savedOutfits, onItemClick, onToggleSaved, vizGenerat
           padding: `0 var(--container-padding-x) calc(24px + var(--safe-bottom))`,
         }}
       >
-        {savedOutfits.map((outfit) => {
-          const vizStatus = vizGenerations?.[outfit.id]?.status;
-          return (
-            <div key={outfit.id} style={{ marginBottom: 24 }}>
-              <div style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 10,
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(2, 1fr)",
+          gap: 16,
+        }}>
+          {savedOutfits.map((outfit) => {
+            const vizStatus = vizGenerations?.[outfit.id]?.status;
+            const thumbnails = outfit.items.slice(0, 4);
+            return (
+              <div key={outfit.id} style={{
+                background: "#fff",
+                borderRadius: 14,
+                border: "1px solid rgba(0,0,0,0.06)",
+                overflow: "hidden",
               }}>
-                <span style={{
-                  fontSize: "var(--font-body)",
-                  fontWeight: 600,
-                  color: "#1A1A1A",
-                  fontFamily: "'DM Sans', sans-serif",
+                {/* 2x2 garment thumbnail grid */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  aspectRatio: "1",
                 }}>
-                  {outfit.vibe}
-                </span>
-                <button
-                  onClick={() => onToggleSaved(outfit.id, true)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: 4,
-                    display: "flex",
-                    alignItems: "center",
-                  }}
-                  title="Unsave outfit"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24"
-                    fill="#1A1A1A" stroke="#1A1A1A"
-                    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                  >
-                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-                  </svg>
-                </button>
-              </div>
-              <div className="item-card-grid">
-                {outfit.items.map((item, i) => (
-                  <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />
-                ))}
-              </div>
-              <button
-                onClick={() => {
-                  if (vizStatus === 'ready') {
-                    onViewVisualization(outfit.id);
-                  } else if (vizStatus !== 'generating' && vizStatus !== 'queued') {
-                    onVisualizeClick(outfit);
-                  }
-                }}
-                disabled={!hasReferencePhoto || vizStatus === 'generating' || vizStatus === 'queued'}
-                style={{
-                  width: "100%",
-                  padding: "12px 20px",
-                  marginTop: 16,
-                  background: vizStatus === 'ready'
-                    ? "#1A1A1A"
-                    : "transparent",
-                  color: vizStatus === 'ready'
-                    ? "#fff"
-                    : hasReferencePhoto ? "#666" : "#bbb",
-                  border: vizStatus === 'ready'
-                    ? "none"
-                    : hasReferencePhoto ? "1px solid #E0E0E0" : "1px solid #EBEBEB",
-                  borderRadius: 12,
-                  fontSize: "var(--font-body)",
-                  fontFamily: "'DM Sans', sans-serif",
-                  fontWeight: vizStatus === 'ready' ? 600 : 500,
-                  cursor: hasReferencePhoto && vizStatus !== 'generating' && vizStatus !== 'queued' ? "pointer" : "not-allowed",
-                  transition: "all 0.2s ease",
-                  opacity: vizStatus === 'generating' || vizStatus === 'queued' ? 0.6 : 1,
-                  letterSpacing: "0.01em",
-                }}
-              >
-                {vizStatus === 'generating' ? (
-                  <span
-                    role="status"
-                    aria-label="Creating your look"
-                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                  >
-                    <span style={{
-                      width: 16, height: 16, borderRadius: "50%",
-                      border: "2px solid #D8D8D8", borderTopColor: "#8A8A8A",
-                      animation: "spin 0.8s linear infinite",
-                    }} />
+                  {thumbnails.map((item, i) => (
+                    <div
+                      key={i}
+                      onClick={() => onItemClick(item)}
+                      style={{
+                        background: "#f5f5f4",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        overflow: "hidden",
+                        borderRight: i % 2 === 0 ? "1px solid rgba(0,0,0,0.04)" : "none",
+                        borderBottom: i < 2 ? "1px solid rgba(0,0,0,0.04)" : "none",
+                      }}
+                    >
+                      {item.image || (item.images && item.images[0]) ? (
+                        <img
+                          src={item.images?.[0] || item.image}
+                          alt={item.name}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: 24 }}>{item.emoji}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {/* Ribbon: viz icon + vibe name + unsave */}
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "10px 12px",
+                  gap: 8,
+                }}>
+                  {hasReferencePhoto && (
+                    <button
+                      onClick={() => {
+                        if (vizStatus === 'ready') {
+                          onViewVisualization(outfit.id);
+                        } else if (vizStatus !== 'generating' && vizStatus !== 'queued') {
+                          onVisualizeClick(outfit);
+                        }
+                      }}
+                      disabled={vizStatus === 'generating' || vizStatus === 'queued'}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: vizStatus === 'generating' || vizStatus === 'queued' ? "default" : "pointer",
+                        padding: 2,
+                        display: "flex",
+                        alignItems: "center",
+                        color: vizStatus === 'ready' ? "#1A1A1A" : "#999",
+                        opacity: vizStatus === 'generating' || vizStatus === 'queued' ? 0.5 : 1,
+                      }}
+                      title={vizStatus === 'ready' ? "View your look" : "Try this on"}
+                    >
+                      {vizStatus === 'generating' || vizStatus === 'queued' ? (
+                        <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+                      ) : (
+                        <Eye size={16} />
+                      )}
+                    </button>
+                  )}
+                  <span style={{
+                    flex: 1,
+                    fontSize: "var(--font-caption)",
+                    fontWeight: 600,
+                    color: "#1A1A1A",
+                    fontFamily: "'DM Sans', sans-serif",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}>
+                    {outfit.vibe}
                   </span>
-                ) : vizStatus === 'queued' ? (
-                  <span>Hang tight...</span>
-                ) : vizStatus === 'ready' ? (
-                  <span>View your look</span>
-                ) : vizStatus === 'error' ? (
-                  <span>Try again</span>
-                ) : hasReferencePhoto ? (
-                  <span>See this on you 😎</span>
-                ) : (
-                  <span>Add a photo to try things on</span>
-                )}
-              </button>
-            </div>
-          );
-        })}
+                  <button
+                    onClick={() => onToggleSaved(outfit.id, true)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: 2,
+                      display: "flex",
+                      alignItems: "center",
+                      flexShrink: 0,
+                    }}
+                    title="Unsave outfit"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24"
+                      fill="#1A1A1A" stroke="#1A1A1A"
+                      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                    >
+                      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -5354,6 +5289,15 @@ function ProfileView({ profile, onSave, focusLocation, onClearFocusLocation }) {
 
 // ── Trip Planning ────────────────────────────────────────────────────────────
 
+function TrashIcon({ size = 16, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+}
+
 function outfitLabel(slotIndex) {
   return `Outfit ${slotIndex + 1}`;
 }
@@ -5416,7 +5360,7 @@ function SlotDetailSheet({ dayIndex, slotIndex, outfit, trip, onClose, onRemove,
           onPointerDown={(e) => e.currentTarget.style.opacity = '0.7'}
           onPointerUp={(e) => e.currentTarget.style.opacity = '1'}
           onPointerLeave={(e) => e.currentTarget.style.opacity = '1'}
-        >🗑️ Remove</button>
+        ><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><TrashIcon size={14} color="#DC2626" /> Remove</span></button>
       </div>
     </div>
   );
@@ -5856,6 +5800,7 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [forecast, setForecast] = useState(null);
+  const [activeOutfitIndex, setActiveOutfitIndex] = useState(0);
 
   useEffect(() => {
     db.fetchTripPlanWithSlots(trip.id).then(data => {
@@ -5917,7 +5862,10 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
   };
 
   const handleRemoveSlot = async (dayIndex, slotName) => {
-    setSlots(prev => prev.filter(s => !(s.dayIndex === dayIndex && s.slotName === slotName)));
+    const nextSlots = slots.filter(s => !(s.dayIndex === dayIndex && s.slotName === slotName));
+    const remaining = nextSlots.filter(s => s.dayIndex === dayIndex && s.outfitId).length;
+    setSlots(nextSlots);
+    setActiveOutfitIndex(prev => Math.min(prev, Math.max(0, remaining - 1)));
     setSlotDetail(null);
     try {
       await db.removeTripSlot({ tripPlanId: trip.id, dayIndex, slotName });
@@ -5936,18 +5884,27 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
 
   const daySlots = slots.filter(s => s.dayIndex === activeDayIndex && s.outfitId).sort((a, b) => db.slotIndexFromName(a.slotName) - db.slotIndexFromName(b.slotName));
   const canAddMore = daySlots.length < db.MAX_OUTFITS_PER_DAY;
+  const activeSlot = daySlots.length > 0 && activeOutfitIndex < daySlots.length ? daySlots[activeOutfitIndex] : null;
+  const activeOutfit = activeSlot?.outfit;
+  const activeSlotIndex = activeSlot ? db.slotIndexFromName(activeSlot.slotName) : 0;
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Day tab bar */}
       <div style={{ flexShrink: 0, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-        <DayTabBar trip={trip} activeDayIndex={activeDayIndex} onSelectDay={setActiveDayIndex} slots={slots} forecast={forecast} />
-        {/* Progress + edit */}
+        <DayTabBar trip={trip} activeDayIndex={activeDayIndex} onSelectDay={(i) => { setActiveDayIndex(i); setActiveOutfitIndex(0); }} slots={slots} forecast={forecast} />
+        {/* Progress + actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px 10px' }}>
           <span style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif", flexShrink: 0 }}>
             {filledCount} outfit{filledCount !== 1 ? 's' : ''} planned
           </span>
           <div style={{ flex: 1 }} />
+          <button
+            onClick={onOpenSummary}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif" }}
+          >
+            Packing list
+          </button>
           <button
             onClick={() => setShowEditSheet(true)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif" }}
@@ -5957,30 +5914,68 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
         </div>
       </div>
 
-      {/* Day slot cards */}
-      <div style={{ flexShrink: 0, padding: '12px 16px 0' }}>
-        {daySlots.map(slot => {
-          const slotIndex = db.slotIndexFromName(slot.slotName);
-          return (
-            <DaySlotCard
-              key={slot.slotName}
-              slotIndex={slotIndex}
-              outfit={slot.outfit}
-              isSelected={false}
-              onTap={() => handleSlotTap(activeDayIndex, slot.slotName, slotIndex, slot.outfit)}
-            />
-          );
-        })}
-        {canAddMore && (
-          <DaySlotCard
-            key="add"
-            slotIndex={daySlots.length}
-            outfit={null}
-            isSelected={!!selectedSlot && selectedSlot.dayIndex === activeDayIndex}
-            isAddButton
-            onTap={() => handleAddOutfit(activeDayIndex)}
-          />
-        )}
+      {/* Outfit pills + full-size display */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 0' }}>
+        {/* Outfit toggle pills */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+          {daySlots.map((slot, i) => {
+            const isActive = i === activeOutfitIndex;
+            return (
+              <button
+                key={slot.slotName}
+                onClick={() => setActiveOutfitIndex(i)}
+                style={{
+                  padding: '6px 14px', borderRadius: 20, cursor: 'pointer',
+                  background: isActive ? '#1A1A1A' : 'transparent',
+                  border: isActive ? 'none' : '1px solid rgba(0,0,0,0.12)',
+                  color: isActive ? '#fff' : '#1A1A1A',
+                  fontSize: 13, fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                {outfitLabel(db.slotIndexFromName(slot.slotName))}
+              </button>
+            );
+          })}
+          {canAddMore && (
+            <button
+              onClick={() => handleAddOutfit(activeDayIndex)}
+              style={{
+                padding: '6px 14px', borderRadius: 20, cursor: 'pointer',
+                background: 'transparent', border: '1.5px dashed #D4D4D4',
+                color: '#999', fontSize: 13, fontWeight: 500, fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              + Add
+            </button>
+          )}
+        </div>
+
+        {/* Active outfit display */}
+        {activeSlot ? (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: 0 }}>
+                {activeOutfit.vibe}
+              </h3>
+              <button
+                onClick={() => handleSlotTap(activeDayIndex, activeSlot.slotName, activeSlotIndex, activeOutfit)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif" }}
+              >
+                Details
+              </button>
+            </div>
+            {activeOutfit.items.length > 0 && (
+              <div className="item-card-grid">
+                {activeOutfit.items.map((item, i) => <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />)}
+              </div>
+            )}
+          </div>
+        ) : daySlots.length === 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', color: '#999', fontFamily: "'DM Sans', sans-serif" }}>
+            <span style={{ fontSize: 32, marginBottom: 8 }}>👕</span>
+            <span style={{ fontSize: 14 }}>No outfits planned for this day</span>
+          </div>
+        ) : null}
       </div>
 
       {/* Outfit selection sheet */}
@@ -6286,12 +6281,64 @@ function TripFormSheet({ onClose, onSave, initialValues, isEdit }) {
   const [endDate, setEndDate] = useState(initialValues?.endDate || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [citySuggestions, setCitySuggestions] = useState([]);
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState(-1);
+  const [selectedCity, setSelectedCity] = useState(initialValues?.destination ? { name: initialValues.destination } : null);
+  const cityDebounceRef = useRef(null);
+
+  useEffect(() => {
+    return () => { if (cityDebounceRef.current) clearTimeout(cityDebounceRef.current); };
+  }, []);
+
+  const handleDestinationChange = (e) => {
+    const value = e.target.value;
+    setDestination(value);
+    setSelectedCity(null);
+    setHighlightIndex(-1);
+    if (cityDebounceRef.current) clearTimeout(cityDebounceRef.current);
+    if (value.trim().length < 2) {
+      setCitySuggestions([]);
+      setShowCityDropdown(false);
+      return;
+    }
+    cityDebounceRef.current = setTimeout(async () => {
+      const results = await searchCities(value);
+      setCitySuggestions(results);
+      setShowCityDropdown(results.length > 0);
+    }, 300);
+  };
+
+  const handleCitySelect = (city) => {
+    const display = city.country ? `${city.name}, ${city.country}` : city.name;
+    setDestination(display);
+    setSelectedCity(city);
+    setCitySuggestions([]);
+    setShowCityDropdown(false);
+  };
+
+  const handleCityKeyDown = (e) => {
+    if (!showCityDropdown || citySuggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightIndex(i => Math.min(i + 1, citySuggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightIndex(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' && highlightIndex >= 0) {
+      e.preventDefault();
+      handleCitySelect(citySuggestions[highlightIndex]);
+    } else if (e.key === 'Escape') {
+      setShowCityDropdown(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!title.trim()) { setError('Please enter a trip name'); return; }
     if (!startDate) { setError('Please select a start date'); return; }
     if (!endDate) { setError('Please select an end date'); return; }
     if (endDate < startDate) { setError('End date must be after start date'); return; }
+    if (destination.trim() && !selectedCity) { setError('Please select a destination from the suggestions'); return; }
     setLoading(true);
     setError('');
     try {
@@ -6308,7 +6355,7 @@ function TripFormSheet({ onClose, onSave, initialValues, isEdit }) {
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }} onClick={onClose} />
-      <div style={{ position: 'relative', background: '#fff', borderRadius: '20px 20px 0 0', padding: '8px 20px calc(32px + var(--safe-bottom))', overflow: 'hidden', width: '100%', boxSizing: 'border-box' }}>
+      <div style={{ position: 'relative', background: '#fff', borderRadius: '20px 20px 0 0', padding: '8px 20px calc(32px + var(--safe-bottom))', overflow: 'visible', width: '100%', boxSizing: 'border-box' }}>
         <div style={{ width: 40, height: 4, background: '#D4D4D4', borderRadius: 2, margin: '0 auto 16px' }} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <span style={{ fontSize: 17, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif" }}>{isEdit ? 'Edit Trip' : 'New Trip'}</span>
@@ -6318,9 +6365,34 @@ function TripFormSheet({ onClose, onSave, initialValues, isEdit }) {
           <label style={labelStyle}>Trip name</label>
           <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. NYC Work Trip" style={inputStyle} />
         </div>
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16, position: 'relative' }}>
           <label style={labelStyle}>Destination</label>
-          <input value={destination} onChange={e => setDestination(e.target.value)} placeholder="e.g. New York City" style={inputStyle} />
+          <input
+            value={destination}
+            onChange={handleDestinationChange}
+            onKeyDown={handleCityKeyDown}
+            onBlur={() => setTimeout(() => setShowCityDropdown(false), 150)}
+            placeholder="e.g. New York City"
+            style={inputStyle}
+          />
+          {showCityDropdown && citySuggestions.length > 0 && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 10, maxHeight: 180, overflowY: 'auto', marginTop: 4 }}>
+              {citySuggestions.map((city, i) => (
+                <div
+                  key={i}
+                  onMouseDown={() => handleCitySelect(city)}
+                  onMouseEnter={() => setHighlightIndex(i)}
+                  style={{
+                    padding: '10px 14px', cursor: 'pointer', fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif",
+                    background: i === highlightIndex ? '#F3F2F0' : 'transparent',
+                    color: '#1A1A1A',
+                  }}
+                >
+                  {[city.name, city.admin1, city.country].filter(Boolean).join(', ')}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ marginBottom: 16, overflow: 'hidden' }}>
           <label style={labelStyle}>Start date</label>
@@ -6343,44 +6415,37 @@ function TripFormSheet({ onClose, onSave, initialValues, isEdit }) {
   );
 }
 
-function TripCard({ trip, onOpen, onDelete }) {
+function TripCard({ trip, onOpen, onDelete, outfitCount = 0 }) {
   const dayCount = db.getTripDayCount(trip.startDate, trip.endDate);
   const startLabel = new Date(trip.startDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const endLabel = new Date(trip.endDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const dayCircles = Array.from({ length: Math.min(dayCount, 7) }, (_, i) => i);
 
   return (
     <div
-      style={{ background: '#fff', borderRadius: 12, padding: 16, border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', marginBottom: 10, position: 'relative' }}
+      onClick={onOpen}
+      style={{ background: '#fff', borderRadius: 12, padding: 16, border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', marginBottom: 10, cursor: 'pointer' }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}
-        onClick={onOpen}
-      >
-        <div style={{ flex: 1, cursor: 'pointer' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div style={{ flex: 1 }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif" }}>{trip.title}</div>
           <div style={{ fontSize: 13, color: '#999', fontFamily: "'DM Sans', sans-serif", marginTop: 2 }}>
             {startLabel} – {endLabel} · {dayCount} day{dayCount !== 1 ? 's' : ''}
             {trip.destination && <span> · {trip.destination}</span>}
           </div>
+          <div style={{ fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif", marginTop: 4 }}>
+            {outfitCount} outfit{outfitCount !== 1 ? 's' : ''} planned
+          </div>
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(trip.id); }}
           style={{ width: 28, height: 28, borderRadius: 8, border: 'none', background: 'transparent', color: '#999', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-        >🗑️</button>
-      </div>
-      <div style={{ display: 'flex', gap: 6 }} onClick={onOpen}>
-        {dayCircles.map(i => (
-          <div key={i} style={{ width: 28, height: 28, borderRadius: 14, background: '#F3F2F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, color: '#666', fontFamily: "'DM Sans', sans-serif", cursor: 'pointer', flexShrink: 0 }}>
-            {i + 1}
-          </div>
-        ))}
-        {dayCount > 7 && <div style={{ width: 28, height: 28, borderRadius: 14, background: '#F3F2F0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#999', fontFamily: "'DM Sans', sans-serif" }}>+{dayCount - 7}</div>}
+        ><TrashIcon size={14} color="#999" /></button>
       </div>
     </div>
   );
 }
 
-function TripsListView({ tripPlans, onOpenTrip, onDeleteTrip, onNewTrip }) {
+function TripsListView({ tripPlans, onOpenTrip, onDeleteTrip, onNewTrip, slotCounts }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div className="outfit-scroll-panel" style={{ flex: 1, overflowY: 'auto', padding: `0 var(--container-padding-x) calc(24px + var(--safe-bottom))` }}>
@@ -6401,7 +6466,7 @@ function TripsListView({ tripPlans, onOpenTrip, onDeleteTrip, onNewTrip }) {
           </div>
         ) : (
           tripPlans.map(trip => (
-            <TripCard key={trip.id} trip={trip} onOpen={() => onOpenTrip(trip)} onDelete={onDeleteTrip} />
+            <TripCard key={trip.id} trip={trip} onOpen={() => onOpenTrip(trip)} onDelete={onDeleteTrip} outfitCount={slotCounts?.[trip.id] || 0} />
           ))
         )}
       </div>
@@ -6738,6 +6803,7 @@ export default function OutfitRecommendations() {
   const [savedOutfits, setSavedOutfits] = useState([]);
   const [focusLocation, setFocusLocation] = useState(false);
   const [tripPlans, setTripPlans] = useState([]);
+  const [tripSlotCounts, setTripSlotCounts] = useState({});
   const [activeTrip, setActiveTrip] = useState(null); // the trip object for trip-detail/summary
   const [showNewTripSheet, setShowNewTripSheet] = useState(false);
   const chatSessionRef = useRef(0);
@@ -6807,19 +6873,21 @@ export default function OutfitRecommendations() {
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const [grouped, flat, chats, dbProfile, saved, trips] = await Promise.all([
+        const [grouped, flat, chats, dbProfile, saved, trips, slotCounts] = await Promise.all([
           db.fetchWardrobeItems(),
           db.fetchWardrobeItemsFlat(),
           db.fetchChats(),
           db.fetchProfile(),
           db.fetchSavedOutfits(),
           db.fetchTripPlans(),
+          db.fetchTripSlotCounts(),
         ]);
         setWardrobeItems(grouped);
         setWardrobeFlat(flat);
         setChatHistory(chats);
         setSavedOutfits(saved);
         setTripPlans(trips);
+        setTripSlotCounts(slotCounts);
 
         if (dbProfile && Object.keys(dbProfile).length > 0) {
           setProfile(prev => ({ ...prev, ...dbProfile }));
@@ -7894,6 +7962,7 @@ export default function OutfitRecommendations() {
       ) : view === "trips" ? (
         <TripsListView
           tripPlans={tripPlans}
+          slotCounts={tripSlotCounts}
           onOpenTrip={handleOpenTrip}
           onDeleteTrip={handleDeleteTrip}
           onNewTrip={() => setShowNewTripSheet(true)}
