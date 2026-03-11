@@ -413,7 +413,7 @@ export async function fetchTripPlans() {
 
 export async function fetchTripSlotCounts() {
   const { data, error } = await supabase
-    .from('trip_slots')
+    .from('trip_plan_slots')
     .select('trip_plan_id')
     .not('outfit_id', 'is', null);
   if (error) throw error;
