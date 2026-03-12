@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractMessageProgressFromJsonBuffer } from '../server/api/chat-stream.js';
+import { extractMessageProgressFromJsonBuffer } from '../api/chat/stream.js';
 
 describe('extractMessageProgressFromJsonBuffer', () => {
   it('returns incomplete progress for partial message JSON', () => {

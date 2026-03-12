@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseOutfitResponse } from '../server/parse-outfits.js';
+import { parseOutfitResponse } from '../api/_lib/parse-outfits.js';
 
 const wardrobeItems = [
   { id: 1, name: 'White Oxford Shirt', color: 'white', category: 'Tops' },

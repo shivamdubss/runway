@@ -59,6 +59,18 @@ function readStream(req) {
  * so we check that first before falling back to streaming.
  */
 async function parseMultipartForm(req) {
+  if (req.file) {
+    return req.file;
+  }
+
+  if (
+    req.headers['content-type']?.startsWith('multipart/form-data') &&
+    req.body &&
+    !Buffer.isBuffer(req.body)
+  ) {
+    throw new Error('No image file found in multipart request');
+  }
+
   const rawBody = Buffer.isBuffer(req.body) ? req.body : await readStream(req);
   return extractFileFromMultipart(rawBody, req.headers['content-type'] || '');
 }

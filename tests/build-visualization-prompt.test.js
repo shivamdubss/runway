@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildVisualizationPrompt } from '../server/api/generate-outfit-visualization.js';
+import { buildVisualizationPrompt } from '../api/generate-outfit-visualization.js';
 
 describe('buildVisualizationPrompt', () => {
   it('builds a prompt with all item fields (name, color, category)', () => {

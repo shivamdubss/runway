@@ -5,6 +5,10 @@ import { getServerSupabase } from './supabase.js';
  * Returns the user if valid, or sends a 401 response and returns null.
  */
 export async function verifyAuth(req, res) {
+  if (req.user) {
+    return req.user;
+  }
+
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Missing or invalid authorization header' });
@@ -20,5 +24,6 @@ export async function verifyAuth(req, res) {
     return null;
   }
 
+  req.user = user;
   return user;
 }

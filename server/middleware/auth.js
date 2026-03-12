@@ -1,19 +1,8 @@
-import { getServerSupabase } from '../lib/supabase.js';
+import { verifyAuth } from '../../api/_lib/auth.js';
 
 export async function requireAuth(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing or invalid authorization header' });
-  }
-
-  const token = authHeader.slice(7);
-  const supabase = getServerSupabase();
-
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
-
+  const user = await verifyAuth(req, res);
+  if (!user) return;
   req.user = user;
   next();
 }

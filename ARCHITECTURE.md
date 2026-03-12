@@ -16,7 +16,7 @@
 │              API Layer (Serverless Functions)            │
 │                                                         │
 │  Production: Vercel Functions (api/)                     │
-│  Dev:        Express server (server/) — mirrors api/     │
+│  Dev:        Express adapters (server/) for api/         │
 │  Shared:     api/_lib/ (auth, prompts, parsing, openai)  │
 └──────┬──────────────┬──────────────────┬────────────────┘
        │              │                  │
@@ -50,9 +50,9 @@
 
 ## Backend
 
-**Dual-mode architecture:** Vercel serverless functions for production (`api/`), Express dev server for local development (`server/`). Both use the same handler logic and shared libraries in `api/_lib/`.
+**Dual-mode architecture:** Vercel serverless functions for production (`api/`), with thin Express adapters for local development (`server/`). Both runtimes invoke the same canonical handlers and shared libraries in `api/` and `api/_lib/`.
 
-**Why dual backend:** Vercel functions have cold start latency and no local debugging. The Express server provides instant feedback during development while the `api/` directory deploys as-is to Vercel. Handler logic is kept identical between both.
+**Why dual backend:** Vercel functions have cold start latency and no local debugging. The Express dev layer provides instant feedback locally while Vercel deploys the canonical `api/` handlers directly. Development routing is adapter-only rather than a second backend implementation.
 
 **Auth flow:** Every protected endpoint validates the JWT from the `Authorization: Bearer <token>` header. The server-side Supabase client uses a service role key for admin operations. Database queries are scoped by `auth.uid()` via Row-Level Security policies.
 

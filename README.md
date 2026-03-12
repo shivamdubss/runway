@@ -107,11 +107,11 @@ runway/
 │       ├── supabase.js           # Server-side Supabase client
 │       └── weather.js            # Weather API client
 │
-├── server/                       # Express dev server (mirrors api/)
-│   ├── index.js                  # Server setup & route definitions
-│   ├── api/                      # Dev handler implementations
-│   ├── lib/                      # Dev server utilities
-│   ├── middleware/auth.js        # Auth middleware
+├── server/                       # Express/Vite dev adapters for canonical api/
+│   ├── dev-api.js                # Shared dev API app and route registration
+│   ├── index.js                  # Standalone local server entrypoint
+│   ├── middleware/auth.js        # Dev auth middleware
+│   ├── route-manifest.js         # Canonical dev route manifest
 │   └── vite-plugin.js            # Custom Vite plugin for dev routing
 │
 ├── supabase/                     # Database schema
