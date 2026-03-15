@@ -5334,38 +5334,6 @@ function TripVisualizationButton({ outfit, vizGenerations, hasReferencePhoto, on
   );
 }
 
-function SlotDetailSheet({ dayIndex, slotIndex, outfit, trip, onClose, onRemove, vizGenerations, hasReferencePhoto, onVisualizeClick, onViewVisualization, onItemClick }) {
-  const dayLabel = db.getTripDayLabel(trip.startDate, dayIndex);
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }} onClick={onClose} />
-      <div style={{ position: 'relative', background: '#fff', borderRadius: '20px 20px 0 0', padding: '8px 20px 32px', maxHeight: '85vh', overflowY: 'auto' }}>
-        <div style={{ width: 40, height: 4, background: '#D4D4D4', borderRadius: 2, margin: '0 auto 16px' }} />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <span style={{ fontSize: 13, color: '#999', fontFamily: "'DM Sans', sans-serif" }}>
-            {dayLabel} · {outfitLabel(slotIndex)}
-          </span>
-          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 16, border: 'none', background: 'rgba(0,0,0,0.05)', color: '#666', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-        </div>
-        <h2 style={{ fontSize: 20, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: '0 0 12px' }}>{outfit.vibe}</h2>
-        {outfit.items.length > 0 && (
-          <div className="item-card-grid" style={{ marginBottom: 12 }}>
-            {outfit.items.map((item, i) => <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />)}
-          </div>
-        )}
-        <TripVisualizationButton outfit={outfit} vizGenerations={vizGenerations} hasReferencePhoto={hasReferencePhoto} onVisualizeClick={onVisualizeClick} onViewVisualization={onViewVisualization} />
-        <button
-          onClick={onRemove}
-          style={{ width: '100%', padding: '12px 0', background: '#FEE2E2', border: 'none', borderRadius: 12, fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif", fontWeight: 500, color: '#DC2626', cursor: 'pointer', marginTop: 8 }}
-          onPointerDown={(e) => e.currentTarget.style.opacity = '0.7'}
-          onPointerUp={(e) => e.currentTarget.style.opacity = '1'}
-          onPointerLeave={(e) => e.currentTarget.style.opacity = '1'}
-        ><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><TrashIcon size={14} color="#DC2626" /> Remove</span></button>
-      </div>
-    </div>
-  );
-}
-
 function SlotTile({ slotIndex, outfit, isSelected, onTap, width = 128 }) {
   const filled = !!outfit;
   return (
@@ -5796,7 +5764,6 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [slotDetail, setSlotDetail] = useState(null); // {dayIndex, slotName, slotIndex}
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [forecast, setForecast] = useState(null);
@@ -5825,16 +5792,6 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
 
   const filledCount = slots.filter(s => s.outfitId).length;
 
-  const handleSlotTap = (dayIndex, slotName, slotIndex, outfit) => {
-    if (outfit) {
-      setSlotDetail({ dayIndex, slotName, slotIndex });
-      setSelectedSlot(null);
-    } else {
-      setSelectedSlot(prev =>
-        prev?.dayIndex === dayIndex && prev?.slotName === slotName ? null : { dayIndex, slotName, slotIndex }
-      );
-    }
-  };
 
   const handleAddOutfit = (dayIndex) => {
     const daySlots = slots.filter(s => s.dayIndex === dayIndex && s.outfitId);
@@ -5866,7 +5823,6 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
     const remaining = nextSlots.filter(s => s.dayIndex === dayIndex && s.outfitId).length;
     setSlots(nextSlots);
     setActiveOutfitIndex(prev => Math.min(prev, Math.max(0, remaining - 1)));
-    setSlotDetail(null);
     try {
       await db.removeTripSlot({ tripPlanId: trip.id, dayIndex, slotName });
     } catch (err) {
@@ -5874,7 +5830,6 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
     }
   };
 
-  const slotDetailData = slotDetail ? slotMap[`${slotDetail.dayIndex}-${slotDetail.slotName}`] : null;
 
   if (loading) {
     return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -5958,10 +5913,15 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
                 {activeOutfit.vibe}
               </h3>
               <button
-                onClick={() => handleSlotTap(activeDayIndex, activeSlot.slotName, activeSlotIndex, activeOutfit)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif" }}
+                onClick={() => {
+                  if (window.confirm('Remove this outfit from the trip?')) {
+                    handleRemoveSlot(activeDayIndex, activeSlot.slotName);
+                  }
+                }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#999', display: 'flex', alignItems: 'center' }}
+                aria-label="Remove outfit"
               >
-                Details
+                <TrashIcon size={16} color="#999" />
               </button>
             </div>
             {activeOutfit.items.length > 0 && (
@@ -5969,6 +5929,7 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
                 {activeOutfit.items.map((item, i) => <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />)}
               </div>
             )}
+            <TripVisualizationButton outfit={activeOutfit} vizGenerations={vizGenerations} hasReferencePhoto={hasReferencePhoto} onVisualizeClick={onVisualizeClick} onViewVisualization={onViewVisualization} />
           </div>
         ) : daySlots.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', color: '#999', fontFamily: "'DM Sans', sans-serif" }}>
@@ -5989,22 +5950,6 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
         />
       )}
 
-      {/* Slot detail bottom sheet */}
-      {slotDetail && slotDetailData?.outfit && (
-        <SlotDetailSheet
-          dayIndex={slotDetail.dayIndex}
-          slotIndex={slotDetail.slotIndex}
-          outfit={slotDetailData.outfit}
-          trip={trip}
-          onClose={() => setSlotDetail(null)}
-          onRemove={() => handleRemoveSlot(slotDetail.dayIndex, slotDetail.slotName)}
-          vizGenerations={vizGenerations}
-          hasReferencePhoto={hasReferencePhoto}
-          onVisualizeClick={onVisualizeClick}
-          onViewVisualization={onViewVisualization}
-          onItemClick={onItemClick}
-        />
-      )}
 
       {showEditSheet && (
         <TripFormSheet
