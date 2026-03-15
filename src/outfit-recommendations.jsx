@@ -6113,7 +6113,7 @@ function TripSummaryView({ trip, onBack }) {
   const packingList = Object.values(itemUsage).sort((a, b) => b.count - a.count);
 
   // Group by category
-  const categoryOrder = ['Tops', 'Bottoms', 'Outerwear', 'Dresses', 'Shoes', 'Accessories', 'Other'];
+  const categoryOrder = ['Tops', 'Layers', 'Bottoms', 'Dresses & Jumpsuits', 'Shoes', 'Accessories', 'Other'];
   const categoryMap = {};
   for (const { item, count } of packingList) {
     const cat = item.category || 'Other';
@@ -6140,47 +6140,16 @@ function TripSummaryView({ trip, onBack }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div className="outfit-scroll-panel" style={{ flex: 1, overflowY: 'auto', padding: '0 var(--container-padding-x) calc(24px + var(--safe-bottom))' }}>
-        {/* Day-by-day summary */}
-        {Array.from({ length: dayCount }, (_, dayIndex) => {
-          const dayLabel = db.getTripDayLabel(trip.startDate, dayIndex);
-          const daySlots = slots.filter(s => s.dayIndex === dayIndex && s.outfit).sort((a, b) => db.slotIndexFromName(a.slotName) - db.slotIndexFromName(b.slotName));
-          if (daySlots.length === 0) return null;
-          return (
-            <div key={dayIndex} style={{ marginBottom: 24 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: '0 0 4px' }}>
-                Day {dayIndex + 1} — {dayLabel}
-              </h2>
-              <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 12 }} />
-              {daySlots.map((slot, idx) => (
-                <div key={slot.slotName} style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif", marginBottom: 5 }}>
-                    {outfitLabel(idx)}
-                  </div>
-                  <div style={{ background: '#fff', borderRadius: 10, padding: 12, border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>{slot.outfit.vibe}</div>
-                    <div style={{ fontSize: 12, color: '#666', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}>
-                      {(slot.outfit.items || []).map(item => `${item.emoji || '👕'} ${item.name}`).join('  ·  ')}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          );
-        })}
-
         {/* Packing list */}
         {packingList.length > 0 && (
-          <div style={{ marginTop: 8, paddingTop: 16, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-              <h2 style={{ fontSize: 14, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: 0 }}>
-                Packing list
-              </h2>
-              {totalPackingItems > 0 && (
+          <div style={{ paddingTop: 8 }}>
+            {totalPackingItems > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 4 }}>
                 <span style={{ fontSize: 12, color: checkedCount === totalPackingItems ? '#22C55E' : '#999', fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>
                   {checkedCount}/{totalPackingItems} packed
                 </span>
-              )}
-            </div>
+              </div>
+            )}
             <div style={{ height: 3, background: '#F0EFED', borderRadius: 2, overflow: 'hidden', marginBottom: 16 }}>
               <div style={{ width: `${totalPackingItems > 0 ? (checkedCount / totalPackingItems) * 100 : 0}%`, height: '100%', background: checkedCount === totalPackingItems ? '#22C55E' : '#1A1A1A', borderRadius: 2, transition: 'width 0.3s ease' }} />
             </div>
@@ -6192,12 +6161,19 @@ function TripSummaryView({ trip, onBack }) {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {categoryMap[category].map(({ item, count }) => (
-                    <div key={item.id} onClick={() => toggleItem(item.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 8, padding: '8px 12px', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer' }}>
+                    <div key={item.id} onClick={() => toggleItem(item.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 10, padding: '8px 12px', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer' }}>
                       <div style={checkboxStyle(!!checkedItems[item.id])}>
                         {checkedItems[item.id] && '✓'}
                       </div>
+                      {(item.images?.[0] || item.image) ? (
+                        <img src={item.images?.[0] || item.image} alt={item.name} style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flexShrink: 0, opacity: checkedItems[item.id] ? 0.4 : 1, transition: 'opacity 0.15s ease' }} />
+                      ) : (
+                        <div style={{ width: 44, height: 44, borderRadius: 8, background: '#EAE9E7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: checkedItems[item.id] ? 0.4 : 1, transition: 'opacity 0.15s ease' }}>
+                          <span style={{ fontSize: 20 }}>{item.emoji || '👕'}</span>
+                        </div>
+                      )}
                       <span style={{ fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: checkedItems[item.id] ? '#999' : '#1A1A1A', textDecoration: checkedItems[item.id] ? 'line-through' : 'none', flex: 1, transition: 'all 0.15s ease' }}>
-                        {item.emoji || '👕'} {item.name}
+                        {item.name}
                       </span>
                       {count > 1 && <span style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif" }}>×{count}</span>}
                     </div>
@@ -7753,7 +7729,7 @@ export default function OutfitRecommendations() {
             lineHeight: 1.1,
             flex: 1,
           }}>
-            {view === "garment" ? (lightboxItem?.name ?? "Item") : view === "wardrobe" ? "My Wardrobe" : view === "saved" ? "Saved Outfits" : view === "outfit" ? "Your Outfit" : view === "profile" ? "My Profile" : view === "trips" ? "Trips" : view === "trip-detail" ? (activeTrip?.title ?? "Trip") : view === "trip-summary" ? "Summary" : "Chat"}
+            {view === "garment" ? (lightboxItem?.name ?? "Item") : view === "wardrobe" ? "My Wardrobe" : view === "saved" ? "Saved Outfits" : view === "outfit" ? "Your Outfit" : view === "profile" ? "My Profile" : view === "trips" ? "Trips" : view === "trip-detail" ? (activeTrip?.title ?? "Trip") : view === "trip-summary" ? "Packing List" : "Chat"}
           </h1>
 
           {view === "trips" && (

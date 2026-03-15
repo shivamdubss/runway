@@ -16,7 +16,7 @@ function buildPackingList(slots) {
 }
 
 function groupByCategory(packingList) {
-  const categoryOrder = ['Tops', 'Bottoms', 'Outerwear', 'Dresses', 'Shoes', 'Accessories', 'Other'];
+  const categoryOrder = ['Tops', 'Layers', 'Bottoms', 'Dresses & Jumpsuits', 'Shoes', 'Accessories', 'Other'];
   const categoryMap = {};
   for (const { item, count } of packingList) {
     const cat = item.category || 'Other';
