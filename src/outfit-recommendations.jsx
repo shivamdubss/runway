@@ -840,7 +840,7 @@ function GarmentDetailPage({ item, onDelete, onEdit, onEnhance, onStyleItem, onS
                   borderRadius: 10,
                   border: "1px solid rgba(0,0,0,0.08)",
                   padding: "10px 12px",
-                  fontSize: "var(--font-caption)",
+                  fontSize: "16px",
                   fontFamily: "'DM Sans', sans-serif",
                   color: "#1A1A1A",
                   boxSizing: "border-box",
