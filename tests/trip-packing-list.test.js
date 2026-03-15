@@ -152,21 +152,11 @@ describe('packing list localStorage persistence', () => {
 
   it('persists and retrieves checked state', () => {
     const key = 'trip-packing-trip123';
-    const state = { checked: { item1: true, item2: false }, extras: [] };
+    const state = { checked: { item1: true, item2: false } };
     localStorage.setItem(key, JSON.stringify(state));
     const loaded = JSON.parse(localStorage.getItem(key));
     expect(loaded.checked.item1).toBe(true);
     expect(loaded.checked.item2).toBe(false);
-  });
-
-  it('persists extras list', () => {
-    const key = 'trip-packing-trip456';
-    const state = { checked: {}, extras: [{ text: 'Charger', checked: true }, { text: 'Toothbrush', checked: false }] };
-    localStorage.setItem(key, JSON.stringify(state));
-    const loaded = JSON.parse(localStorage.getItem(key));
-    expect(loaded.extras).toHaveLength(2);
-    expect(loaded.extras[0].text).toBe('Charger');
-    expect(loaded.extras[0].checked).toBe(true);
   });
 
   it('handles missing storage gracefully', () => {

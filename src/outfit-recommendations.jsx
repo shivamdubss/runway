@@ -6037,8 +6037,6 @@ function TripSummaryView({ trip, onBack }) {
   const [tripData, setTripData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [checkedItems, setCheckedItems] = useState({});
-  const [extras, setExtras] = useState([]);
-  const [newExtra, setNewExtra] = useState('');
 
   const storageKey = `trip-packing-${trip.id}`;
 
@@ -6054,43 +6052,21 @@ function TripSummaryView({ trip, onBack }) {
     try {
       const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
       if (saved.checked) setCheckedItems(saved.checked);
-      if (saved.extras) setExtras(saved.extras);
     } catch {}
   }, [trip.id]);
 
-  const persistState = (checked, extrasList) => {
-    try { localStorage.setItem(storageKey, JSON.stringify({ checked, extras: extrasList })); } catch {}
+  const persistState = (checked) => {
+    try { localStorage.setItem(storageKey, JSON.stringify({ checked })); } catch {}
   };
 
   const toggleItem = (key) => {
     setCheckedItems(prev => {
       const next = { ...prev, [key]: !prev[key] };
-      persistState(next, extras);
+      persistState(next);
       return next;
     });
   };
 
-  const toggleExtra = (idx) => {
-    setExtras(prev => {
-      const next = prev.map((e, i) => i === idx ? { ...e, checked: !e.checked } : e);
-      persistState(checkedItems, next);
-      return next;
-    });
-  };
-
-  const addExtra = () => {
-    if (!newExtra.trim()) return;
-    const next = [...extras, { text: newExtra.trim(), checked: false }];
-    setExtras(next);
-    setNewExtra('');
-    persistState(checkedItems, next);
-  };
-
-  const removeExtra = (idx) => {
-    const next = extras.filter((_, i) => i !== idx);
-    setExtras(next);
-    persistState(checkedItems, next);
-  };
 
   if (loading) {
     return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -6127,8 +6103,8 @@ function TripSummaryView({ trip, onBack }) {
     Object.keys(categoryMap).filter(c => !categoryOrder.includes(c))
   );
 
-  const totalPackingItems = packingList.length + extras.length;
-  const checkedCount = packingList.filter(p => checkedItems[p.item.id]).length + extras.filter(e => e.checked).length;
+  const totalPackingItems = packingList.length;
+  const checkedCount = packingList.filter(p => checkedItems[p.item.id]).length;
 
   const checkboxStyle = (checked) => ({
     width: 20, height: 20, borderRadius: 6, border: checked ? 'none' : '1.5px solid #D4D4D4',
@@ -6175,74 +6151,21 @@ function TripSummaryView({ trip, onBack }) {
                       <span style={{ fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: checkedItems[item.id] ? '#999' : '#1A1A1A', textDecoration: checkedItems[item.id] ? 'line-through' : 'none', flex: 1, transition: 'all 0.15s ease' }}>
                         {item.name}
                       </span>
-                      {count > 1 && <span style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif" }}>×{count}</span>}
                     </div>
                   ))}
                 </div>
               </div>
             ))}
 
-            {/* Extras section */}
-            <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#999', fontFamily: "'DM Sans', sans-serif", textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-                Extras
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {extras.map((extra, idx) => (
-                  <div key={idx} onClick={() => toggleExtra(idx)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 8, padding: '8px 12px', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer' }}>
-                    <div style={checkboxStyle(extra.checked)}>
-                      {extra.checked && '✓'}
-                    </div>
-                    <span style={{ fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: extra.checked ? '#999' : '#1A1A1A', textDecoration: extra.checked ? 'line-through' : 'none', flex: 1 }}>
-                      {extra.text}
-                    </span>
-                    <button onClick={(e) => { e.stopPropagation(); removeExtra(idx); }} style={{ background: 'none', border: 'none', color: '#ccc', fontSize: 14, cursor: 'pointer', padding: '0 2px' }}>✕</button>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <input
-                  value={newExtra}
-                  onChange={e => setNewExtra(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addExtra()}
-                  placeholder="Add item (charger, toiletries...)"
-                  style={{ flex: 1, padding: '10px 12px', background: '#F3F2F0', border: 'none', borderRadius: 8, fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: 'none' }}
-                />
-                <button onClick={addExtra} style={{ padding: '0 14px', borderRadius: 8, border: 'none', background: '#1A1A1A', color: '#fff', fontSize: 13, fontFamily: "'DM Sans', sans-serif", fontWeight: 600, cursor: 'pointer' }}>Add</button>
-              </div>
-            </div>
           </div>
         )}
 
-        {/* Show extras even if no outfits planned yet */}
         {packingList.length === 0 && (
           <div style={{ marginTop: 8, paddingTop: 16 }}>
             <h2 style={{ fontSize: 14, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: '0 0 4px' }}>Packing list</h2>
-            <p style={{ fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif", margin: '0 0 12px' }}>
+            <p style={{ fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif", margin: 0 }}>
               Plan some outfits to build your packing list.
             </p>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#999', fontFamily: "'DM Sans', sans-serif", textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-              Extras
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {extras.map((extra, idx) => (
-                <div key={idx} onClick={() => toggleExtra(idx)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 8, padding: '8px 12px', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer' }}>
-                  <div style={checkboxStyle(extra.checked)}>{extra.checked && '✓'}</div>
-                  <span style={{ fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: extra.checked ? '#999' : '#1A1A1A', textDecoration: extra.checked ? 'line-through' : 'none', flex: 1 }}>{extra.text}</span>
-                  <button onClick={(e) => { e.stopPropagation(); removeExtra(idx); }} style={{ background: 'none', border: 'none', color: '#ccc', fontSize: 14, cursor: 'pointer', padding: '0 2px' }}>✕</button>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <input
-                value={newExtra}
-                onChange={e => setNewExtra(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addExtra()}
-                placeholder="Add item (charger, toiletries...)"
-                style={{ flex: 1, padding: '10px 12px', background: '#F3F2F0', border: 'none', borderRadius: 8, fontSize: 13, fontFamily: "'DM Sans', sans-serif", outline: 'none' }}
-              />
-              <button onClick={addExtra} style={{ padding: '0 14px', borderRadius: 8, border: 'none', background: '#1A1A1A', color: '#fff', fontSize: 13, fontFamily: "'DM Sans', sans-serif", fontWeight: 600, cursor: 'pointer' }}>Add</button>
-            </div>
           </div>
         )}
       </div>
