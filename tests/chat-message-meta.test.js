@@ -9,9 +9,9 @@ import {
 
 describe('chat message metadata helpers', () => {
   it('builds CTA metadata when outfits exist', () => {
-    expect(buildAssistantMessageMetadata({ outfits: [{ id: 1 }] })).toEqual({
-      cta: OUTFIT_NAV_CTA,
-    });
+    const meta = buildAssistantMessageMetadata({ outfits: [{ id: 1 }] });
+    expect(meta.cta).toEqual(OUTFIT_NAV_CTA);
+    expect(meta.outfitSummary).toEqual([{ number: 1, vibe: 'Look 1', items: [] }]);
   });
 
   it('returns empty metadata when outfits are absent', () => {

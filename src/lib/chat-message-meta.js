@@ -10,19 +10,26 @@ function toOutfitNavCta(cta) {
 
 export function buildAssistantMessageMetadata({ outfits }) {
   if (Array.isArray(outfits) && outfits.length > 0) {
-    return { cta: { ...OUTFIT_NAV_CTA } };
+    const outfitSummary = outfits.map((o, i) => ({
+      number: i + 1,
+      vibe: o.vibe || `Look ${i + 1}`,
+      items: (o.items || []).map(item => typeof item === 'string' ? item : item?.name).filter(Boolean),
+    }));
+    return { cta: { ...OUTFIT_NAV_CTA }, outfitSummary };
   }
   return {};
 }
 
 export function toChatUiMessage(dbMessage) {
   const cta = toOutfitNavCta(dbMessage?.metadata?.cta);
+  const outfitSummary = dbMessage?.metadata?.outfitSummary || null;
   return {
     id: dbMessage.id,
     role: dbMessage.role,
     text: dbMessage.content,
     image: dbMessage.image_url || null,
     ...(cta ? { cta } : {}),
+    ...(outfitSummary ? { outfitSummary } : {}),
   };
 }
 

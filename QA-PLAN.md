@@ -124,13 +124,15 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 
 | ID | Priority | Scenario | Steps | Expected Result |
 |----|----------|----------|-------|-----------------|
-| REFINE-01 | P0 | Refinement chips appear after outfits | 1. Send a message that generates outfits 2. View chat after outfits load | Four refinement chips appear below the "View Outfits" button: "Swap the shoes", "Make it more casual", "Make it dressier", "Show me more options" |
-| REFINE-02 | P0 | Tapping a refinement chip sends message | 1. After outfits load, tap "Swap the shoes" chip | Message sent with chip text; AI generates modified outfits with different shoes |
-| REFINE-03 | P1 | Refinement chips only on last message | 1. Generate outfits 2. Send a follow-up message that also generates outfits | Refinement chips appear only after the latest CTA, not on previous messages |
-| REFINE-04 | P1 | Freeform refinement | 1. Generate outfits 2. Type "Can you replace the pants with a skirt?" | AI modifies relevant outfits, keeping other items intact |
-| REFINE-05 | P1 | Chips hidden during generation | 1. Generate outfits 2. Tap a refinement chip | Chips disappear or become disabled while AI is generating |
-| REFINE-06 | P2 | Multiple refinement rounds | 1. Generate outfits 2. Refine once 3. Refine again | Each round produces updated outfits; AI context includes the latest outfits |
-| REFINE-07 | P2 | Refinement chips absent without outfits | 1. Send a conversational message with no outfit result | No refinement chips appear |
+| REFINE-01 | P0 | Outfit summary in chat message | 1. Send a message that generates outfits 2. View chat after outfits load | A numbered outfit summary appears in the assistant message (e.g., "1. Casual Friday — Shirt, Jeans, Sneakers") |
+| REFINE-02 | P0 | Chips appear only after viewing outfits | 1. Generate outfits 2. Stay on chat view | No refinement chips visible. 3. Tap "View Outfits" 4. Return to chat | Refinement chips now appear below the CTA |
+| REFINE-03 | P0 | Tapping a refinement chip sends message | 1. View outfits, return to chat 2. Tap "Swap the shoes" chip | Message sent with chip text; AI generates modified outfits with different shoes |
+| REFINE-04 | P1 | Chips reset on new outfits | 1. Generate outfits 2. View them 3. Refine (new outfits generated) | Chips disappear until user views the new outfits |
+| REFINE-05 | P1 | Freeform refinement by number | 1. Generate outfits 2. Type "Make outfit 2 more casual" | AI modifies only the referenced outfit, keeps others unchanged |
+| REFINE-06 | P1 | Chips hidden during generation | 1. Generate outfits, view them, return to chat 2. Tap a refinement chip | Chips disappear while AI is generating |
+| REFINE-07 | P2 | Multiple refinement rounds | 1. Generate outfits 2. Refine once 3. Refine again | Each round produces updated outfits with new summary; chips reset each time |
+| REFINE-08 | P2 | Refinement chips absent without outfits | 1. Send a conversational message with no outfit result | No refinement chips or outfit summary appear |
+| REFINE-09 | P1 | Outfit summary persists across reload | 1. Generate outfits 2. Refresh page 3. Open the same chat | Outfit summary still visible in the assistant message |
 
 ### 3.5 Chat Persistence
 

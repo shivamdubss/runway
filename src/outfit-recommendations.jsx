@@ -3291,6 +3291,7 @@ function ChatView({
   onChipTap,
   onCtaAction,
   hasOutfits,
+  hasViewedOutfits,
   pendingImage,
   onImageSelect,
   onImageRemove,
@@ -3564,6 +3565,26 @@ function ChatView({
                   )}
                 </div>
               )}
+              {msg.outfitSummary && (
+                <div style={{
+                  marginTop: 10,
+                  padding: "10px 12px",
+                  background: "rgba(0,0,0,0.03)",
+                  borderRadius: 10,
+                  fontSize: 13,
+                  fontFamily: "'DM Sans', sans-serif",
+                  color: "#555",
+                  lineHeight: 1.7,
+                }}>
+                  {msg.outfitSummary.map((o) => (
+                    <div key={o.number}>
+                      <span style={{ fontWeight: 600, color: "#333" }}>{o.number}. {o.vibe}</span>
+                      {" — "}
+                      {o.items.join(", ")}
+                    </div>
+                  ))}
+                </div>
+              )}
               {msg.cta && (
                 <button
                   onClick={() => onCtaAction(msg.cta.action)}
@@ -3604,7 +3625,7 @@ function ChatView({
                   <span style={{ fontSize: 14, opacity: 0.7 }}>→</span>
                 </button>
               )}
-              {msg.cta && hasOutfits && i === messages.length - 1 && !isGenerating && (
+              {msg.cta && hasOutfits && hasViewedOutfits && i === messages.length - 1 && !isGenerating && (
                 <div style={{
                   display: "flex",
                   flexWrap: "wrap",
@@ -6755,6 +6776,7 @@ export default function OutfitRecommendations() {
   const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState(null);
   const [view, setView] = useState("chat");
+  const [hasViewedOutfits, setHasViewedOutfits] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [messages, setMessages] = useState([]);
   const [outfits, setOutfits] = useState([]);
@@ -7256,6 +7278,7 @@ export default function OutfitRecommendations() {
       const finalAssistantMessage = result.message || streamedMessage.trim();
       const assistantMessageMetadata = buildAssistantMessageMetadata({ outfits: result.outfits });
       const assistantMessageCta = assistantMessageMetadata.cta || null;
+      const outfitSummary = assistantMessageMetadata.outfitSummary || null;
 
       if (finalAssistantMessage) {
         if (hasStreamedToken) {
@@ -7266,6 +7289,7 @@ export default function OutfitRecommendations() {
                   ...msg,
                   text: finalAssistantMessage,
                   ...(assistantMessageCta ? { cta: assistantMessageCta } : {}),
+                  ...(outfitSummary ? { outfitSummary } : {}),
                 }
                 : msg
             )
@@ -7278,6 +7302,7 @@ export default function OutfitRecommendations() {
               role: "assistant",
               text: finalAssistantMessage,
               ...(assistantMessageCta ? { cta: assistantMessageCta } : {}),
+              ...(outfitSummary ? { outfitSummary } : {}),
             },
           ]);
         }
@@ -7300,6 +7325,7 @@ export default function OutfitRecommendations() {
             role: "assistant",
             text: "",
             cta: { ...OUTFIT_NAV_CTA },
+            ...(outfitSummary ? { outfitSummary } : {}),
           },
         ]);
 
@@ -7322,12 +7348,13 @@ export default function OutfitRecommendations() {
         });
         setOutfits(result.outfits);
         setCurrent(0);
+        setHasViewedOutfits(false);
 
         if (assistantMessageCta) {
           setMessages((prev) =>
             prev.map((msg) =>
               msg.id === assistantMessageId
-                ? { ...msg, cta: { ...OUTFIT_NAV_CTA } }
+                ? { ...msg, cta: { ...OUTFIT_NAV_CTA }, ...(outfitSummary ? { outfitSummary } : {}) }
                 : msg
             )
           );
@@ -7801,7 +7828,7 @@ export default function OutfitRecommendations() {
                 Chat
               </button>
               <button
-                onClick={() => setView("outfit")}
+                onClick={() => { setView("outfit"); setHasViewedOutfits(true); }}
                 style={{
                   height: "var(--tab-height)",
                   padding: `0 var(--tab-padding-x)`,
@@ -7984,9 +8011,13 @@ export default function OutfitRecommendations() {
           onSend={handleSend}
           onChipTap={handleChipTap}
           onCtaAction={(action) => {
-            if (action === "navigate_outfits") setView("outfit");
+            if (action === "navigate_outfits") {
+              setView("outfit");
+              setHasViewedOutfits(true);
+            }
           }}
           hasOutfits={outfits.length > 0}
+          hasViewedOutfits={hasViewedOutfits}
           pendingImage={pendingImage}
           onImageSelect={handleImageSelect}
           onImageRemove={handleImageRemove}
