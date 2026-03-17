@@ -37,7 +37,7 @@ import {
   pruneVizRegistry,
 } from "./lib/visualization";
 import { useAuth } from "./lib/auth";
-import { fetchWeatherForDisplay, weatherIconToEmoji, searchCities, detectLocationFromBrowser, fetchForecastForTrip, wmoCodeToEmoji } from "./lib/weather";
+import { fetchWeatherForDisplay, getWeatherFromCache, weatherIconToEmoji, searchCities, detectLocationFromBrowser, fetchForecastForTrip, wmoCodeToEmoji } from "./lib/weather";
 
 // Inject CSS animations for streaming states
 const style = document.createElement('style');
@@ -6720,7 +6720,18 @@ export default function OutfitRecommendations() {
   const [profileLoaded, setProfileLoaded] = useState(false);
   const vizGenerations = useSyncExternalStore(subscribeVizRegistry, getVizRegistrySnapshot);
   const [vizModalOutfitId, setVizModalOutfitId] = useState(null);
-  const [weather, setWeather] = useState(null);
+  const [weather, setWeather] = useState(() => {
+    try {
+      const cached = localStorage.getItem('runway_weather_cache_metric');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Date.now() - parsed.fetchedAt < 30 * 60 * 1000) {
+          return parsed.data;
+        }
+      }
+    } catch { /* ignore */ }
+    return null;
+  });
   const [savedOutfits, setSavedOutfits] = useState([]);
   const [focusLocation, setFocusLocation] = useState(false);
   const [tripPlans, setTripPlans] = useState([]);
@@ -6786,10 +6797,11 @@ export default function OutfitRecommendations() {
   }, [profileLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (!profileLoaded) return;
     const city = profile.location?.city;
     if (!city) { setWeather(null); return; }
     fetchWeatherForDisplay(city).then(setWeather);
-  }, [profile.location?.city]);
+  }, [profile.location?.city, profileLoaded]);
 
   useEffect(() => {
     async function loadInitialData() {
