@@ -72,11 +72,19 @@ Six preset occasion shortcuts displayed below the greeting:
 - A typing indicator shows animated dots with rotating messages: "Raiding your closet...", "Mixing patterns (tastefully)...", "Checking if those shoes match...", "Consulting the fashion gods...", "Channeling your inner stylist..."
 - Messages render incrementally with a blinking cursor.
 
+#### Outfit Refinement
+After outfits are generated, users can refine them with follow-up messages instead of starting from scratch:
+- Quick-action refinement chips appear below the "View Outfits" button: "Swap the shoes", "Make it more casual", "Make it dressier", "Show me more options".
+- Users can also type freeform refinement requests (e.g., "What about with my leather jacket?" or "I don't like outfit 2").
+- The AI receives the previously recommended outfits as context and applies targeted changes — preserving what works and only modifying what the user asks to change.
+- Refinement works across multiple rounds within the same conversation.
+
 #### System Prompt Context
 The AI receives:
 - The user's full wardrobe (item names, categories, colors).
 - User profile (body type, size, gender/style preference, preferred styles, color preferences, style context notes).
 - Current weather data (temp, feels-like, high/low, wind, humidity, condition) if location is set.
+- Previously recommended outfits (when refining).
 
 #### Item Resolution
 The AI references wardrobe items by name. The client resolves names to full item objects using case-insensitive matching with emoji/non-ASCII stripping. Unresolved items are silently dropped; outfits with zero resolved items are filtered out.

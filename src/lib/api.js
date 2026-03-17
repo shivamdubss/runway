@@ -17,12 +17,12 @@ async function getAuthHeaders(contentType = 'application/json') {
  * @param {Object} params.profile - User profile
  * @returns {Promise<{message: string, outfits: Array}>}
  */
-export async function sendChatMessage({ messages, wardrobeItems, profile, location }) {
+export async function sendChatMessage({ messages, wardrobeItems, profile, location, previousOutfits }) {
   const headers = await getAuthHeaders();
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ messages, wardrobeItems, profile, location }),
+    body: JSON.stringify({ messages, wardrobeItems, profile, location, previousOutfits }),
   });
 
   if (!response.ok) {
@@ -51,6 +51,7 @@ export function sendChatMessageStreaming({
   wardrobeItems,
   profile,
   location,
+  previousOutfits,
   onToken,
   onMessageDone,
   onComplete,
@@ -84,7 +85,7 @@ export function sendChatMessageStreaming({
     fetch('/api/chat/stream', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ messages, wardrobeItems, profile, location }),
+      body: JSON.stringify({ messages, wardrobeItems, profile, location, previousOutfits }),
       signal: controller.signal,
     })
       .then(response => {

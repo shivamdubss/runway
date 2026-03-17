@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-03-17
+
+### Outfit Refinement Loop
+- Refine AI-generated outfits with follow-up messages instead of starting over
+- Quick-action chips appear after outfit results: "Swap the shoes", "Make it more casual", "Make it dressier", "Show me more options"
+- AI preserves what works and only changes what you ask — swap one item, adjust formality, or replace a specific outfit
+- Previous outfits are passed as context so the AI knows what it's refining
+
 ## 2026-03-11
 
 ### Dynamic Trip Outfit Slots

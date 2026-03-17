@@ -10,7 +10,7 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 
 1. [Authentication](#1-authentication)
 2. [Sidebar & Navigation](#2-sidebar--navigation)
-3. [Chat Interface](#3-chat-interface)
+3. [Chat Interface](#3-chat-interface) (includes [Outfit Refinement](#34-outfit-refinement))
 4. [Outfit Recommendations](#4-outfit-recommendations)
 5. [Wardrobe Management](#5-wardrobe-management)
 6. [Outfit Visualization](#6-outfit-visualization)
@@ -120,7 +120,19 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 | CHAT-17 | P1 | Image in message | 1. Send message with image attachment | Full-width inline image displayed within message bubble |
 | CHAT-18 | P2 | CTA button in response | 1. Receive response with visualization option | "🪞 Visualize Outfit →" button appears in assistant message |
 
-### 3.4 Chat Persistence
+### 3.4 Outfit Refinement
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| REFINE-01 | P0 | Refinement chips appear after outfits | 1. Send a message that generates outfits 2. View chat after outfits load | Four refinement chips appear below the "View Outfits" button: "Swap the shoes", "Make it more casual", "Make it dressier", "Show me more options" |
+| REFINE-02 | P0 | Tapping a refinement chip sends message | 1. After outfits load, tap "Swap the shoes" chip | Message sent with chip text; AI generates modified outfits with different shoes |
+| REFINE-03 | P1 | Refinement chips only on last message | 1. Generate outfits 2. Send a follow-up message that also generates outfits | Refinement chips appear only after the latest CTA, not on previous messages |
+| REFINE-04 | P1 | Freeform refinement | 1. Generate outfits 2. Type "Can you replace the pants with a skirt?" | AI modifies relevant outfits, keeping other items intact |
+| REFINE-05 | P1 | Chips hidden during generation | 1. Generate outfits 2. Tap a refinement chip | Chips disappear or become disabled while AI is generating |
+| REFINE-06 | P2 | Multiple refinement rounds | 1. Generate outfits 2. Refine once 3. Refine again | Each round produces updated outfits; AI context includes the latest outfits |
+| REFINE-07 | P2 | Refinement chips absent without outfits | 1. Send a conversational message with no outfit result | No refinement chips appear |
+
+### 3.5 Chat Persistence
 
 | ID | Priority | Scenario | Steps | Expected Result |
 |----|----------|----------|-------|-----------------|

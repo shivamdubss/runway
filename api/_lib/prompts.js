@@ -77,6 +77,25 @@ outfits, generate as many distinct outfits as possible and explain to the user
 that their wardrobe limits further variety. Do not pad with low-quality
 recommendations.
 
+## Refinement and follow-up
+
+When previous outfits are provided, the user is refining an existing recommendation.
+Pay close attention to what they ask:
+
+- "Swap the shoes" → Replace only the shoes in the relevant outfit(s), keep everything else.
+- "Make it more casual / formal" → Adjust formality by swapping 1-2 items, not rebuilding from scratch.
+- "I don't like outfit 2" → Replace that specific outfit, keep the others unchanged.
+- "More options" or "Show me more" → Generate additional outfits that differ from the previous ones.
+- "What about with my [item]?" → Incorporate that specific item into one or more outfits.
+
+Refinement rules:
+- Preserve what works. Only change what the user asks to change.
+- When modifying a specific outfit, keep its vibe and structure unless the user
+  asks for a different direction.
+- When the user references an outfit by number or vibe name, modify only that one
+  and return all outfits (modified + unchanged).
+- If the request is ambiguous about which outfit to change, apply it to all outfits.
+
 ## What to avoid
 
 - Never recommend items not in the provided wardrobe.
@@ -100,9 +119,10 @@ Do not include any text outside the JSON block.`;
  * @param {Array} params.wardrobeItems - Array of { category, label, name, color, accent, emoji }
  * @param {Object} params.profile - User profile with body, style, lifestyle sections
  * @param {Object} [params.weather] - Current weather data from OpenWeatherMap
+ * @param {Array} [params.previousOutfits] - Previously recommended outfits for refinement context
  * @returns {string}
  */
-export function buildSystemPrompt({ wardrobeItems, profile, weather }) {
+export function buildSystemPrompt({ wardrobeItems, profile, weather, previousOutfits }) {
   const sections = [CORE_PROMPT];
 
   // Wardrobe inventory grouped by category
@@ -130,6 +150,10 @@ export function buildSystemPrompt({ wardrobeItems, profile, weather }) {
   const weatherLines = buildWeatherSection(weather);
   if (weatherLines) sections.push(weatherLines);
 
+  // Previous outfits context (for refinement)
+  const previousOutfitsSection = buildPreviousOutfitsSection(previousOutfits);
+  if (previousOutfitsSection) sections.push(previousOutfitsSection);
+
   // JSON schema
   sections.push(`## Response JSON schema
 
@@ -153,6 +177,27 @@ Rules:
 - If the user's message is conversational (not requesting outfits), respond with an empty outfits array.`);
 
   return sections.join('\n\n');
+}
+
+export function buildPreviousOutfitsSection(previousOutfits) {
+  if (!Array.isArray(previousOutfits) || previousOutfits.length === 0) return null;
+
+  const lines = ['## Previously recommended outfits (current session)', ''];
+  lines.push('The user may ask you to refine these. Apply the refinement rules above.');
+  lines.push('');
+
+  for (let i = 0; i < previousOutfits.length; i++) {
+    const outfit = previousOutfits[i];
+    const items = (outfit.items || []).map(item =>
+      typeof item === 'string' ? item : item?.name
+    ).filter(Boolean);
+    lines.push(`### Outfit ${i + 1}: ${outfit.vibe || `Look ${i + 1}`}`);
+    if (outfit.reasoning) lines.push(`Reasoning: ${outfit.reasoning}`);
+    lines.push(`Items: ${items.join(', ')}`);
+    lines.push('');
+  }
+
+  return lines.join('\n');
 }
 
 function buildProfileSection(profile) {

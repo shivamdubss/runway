@@ -11,7 +11,7 @@ import { fetchWeather } from '../weather.js';
  */
 export async function handleChat(req, res) {
   try {
-    const { messages, wardrobeItems, profile, location } = req.body;
+    const { messages, wardrobeItems, profile, location, previousOutfits } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'messages array is required' });
@@ -24,7 +24,7 @@ export async function handleChat(req, res) {
     const openai = getOpenAIClient();
 
     const weather = location?.city ? await fetchWeather(location.city) : null;
-    const systemPrompt = buildSystemPrompt({ wardrobeItems, profile, weather });
+    const systemPrompt = buildSystemPrompt({ wardrobeItems, profile, weather, previousOutfits });
 
     const apiMessages = [
       { role: 'system', content: systemPrompt },

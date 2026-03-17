@@ -3276,6 +3276,13 @@ function TypingIndicator() {
   );
 }
 
+const REFINEMENT_CHIPS = [
+  { label: "Swap the shoes", icon: "👟" },
+  { label: "Make it more casual", icon: "😎" },
+  { label: "Make it dressier", icon: "✨" },
+  { label: "Show me more options", icon: "🔄" },
+];
+
 function ChatView({
   messages,
   inputValue,
@@ -3283,6 +3290,7 @@ function ChatView({
   onSend,
   onChipTap,
   onCtaAction,
+  hasOutfits,
   pendingImage,
   onImageSelect,
   onImageRemove,
@@ -3595,6 +3603,57 @@ function ChatView({
                   {msg.cta.label}
                   <span style={{ fontSize: 14, opacity: 0.7 }}>→</span>
                 </button>
+              )}
+              {msg.cta && hasOutfits && i === messages.length - 1 && !isGenerating && (
+                <div style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 6,
+                  marginTop: 10,
+                }}>
+                  {REFINEMENT_CHIPS.map((chip) => (
+                    <button
+                      key={chip.label}
+                      onClick={() => onChipTap(chip.label)}
+                      disabled={isGenerating}
+                      style={{
+                        height: 32,
+                        padding: "0 12px",
+                        borderRadius: 16,
+                        border: "1px solid rgba(0,0,0,0.08)",
+                        background: "#fff",
+                        color: "#777",
+                        fontSize: 13,
+                        fontWeight: 500,
+                        fontFamily: "'DM Sans', sans-serif",
+                        cursor: isGenerating ? "default" : "pointer",
+                        transition: "all 0.15s ease",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
+                        whiteSpace: "nowrap",
+                        opacity: isGenerating ? 0.5 : 1,
+                      }}
+                      onPointerDown={(e) => {
+                        if (!isGenerating) {
+                          e.currentTarget.style.transform = "scale(0.95)";
+                          e.currentTarget.style.background = "#F3F2F0";
+                        }
+                      }}
+                      onPointerUp={(e) => {
+                        e.currentTarget.style.transform = "scale(1)";
+                        e.currentTarget.style.background = "#fff";
+                      }}
+                      onPointerLeave={(e) => {
+                        e.currentTarget.style.transform = "scale(1)";
+                        e.currentTarget.style.background = "#fff";
+                      }}
+                    >
+                      <span style={{ fontSize: 13 }}>{chip.icon}</span>
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           ))}
@@ -7156,6 +7215,11 @@ export default function OutfitRecommendations() {
           wardrobeItems: allWardrobeItems,
           profile,
           location: profile.location,
+          previousOutfits: outfits.length > 0 ? outfits.map(o => ({
+            vibe: o.vibe,
+            reasoning: o.reasoning,
+            items: o.items?.map(item => item.name).filter(Boolean) || [],
+          })) : undefined,
           onToken: (token) => {
             if (chatSessionRef.current !== sessionId || !token) return;
 
@@ -7922,6 +7986,7 @@ export default function OutfitRecommendations() {
           onCtaAction={(action) => {
             if (action === "navigate_outfits") setView("outfit");
           }}
+          hasOutfits={outfits.length > 0}
           pendingImage={pendingImage}
           onImageSelect={handleImageSelect}
           onImageRemove={handleImageRemove}
