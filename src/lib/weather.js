@@ -2,6 +2,27 @@ const CACHE_KEY = 'runway_weather_cache_metric';
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
+ * Synchronously read cached weather data from localStorage.
+ * Returns the cached data if it matches the given city and is within TTL, else null.
+ *
+ * @param {string} city - City name to match against cache
+ * @returns {Object|null} { temp, condition, icon, city } or null
+ */
+export function getWeatherFromCache(city) {
+  if (!city) return null;
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed.city === city && Date.now() - parsed.fetchedAt < CACHE_TTL_MS) {
+        return parsed.data;
+      }
+    }
+  } catch { /* ignore corrupt cache */ }
+  return null;
+}
+
+/**
  * Fetch current weather for display purposes (client-side).
  * Results are cached in localStorage for 30 minutes.
  *
