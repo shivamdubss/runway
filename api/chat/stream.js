@@ -91,7 +91,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    const { messages, wardrobeItems, profile, location } = req.body;
+    const { messages, wardrobeItems, profile, location, previousOutfits } = req.body;
 
     // Validation
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -109,7 +109,7 @@ export default async function handler(req, res) {
 
     const openai = getOpenAIClient();
     const weather = location?.city ? await fetchWeather(location.city) : null;
-    const systemPrompt = buildSystemPrompt({ wardrobeItems, profile, weather });
+    const systemPrompt = buildSystemPrompt({ wardrobeItems, profile, weather, previousOutfits });
 
     const apiMessages = [
       { role: 'system', content: systemPrompt },
