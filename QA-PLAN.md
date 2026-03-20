@@ -15,8 +15,9 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 5. [Wardrobe Management](#5-wardrobe-management)
 6. [Outfit Visualization](#6-outfit-visualization)
 7. [Outfit Saving](#7-outfit-saving)
-8. [Trip Planning](#8-trip-planning)
-9. [Profile Settings](#9-profile-settings)
+8. [Weekly Outfit Calendar](#8-weekly-outfit-calendar)
+9. [Trip Planning](#9-trip-planning)
+10. [Profile Settings](#10-profile-settings)
 10. [Weather Integration](#10-weather-integration)
 11. [API Endpoints](#11-api-endpoints)
 12. [Cross-Cutting Concerns](#12-cross-cutting-concerns)
@@ -312,7 +313,44 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 
 ---
 
-## 8. Trip Planning
+## 8. Weekly Outfit Calendar
+
+### 8.1 Calendar Auto-Generation
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| CAL-01 | P1 | Open calendar triggers generation | Tap "Weekly Calendar" in sidebar | Loading state shown, then 7 outfit rows appear |
+| CAL-02 | P1 | Weather shown per day | Set location, open calendar | Each day shows weather emoji and temperature |
+| CAL-03 | P2 | No location graceful fallback | Remove location, open calendar | Outfits generate without weather; no weather data shown |
+| CAL-04 | P2 | Empty wardrobe shows error | Remove all wardrobe items, open calendar | Error message with "Try again" button |
+
+### 8.2 Lock & Regenerate
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| CAL-05 | P1 | Lock a day | Tap lock icon on a day | Day gets locked border; lock icon changes to filled |
+| CAL-06 | P1 | Regenerate preserves locked | Lock 2 days, tap "Regenerate" | Locked days unchanged, unlocked days get new outfits |
+| CAL-07 | P2 | Lock persists across sessions | Lock a day, close and reopen calendar | Day still shows as locked |
+
+### 8.3 Week Navigation
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| CAL-08 | P1 | Navigate to next week | Tap next arrow | New week auto-generates; date range updates |
+| CAL-09 | P1 | Navigate back to previous week | Generate a week, go forward, go back | Previous week loads from database instantly |
+| CAL-10 | P2 | Week header shows correct dates | Open calendar | Header shows "Mon, Mar 16 — Sun, Mar 22" format |
+
+### 8.4 Day Detail
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| CAL-11 | P1 | Tap day shows detail | Tap a day row | Detail view with items grid, vibe, and reasoning |
+| CAL-12 | P1 | Back from detail returns to calendar | Tap back from day detail | Calendar grid view with all 7 days |
+| CAL-13 | P2 | Tap item navigates to garment | In day detail, tap an item | Garment detail page opens |
+
+---
+
+## 9. Trip Planning
 
 ### 8.1 Trip Creation
 

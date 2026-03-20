@@ -199,3 +199,29 @@ export function sendChatMessageStreaming({
     controller.abort();
   };
 }
+
+/**
+ * Generate weekly outfit recommendations for a 7-day calendar.
+ *
+ * @param {Object} params
+ * @param {Array} params.wardrobeItems - User's wardrobe items
+ * @param {Object} params.profile - User profile
+ * @param {Array} [params.forecasts] - Per-day weather [{dayIndex, tempMax, tempMin, weatherCode}]
+ * @param {Array} [params.lockedOutfits] - Locked day outfits [{dayIndex, vibe, items}]
+ * @returns {Promise<{message: string, outfits: Array}>}
+ */
+export async function generateWeeklyOutfits({ wardrobeItems, profile, forecasts, lockedOutfits }) {
+  const headers = await getAuthHeaders();
+  const response = await fetch('/api/generate-weekly-outfits', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ wardrobeItems, profile, forecasts, lockedOutfits }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Request failed with status ${response.status}`);
+  }
+
+  return response.json();
+}

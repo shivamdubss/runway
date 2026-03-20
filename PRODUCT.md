@@ -251,7 +251,20 @@ Users can plan outfits for multi-day trips with a visual calendar interface.
 
 ---
 
-### 9. Chat History & Navigation
+### 9. Weekly Outfit Calendar
+
+- **Access:** "Weekly Calendar" button in the sidebar, between Saved Outfits and Trips.
+- **Auto-generation:** On first visit to a week, AI generates one outfit per day (Mon–Sun) in a single API call. Factors in weather forecasts and the user's wardrobe/profile.
+- **Day grid:** 7-day vertical list showing each day's outfit thumbnail, vibe label, and weather forecast (emoji + temperature).
+- **Lock/unlock:** Tap the lock icon on any day to preserve that outfit during regeneration.
+- **Regenerate:** "Regenerate unlocked days" button replaces only unlocked days, passing locked outfits as context so AI maintains variety.
+- **Week navigation:** Prev/next arrows navigate between weeks. Previously generated weeks load from the database; new weeks auto-generate.
+- **Day detail:** Tap a day to see full outfit detail — items grid, vibe label, and "why this works" reasoning.
+- **Database:** `weekly_calendar_days` table with unique constraint on `(user_id, week_start, day_index)`. Outfits stored in the existing `outfits` table.
+
+---
+
+### 10. Chat History & Navigation
 
 #### Side Panel
 - Slides in from the left via hamburger menu.

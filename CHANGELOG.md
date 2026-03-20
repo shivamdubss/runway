@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-03-20
+
+### Weekly Outfit Calendar
+- New "Weekly Calendar" view accessible from the sidebar
+- AI auto-generates 7 outfits for the current week on first visit, factoring in weather forecasts and your wardrobe
+- Lock days you like and regenerate only the unlocked ones
+- Navigate between weeks with prev/next arrows — previously generated weeks load from the database
+- Each day shows item thumbnails, vibe label, and weather forecast
+- Tap any day to see full outfit detail with items grid and styling reasoning
+
 ## 2026-03-17
 
 ### Outfit Refinement Loop
