@@ -10,13 +10,14 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 
 1. [Authentication](#1-authentication)
 2. [Sidebar & Navigation](#2-sidebar--navigation)
-3. [Chat Interface](#3-chat-interface)
+3. [Chat Interface](#3-chat-interface) (includes [Outfit Refinement](#34-outfit-refinement))
 4. [Outfit Recommendations](#4-outfit-recommendations)
 5. [Wardrobe Management](#5-wardrobe-management)
 6. [Outfit Visualization](#6-outfit-visualization)
 7. [Outfit Saving](#7-outfit-saving)
-8. [Trip Planning](#8-trip-planning)
-9. [Profile Settings](#9-profile-settings)
+8. [Weekly Outfit Calendar](#8-weekly-outfit-calendar)
+9. [Trip Planning](#9-trip-planning)
+10. [Profile Settings](#10-profile-settings)
 10. [Weather Integration](#10-weather-integration)
 11. [API Endpoints](#11-api-endpoints)
 12. [Cross-Cutting Concerns](#12-cross-cutting-concerns)
@@ -120,7 +121,19 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 | CHAT-17 | P1 | Image in message | 1. Send message with image attachment | Full-width inline image displayed within message bubble |
 | CHAT-18 | P2 | CTA button in response | 1. Receive response with visualization option | "🪞 Visualize Outfit →" button appears in assistant message |
 
-### 3.4 Chat Persistence
+### 3.4 Outfit Refinement
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| REFINE-01 | P0 | Refinement chips appear after outfits | 1. Send a message that generates outfits 2. View chat after outfits load | Four refinement chips appear below the "View Outfits" button: "Swap the shoes", "Make it more casual", "Make it dressier", "Show me more options" |
+| REFINE-02 | P0 | Tapping a refinement chip sends message | 1. After outfits load, tap "Swap the shoes" chip | Message sent with chip text; AI generates modified outfits with different shoes |
+| REFINE-03 | P1 | Refinement chips only on last message | 1. Generate outfits 2. Send a follow-up message that also generates outfits | Refinement chips appear only after the latest CTA, not on previous messages |
+| REFINE-04 | P1 | Freeform refinement | 1. Generate outfits 2. Type "Can you replace the pants with a skirt?" | AI modifies relevant outfits, keeping other items intact |
+| REFINE-05 | P1 | Chips hidden during generation | 1. Generate outfits 2. Tap a refinement chip | Chips disappear or become disabled while AI is generating |
+| REFINE-06 | P2 | Multiple refinement rounds | 1. Generate outfits 2. Refine once 3. Refine again | Each round produces updated outfits; AI context includes the latest outfits |
+| REFINE-07 | P2 | Refinement chips absent without outfits | 1. Send a conversational message with no outfit result | No refinement chips appear |
+
+### 3.5 Chat Persistence
 
 | ID | Priority | Scenario | Steps | Expected Result |
 |----|----------|----------|-------|-----------------|
@@ -300,7 +313,44 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 
 ---
 
-## 8. Trip Planning
+## 8. Weekly Outfit Calendar
+
+### 8.1 Calendar Auto-Generation
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| CAL-01 | P1 | Open calendar triggers generation | Tap "Weekly Calendar" in sidebar | Loading state shown, then 7 outfit rows appear |
+| CAL-02 | P1 | Weather shown per day | Set location, open calendar | Each day shows weather emoji and temperature |
+| CAL-03 | P2 | No location graceful fallback | Remove location, open calendar | Outfits generate without weather; no weather data shown |
+| CAL-04 | P2 | Empty wardrobe shows error | Remove all wardrobe items, open calendar | Error message with "Try again" button |
+
+### 8.2 Lock & Regenerate
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| CAL-05 | P1 | Lock a day | Tap lock icon on a day | Day gets locked border; lock icon changes to filled |
+| CAL-06 | P1 | Regenerate preserves locked | Lock 2 days, tap "Regenerate" | Locked days unchanged, unlocked days get new outfits |
+| CAL-07 | P2 | Lock persists across sessions | Lock a day, close and reopen calendar | Day still shows as locked |
+
+### 8.3 Week Navigation
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| CAL-08 | P1 | Navigate to next week | Tap next arrow | New week auto-generates; date range updates |
+| CAL-09 | P1 | Navigate back to previous week | Generate a week, go forward, go back | Previous week loads from database instantly |
+| CAL-10 | P2 | Week header shows correct dates | Open calendar | Header shows "Mon, Mar 16 — Sun, Mar 22" format |
+
+### 8.4 Day Detail
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| CAL-11 | P1 | Tap day shows detail | Tap a day row | Detail view with items grid, vibe, and reasoning |
+| CAL-12 | P1 | Back from detail returns to calendar | Tap back from day detail | Calendar grid view with all 7 days |
+| CAL-13 | P2 | Tap item navigates to garment | In day detail, tap an item | Garment detail page opens |
+
+---
+
+## 9. Trip Planning
 
 ### 8.1 Trip Creation
 

@@ -1,8 +1,7 @@
-import { getOpenAIClient } from '../_lib/openai.js';
-import { buildSystemPrompt } from '../_lib/prompts.js';
-import { parseOutfitResponse } from '../_lib/parse-outfits.js';
-import { verifyAuth } from '../_lib/auth.js';
-import { fetchWeather } from '../_lib/weather.js';
+import { getOpenAIClient } from '../openai.js';
+import { buildSystemPrompt } from '../prompts.js';
+import { parseOutfitResponse } from '../parse-outfits.js';
+import { fetchWeather } from '../weather.js';
 
 export function extractMessageProgressFromJsonBuffer(jsonBuffer) {
   const keyMatch = /"message"\s*:\s*"/.exec(jsonBuffer);
@@ -71,14 +70,7 @@ export function extractMessageProgressFromJsonBuffer(jsonBuffer) {
  * - { type: 'complete', message: '...', outfits: [...] } - Stream completed
  * - { type: 'error', error: '...' } - Error occurred
  */
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const user = await verifyAuth(req, res);
-  if (!user) return;
-
+export async function handleChatStream(req, res) {
   // Set SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');

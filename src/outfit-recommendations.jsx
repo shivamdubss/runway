@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import { Pencil, Trash2, Wand2, Eye, Loader2 } from "lucide-react";
-import { sendChatMessageStreaming } from "./lib/api";
+import { sendChatMessageStreaming, generateWeeklyOutfits } from "./lib/api";
 import { track } from "./lib/analytics";
 import { uploadImage } from "./lib/upload";
 import { buildConversationHistory } from "./lib/conversation-history";
@@ -37,7 +37,7 @@ import {
   pruneVizRegistry,
 } from "./lib/visualization";
 import { useAuth } from "./lib/auth";
-import { fetchWeatherForDisplay, weatherIconToEmoji, searchCities, detectLocationFromBrowser, fetchForecastForTrip, wmoCodeToEmoji } from "./lib/weather";
+import { fetchWeatherForDisplay, getWeatherFromCache, weatherIconToEmoji, searchCities, detectLocationFromBrowser, fetchForecastForTrip, wmoCodeToEmoji } from "./lib/weather";
 
 // Inject CSS animations for streaming states
 const style = document.createElement('style');
@@ -840,7 +840,7 @@ function GarmentDetailPage({ item, onDelete, onEdit, onEnhance, onStyleItem, onS
                   borderRadius: 10,
                   border: "1px solid rgba(0,0,0,0.08)",
                   padding: "10px 12px",
-                  fontSize: "var(--font-caption)",
+                  fontSize: "16px",
                   fontFamily: "'DM Sans', sans-serif",
                   color: "#1A1A1A",
                   boxSizing: "border-box",
@@ -3276,6 +3276,13 @@ function TypingIndicator() {
   );
 }
 
+const REFINEMENT_CHIPS = [
+  { label: "Swap the shoes", icon: "👟" },
+  { label: "Make it more casual", icon: "😎" },
+  { label: "Make it dressier", icon: "✨" },
+  { label: "Show me more options", icon: "🔄" },
+];
+
 function ChatView({
   messages,
   inputValue,
@@ -3283,6 +3290,7 @@ function ChatView({
   onSend,
   onChipTap,
   onCtaAction,
+  hasOutfits,
   pendingImage,
   onImageSelect,
   onImageRemove,
@@ -3595,6 +3603,57 @@ function ChatView({
                   {msg.cta.label}
                   <span style={{ fontSize: 14, opacity: 0.7 }}>→</span>
                 </button>
+              )}
+              {msg.cta && hasOutfits && i === messages.length - 1 && !isGenerating && (
+                <div style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 6,
+                  marginTop: 10,
+                }}>
+                  {REFINEMENT_CHIPS.map((chip) => (
+                    <button
+                      key={chip.label}
+                      onClick={() => onChipTap(chip.label)}
+                      disabled={isGenerating}
+                      style={{
+                        height: 32,
+                        padding: "0 12px",
+                        borderRadius: 16,
+                        border: "1px solid rgba(0,0,0,0.08)",
+                        background: "#fff",
+                        color: "#777",
+                        fontSize: 13,
+                        fontWeight: 500,
+                        fontFamily: "'DM Sans', sans-serif",
+                        cursor: isGenerating ? "default" : "pointer",
+                        transition: "all 0.15s ease",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
+                        whiteSpace: "nowrap",
+                        opacity: isGenerating ? 0.5 : 1,
+                      }}
+                      onPointerDown={(e) => {
+                        if (!isGenerating) {
+                          e.currentTarget.style.transform = "scale(0.95)";
+                          e.currentTarget.style.background = "#F3F2F0";
+                        }
+                      }}
+                      onPointerUp={(e) => {
+                        e.currentTarget.style.transform = "scale(1)";
+                        e.currentTarget.style.background = "#fff";
+                      }}
+                      onPointerLeave={(e) => {
+                        e.currentTarget.style.transform = "scale(1)";
+                        e.currentTarget.style.background = "#fff";
+                      }}
+                    >
+                      <span style={{ fontSize: 13 }}>{chip.icon}</span>
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           ))}
@@ -5334,38 +5393,6 @@ function TripVisualizationButton({ outfit, vizGenerations, hasReferencePhoto, on
   );
 }
 
-function SlotDetailSheet({ dayIndex, slotIndex, outfit, trip, onClose, onRemove, vizGenerations, hasReferencePhoto, onVisualizeClick, onViewVisualization, onItemClick }) {
-  const dayLabel = db.getTripDayLabel(trip.startDate, dayIndex);
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }} onClick={onClose} />
-      <div style={{ position: 'relative', background: '#fff', borderRadius: '20px 20px 0 0', padding: '8px 20px 32px', maxHeight: '85vh', overflowY: 'auto' }}>
-        <div style={{ width: 40, height: 4, background: '#D4D4D4', borderRadius: 2, margin: '0 auto 16px' }} />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <span style={{ fontSize: 13, color: '#999', fontFamily: "'DM Sans', sans-serif" }}>
-            {dayLabel} · {outfitLabel(slotIndex)}
-          </span>
-          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 16, border: 'none', background: 'rgba(0,0,0,0.05)', color: '#666', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-        </div>
-        <h2 style={{ fontSize: 20, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: '0 0 12px' }}>{outfit.vibe}</h2>
-        {outfit.items.length > 0 && (
-          <div className="item-card-grid" style={{ marginBottom: 12 }}>
-            {outfit.items.map((item, i) => <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />)}
-          </div>
-        )}
-        <TripVisualizationButton outfit={outfit} vizGenerations={vizGenerations} hasReferencePhoto={hasReferencePhoto} onVisualizeClick={onVisualizeClick} onViewVisualization={onViewVisualization} />
-        <button
-          onClick={onRemove}
-          style={{ width: '100%', padding: '12px 0', background: '#FEE2E2', border: 'none', borderRadius: 12, fontSize: 'var(--font-body)', fontFamily: "'DM Sans', sans-serif", fontWeight: 500, color: '#DC2626', cursor: 'pointer', marginTop: 8 }}
-          onPointerDown={(e) => e.currentTarget.style.opacity = '0.7'}
-          onPointerUp={(e) => e.currentTarget.style.opacity = '1'}
-          onPointerLeave={(e) => e.currentTarget.style.opacity = '1'}
-        ><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><TrashIcon size={14} color="#DC2626" /> Remove</span></button>
-      </div>
-    </div>
-  );
-}
-
 function SlotTile({ slotIndex, outfit, isSelected, onTap, width = 128 }) {
   const filled = !!outfit;
   return (
@@ -5796,7 +5823,6 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [slotDetail, setSlotDetail] = useState(null); // {dayIndex, slotName, slotIndex}
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [forecast, setForecast] = useState(null);
@@ -5825,16 +5851,6 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
 
   const filledCount = slots.filter(s => s.outfitId).length;
 
-  const handleSlotTap = (dayIndex, slotName, slotIndex, outfit) => {
-    if (outfit) {
-      setSlotDetail({ dayIndex, slotName, slotIndex });
-      setSelectedSlot(null);
-    } else {
-      setSelectedSlot(prev =>
-        prev?.dayIndex === dayIndex && prev?.slotName === slotName ? null : { dayIndex, slotName, slotIndex }
-      );
-    }
-  };
 
   const handleAddOutfit = (dayIndex) => {
     const daySlots = slots.filter(s => s.dayIndex === dayIndex && s.outfitId);
@@ -5866,7 +5882,6 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
     const remaining = nextSlots.filter(s => s.dayIndex === dayIndex && s.outfitId).length;
     setSlots(nextSlots);
     setActiveOutfitIndex(prev => Math.min(prev, Math.max(0, remaining - 1)));
-    setSlotDetail(null);
     try {
       await db.removeTripSlot({ tripPlanId: trip.id, dayIndex, slotName });
     } catch (err) {
@@ -5874,7 +5889,6 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
     }
   };
 
-  const slotDetailData = slotDetail ? slotMap[`${slotDetail.dayIndex}-${slotDetail.slotName}`] : null;
 
   if (loading) {
     return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -5958,10 +5972,15 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
                 {activeOutfit.vibe}
               </h3>
               <button
-                onClick={() => handleSlotTap(activeDayIndex, activeSlot.slotName, activeSlotIndex, activeOutfit)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif" }}
+                onClick={() => {
+                  if (window.confirm('Remove this outfit from the trip?')) {
+                    handleRemoveSlot(activeDayIndex, activeSlot.slotName);
+                  }
+                }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#999', display: 'flex', alignItems: 'center' }}
+                aria-label="Remove outfit"
               >
-                Details
+                <TrashIcon size={16} color="#999" />
               </button>
             </div>
             {activeOutfit.items.length > 0 && (
@@ -5969,6 +5988,7 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
                 {activeOutfit.items.map((item, i) => <ItemCard key={i} item={item} onClick={() => onItemClick(item)} />)}
               </div>
             )}
+            <TripVisualizationButton outfit={activeOutfit} vizGenerations={vizGenerations} hasReferencePhoto={hasReferencePhoto} onVisualizeClick={onVisualizeClick} onViewVisualization={onViewVisualization} />
           </div>
         ) : daySlots.length === 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', color: '#999', fontFamily: "'DM Sans', sans-serif" }}>
@@ -5989,22 +6009,6 @@ function TripDetailView({ trip, savedOutfits, vizGenerations, hasReferencePhoto,
         />
       )}
 
-      {/* Slot detail bottom sheet */}
-      {slotDetail && slotDetailData?.outfit && (
-        <SlotDetailSheet
-          dayIndex={slotDetail.dayIndex}
-          slotIndex={slotDetail.slotIndex}
-          outfit={slotDetailData.outfit}
-          trip={trip}
-          onClose={() => setSlotDetail(null)}
-          onRemove={() => handleRemoveSlot(slotDetail.dayIndex, slotDetail.slotName)}
-          vizGenerations={vizGenerations}
-          hasReferencePhoto={hasReferencePhoto}
-          onVisualizeClick={onVisualizeClick}
-          onViewVisualization={onViewVisualization}
-          onItemClick={onItemClick}
-        />
-      )}
 
       {showEditSheet && (
         <TripFormSheet
@@ -6113,7 +6117,7 @@ function TripSummaryView({ trip, onBack }) {
   const packingList = Object.values(itemUsage).sort((a, b) => b.count - a.count);
 
   // Group by category
-  const categoryOrder = ['Tops', 'Bottoms', 'Outerwear', 'Dresses', 'Shoes', 'Accessories', 'Other'];
+  const categoryOrder = ['Tops', 'Layers', 'Bottoms', 'Dresses & Jumpsuits', 'Shoes', 'Accessories', 'Other'];
   const categoryMap = {};
   for (const { item, count } of packingList) {
     const cat = item.category || 'Other';
@@ -6140,47 +6144,16 @@ function TripSummaryView({ trip, onBack }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <div className="outfit-scroll-panel" style={{ flex: 1, overflowY: 'auto', padding: '0 var(--container-padding-x) calc(24px + var(--safe-bottom))' }}>
-        {/* Day-by-day summary */}
-        {Array.from({ length: dayCount }, (_, dayIndex) => {
-          const dayLabel = db.getTripDayLabel(trip.startDate, dayIndex);
-          const daySlots = slots.filter(s => s.dayIndex === dayIndex && s.outfit).sort((a, b) => db.slotIndexFromName(a.slotName) - db.slotIndexFromName(b.slotName));
-          if (daySlots.length === 0) return null;
-          return (
-            <div key={dayIndex} style={{ marginBottom: 24 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: '0 0 4px' }}>
-                Day {dayIndex + 1} — {dayLabel}
-              </h2>
-              <div style={{ height: 1, background: 'rgba(0,0,0,0.06)', marginBottom: 12 }} />
-              {daySlots.map((slot, idx) => (
-                <div key={slot.slotName} style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 12, color: '#999', fontFamily: "'DM Sans', sans-serif", marginBottom: 5 }}>
-                    {outfitLabel(idx)}
-                  </div>
-                  <div style={{ background: '#fff', borderRadius: 10, padding: 12, border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", marginBottom: 4 }}>{slot.outfit.vibe}</div>
-                    <div style={{ fontSize: 12, color: '#666', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}>
-                      {(slot.outfit.items || []).map(item => `${item.emoji || '👕'} ${item.name}`).join('  ·  ')}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          );
-        })}
-
         {/* Packing list */}
         {packingList.length > 0 && (
-          <div style={{ marginTop: 8, paddingTop: 16, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-              <h2 style={{ fontSize: 14, fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: 0 }}>
-                Packing list
-              </h2>
-              {totalPackingItems > 0 && (
+          <div style={{ paddingTop: 8 }}>
+            {totalPackingItems > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 4 }}>
                 <span style={{ fontSize: 12, color: checkedCount === totalPackingItems ? '#22C55E' : '#999', fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>
                   {checkedCount}/{totalPackingItems} packed
                 </span>
-              )}
-            </div>
+              </div>
+            )}
             <div style={{ height: 3, background: '#F0EFED', borderRadius: 2, overflow: 'hidden', marginBottom: 16 }}>
               <div style={{ width: `${totalPackingItems > 0 ? (checkedCount / totalPackingItems) * 100 : 0}%`, height: '100%', background: checkedCount === totalPackingItems ? '#22C55E' : '#1A1A1A', borderRadius: 2, transition: 'width 0.3s ease' }} />
             </div>
@@ -6192,12 +6165,19 @@ function TripSummaryView({ trip, onBack }) {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {categoryMap[category].map(({ item, count }) => (
-                    <div key={item.id} onClick={() => toggleItem(item.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 8, padding: '8px 12px', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer' }}>
+                    <div key={item.id} onClick={() => toggleItem(item.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#fff', borderRadius: 10, padding: '8px 12px', border: '1px solid rgba(0,0,0,0.06)', cursor: 'pointer' }}>
                       <div style={checkboxStyle(!!checkedItems[item.id])}>
                         {checkedItems[item.id] && '✓'}
                       </div>
+                      {(item.images?.[0] || item.image) ? (
+                        <img src={item.images?.[0] || item.image} alt={item.name} style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flexShrink: 0, opacity: checkedItems[item.id] ? 0.4 : 1, transition: 'opacity 0.15s ease' }} />
+                      ) : (
+                        <div style={{ width: 44, height: 44, borderRadius: 8, background: '#EAE9E7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: checkedItems[item.id] ? 0.4 : 1, transition: 'opacity 0.15s ease' }}>
+                          <span style={{ fontSize: 20 }}>{item.emoji || '👕'}</span>
+                        </div>
+                      )}
                       <span style={{ fontSize: 13, fontFamily: "'DM Sans', sans-serif", color: checkedItems[item.id] ? '#999' : '#1A1A1A', textDecoration: checkedItems[item.id] ? 'line-through' : 'none', flex: 1, transition: 'all 0.15s ease' }}>
-                        {item.emoji || '👕'} {item.name}
+                        {item.name}
                       </span>
                       {count > 1 && <span style={{ fontSize: 11, color: '#999', fontFamily: "'DM Sans', sans-serif" }}>×{count}</span>}
                     </div>
@@ -6474,7 +6454,285 @@ function TripsListView({ tripPlans, onOpenTrip, onDeleteTrip, onNewTrip, slotCou
   );
 }
 
-function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, onOpenSaved, onOpenTrips, savedCount, chatHistory, onSelectChat, onToggleStar, onDeleteChat, onSignOut }) {
+// ── Weekly Calendar Components ──────────────────────────────
+
+const LOADING_MESSAGES = [
+  "Planning your week...",
+  "Checking the forecast...",
+  "Mixing and matching...",
+  "Curating your looks...",
+  "Almost there...",
+];
+
+function WeeklyCalendarView({ weekStart, days, forecast, loading, error, onWeekNav, onRegenerate, onToggleLock, onSelectDay, onItemClick }) {
+  const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
+
+  useEffect(() => {
+    if (!loading) return;
+    const interval = setInterval(() => {
+      setLoadingMsgIndex(i => (i + 1) % LOADING_MESSAGES.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [loading]);
+
+  const weekEndStr = db.getWeekEnd(weekStart);
+  const startLabel = db.getCalendarDayLabel(weekStart, 0);
+  const endLabel = db.getCalendarDayLabel(weekStart, 6);
+  const unlockedCount = 7 - days.filter(d => d.locked).length;
+
+  if (loading) {
+    return (
+      <div style={{ padding: "40px var(--container-padding-x)", textAlign: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+          <Loader2 size={32} style={{ animation: "spin 1s linear infinite", color: "#888" }} />
+          <p style={{ fontSize: "var(--font-body)", color: "#888", fontFamily: "'DM Sans', sans-serif", margin: 0 }}>
+            {LOADING_MESSAGES[loadingMsgIndex]}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: "40px var(--container-padding-x)", textAlign: "center" }}>
+        <p style={{ fontSize: "var(--font-body)", color: "#c00", fontFamily: "'DM Sans', sans-serif", marginBottom: 16 }}>
+          {error}
+        </p>
+        <button
+          onClick={onRegenerate}
+          style={{
+            padding: "10px 24px", borderRadius: 8, border: "none", background: "#1A1A1A",
+            color: "#fff", fontSize: "var(--font-body)", fontWeight: 600, cursor: "pointer",
+            fontFamily: "'DM Sans', sans-serif",
+          }}
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: "0 var(--container-padding-x)", paddingBottom: 100, overflow: "auto", flex: 1 }}>
+      {/* Week navigation */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, gap: 8 }}>
+        <button
+          onClick={() => onWeekNav(-1)}
+          style={{ width: 36, height: 36, borderRadius: 8, border: "1px solid rgba(0,0,0,0.1)", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+          aria-label="Previous week"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+        </button>
+        <span style={{ fontSize: "var(--font-small)", fontWeight: 500, color: "#555", fontFamily: "'DM Sans', sans-serif", textAlign: "center" }}>
+          {startLabel} — {endLabel}
+        </span>
+        <button
+          onClick={() => onWeekNav(1)}
+          style={{ width: 36, height: 36, borderRadius: 8, border: "1px solid rgba(0,0,0,0.1)", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+          aria-label="Next week"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+        </button>
+      </div>
+
+      {/* Day rows */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {[0, 1, 2, 3, 4, 5, 6].map(dayIndex => {
+          const day = days.find(d => d.dayIndex === dayIndex);
+          const dayLabel = db.getCalendarDayLabel(weekStart, dayIndex);
+          const dayName = db.getCalendarDayName(dayIndex);
+          const forecastDay = forecast?.[dayIndex];
+          const weatherEmoji = forecastDay ? wmoCodeToEmoji(forecastDay.weatherCode) : '';
+          const tempStr = forecastDay ? `${forecastDay.tempMax}°` : '';
+
+          return (
+            <div
+              key={dayIndex}
+              style={{
+                background: "#fff",
+                borderRadius: 12,
+                border: day?.locked ? "2px solid #1A1A1A" : "1px solid rgba(0,0,0,0.08)",
+                padding: "12px 14px",
+                cursor: day?.outfit ? "pointer" : "default",
+                transition: "box-shadow 0.15s ease",
+              }}
+              onClick={() => day?.outfit && onSelectDay(dayIndex)}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: day?.outfit ? 8 : 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: "var(--font-body)", fontWeight: 600, color: "#1A1A1A", fontFamily: "'DM Sans', sans-serif", minWidth: 36 }}>
+                    {dayName}
+                  </span>
+                  <span style={{ fontSize: "var(--font-small)", color: "#888", fontFamily: "'DM Sans', sans-serif" }}>
+                    {dayLabel.replace(/^\w+, /, '')}
+                  </span>
+                  {weatherEmoji && (
+                    <span style={{ fontSize: "var(--font-small)" }}>{weatherEmoji} {tempStr}</span>
+                  )}
+                </div>
+                {day?.outfit && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onToggleLock(dayIndex); }}
+                    style={{
+                      width: 28, height: 28, borderRadius: 6, border: "none",
+                      background: day.locked ? "#1A1A1A" : "rgba(0,0,0,0.05)",
+                      color: day.locked ? "#fff" : "#888",
+                      cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                      flexShrink: 0, fontSize: 14,
+                    }}
+                    aria-label={day.locked ? "Unlock day" : "Lock day"}
+                  >
+                    {day.locked ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 9.9-1" /></svg>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {day?.outfit ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {/* Item thumbnails */}
+                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                    {(day.outfit.items || []).slice(0, 4).map((item, i) => (
+                      <div
+                        key={item.id || i}
+                        style={{
+                          width: 36, height: 36, borderRadius: 6, overflow: "hidden",
+                          background: "#f5f5f5", flexShrink: 0,
+                        }}
+                      >
+                        {item.image ? (
+                          <img src={item.image} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        ) : (
+                          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", fontSize: 16 }}>
+                            {item.emoji || "👕"}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                    {(day.outfit.items || []).length > 4 && (
+                      <div style={{ width: 36, height: 36, borderRadius: 6, background: "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#888", fontWeight: 600 }}>
+                        +{day.outfit.items.length - 4}
+                      </div>
+                    )}
+                  </div>
+                  <span style={{ fontSize: "var(--font-small)", color: "#555", fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>
+                    {day.outfit.vibe}
+                  </span>
+                </div>
+              ) : (
+                <span style={{ fontSize: "var(--font-small)", color: "#ccc", fontFamily: "'DM Sans', sans-serif", fontStyle: "italic" }}>
+                  No outfit
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Regenerate button */}
+      {unlockedCount > 0 && days.length > 0 && (
+        <button
+          onClick={onRegenerate}
+          style={{
+            width: "100%", marginTop: 20, padding: "14px 0", borderRadius: 10,
+            border: "none", background: "#1A1A1A", color: "#fff",
+            fontSize: "var(--font-body)", fontWeight: 600, cursor: "pointer",
+            fontFamily: "'DM Sans', sans-serif",
+          }}
+        >
+          Regenerate {unlockedCount === 7 ? "all days" : `${unlockedCount} unlocked day${unlockedCount > 1 ? "s" : ""}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CalendarDayDetailView({ day, weekStart, forecast, onItemClick, onToggleSaved }) {
+  if (!day?.outfit) return null;
+  const dayLabel = db.getCalendarDayLabel(weekStart, day.dayIndex);
+  const forecastDay = forecast?.[day.dayIndex];
+  const weatherEmoji = forecastDay ? wmoCodeToEmoji(forecastDay.weatherCode) : '';
+  const tempStr = forecastDay ? `${forecastDay.tempMin}° – ${forecastDay.tempMax}°` : '';
+
+  return (
+    <div style={{ padding: "0 var(--container-padding-x)", paddingBottom: 100, overflow: "auto", flex: 1 }}>
+      {/* Day header */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <span style={{ fontSize: "var(--font-body)", fontWeight: 600, color: "#1A1A1A", fontFamily: "'DM Sans', sans-serif" }}>
+            {dayLabel}
+          </span>
+          {weatherEmoji && (
+            <span style={{ fontSize: "var(--font-small)", color: "#888" }}>{weatherEmoji} {tempStr}</span>
+          )}
+        </div>
+        <h2 style={{ fontSize: 22, fontWeight: 400, color: "#1A1A1A", fontFamily: "'Instrument Serif', serif", margin: 0 }}>
+          {day.outfit.vibe}
+        </h2>
+      </div>
+
+      {/* Items grid */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(2, 1fr)",
+        gap: 10,
+        marginBottom: 20,
+      }}>
+        {(day.outfit.items || []).map((item) => (
+          <div
+            key={item.id}
+            onClick={() => onItemClick(item)}
+            style={{
+              background: "#fff",
+              borderRadius: 10,
+              border: "1px solid rgba(0,0,0,0.08)",
+              overflow: "hidden",
+              cursor: "pointer",
+            }}
+          >
+            <div style={{ aspectRatio: "1", background: "#f5f5f5", position: "relative" }}>
+              {item.image ? (
+                <img src={item.image} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", fontSize: 40 }}>
+                  {item.emoji || "👕"}
+                </div>
+              )}
+            </div>
+            <div style={{ padding: "8px 10px" }}>
+              <p style={{ fontSize: "var(--font-small)", fontWeight: 500, color: "#1A1A1A", fontFamily: "'DM Sans', sans-serif", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {item.name}
+              </p>
+              <p style={{ fontSize: 11, color: "#888", fontFamily: "'DM Sans', sans-serif", margin: "2px 0 0 0" }}>
+                {item.category}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Reasoning */}
+      {day.outfit.reasoning && (
+        <div style={{
+          background: "#f9f9f9", borderRadius: 10, padding: "14px 16px", marginBottom: 16,
+        }}>
+          <p style={{ fontSize: "var(--font-small)", fontWeight: 600, color: "#1A1A1A", fontFamily: "'DM Sans', sans-serif", margin: "0 0 4px 0" }}>
+            Why this works
+          </p>
+          <p style={{ fontSize: "var(--font-small)", color: "#555", fontFamily: "'DM Sans', sans-serif", margin: 0, lineHeight: 1.5 }}>
+            {day.outfit.reasoning}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, onOpenSaved, onOpenCalendar, onOpenTrips, savedCount, chatHistory, onSelectChat, onToggleStar, onDeleteChat, onSignOut }) {
   const starredChats = chatHistory.filter((c) => c.starred);
   const recentChats = chatHistory.filter((c) => !c.starred);
 
@@ -6626,6 +6884,39 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, 
                 {savedCount}
               </span>
             )}
+          </button>
+
+          <button
+            onClick={onOpenCalendar}
+            style={{
+              width: "100%",
+              height: 40,
+              borderRadius: 8,
+              border: "none",
+              background: "transparent",
+              color: "#1A1A1A",
+              fontSize: "var(--font-body)",
+              fontWeight: 500,
+              fontFamily: "'DM Sans', sans-serif",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-start",
+              padding: "0 12px",
+              gap: 8,
+              transition: "background 0.15s ease",
+            }}
+            onPointerDown={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.05)"}
+            onPointerUp={(e) => e.currentTarget.style.background = "transparent"}
+            onPointerLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            Weekly Calendar
           </button>
 
           <button
@@ -6799,13 +7090,30 @@ export default function OutfitRecommendations() {
   const [profileLoaded, setProfileLoaded] = useState(false);
   const vizGenerations = useSyncExternalStore(subscribeVizRegistry, getVizRegistrySnapshot);
   const [vizModalOutfitId, setVizModalOutfitId] = useState(null);
-  const [weather, setWeather] = useState(null);
+  const [weather, setWeather] = useState(() => {
+    try {
+      const cached = localStorage.getItem('runway_weather_cache_metric');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Date.now() - parsed.fetchedAt < 30 * 60 * 1000) {
+          return parsed.data;
+        }
+      }
+    } catch { /* ignore */ }
+    return null;
+  });
   const [savedOutfits, setSavedOutfits] = useState([]);
   const [focusLocation, setFocusLocation] = useState(false);
   const [tripPlans, setTripPlans] = useState([]);
   const [tripSlotCounts, setTripSlotCounts] = useState({});
   const [activeTrip, setActiveTrip] = useState(null); // the trip object for trip-detail/summary
   const [showNewTripSheet, setShowNewTripSheet] = useState(false);
+  const [calendarWeekStart, setCalendarWeekStart] = useState(null);
+  const [calendarDays, setCalendarDays] = useState([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [calendarForecast, setCalendarForecast] = useState(null);
+  const [calendarSelectedDay, setCalendarSelectedDay] = useState(null);
+  const [calendarError, setCalendarError] = useState(null);
   const chatSessionRef = useRef(0);
   const streamAbortRef = useRef(null);
 
@@ -6865,10 +7173,11 @@ export default function OutfitRecommendations() {
   }, [profileLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (!profileLoaded) return;
     const city = profile.location?.city;
     if (!city) { setWeather(null); return; }
     fetchWeatherForDisplay(city).then(setWeather);
-  }, [profile.location?.city]);
+  }, [profile.location?.city, profileLoaded]);
 
   useEffect(() => {
     async function loadInitialData() {
@@ -7235,6 +7544,11 @@ export default function OutfitRecommendations() {
           wardrobeItems: allWardrobeItems,
           profile,
           location: profile.location,
+          previousOutfits: outfits.length > 0 ? outfits.map(o => ({
+            vibe: o.vibe,
+            reasoning: o.reasoning,
+            items: o.items?.map(item => item.name).filter(Boolean) || [],
+          })) : undefined,
           onToken: (token) => {
             if (chatSessionRef.current !== sessionId || !token) return;
 
@@ -7630,6 +7944,141 @@ export default function OutfitRecommendations() {
     }
   }, [activeTrip]);
 
+  // ── Weekly Calendar ──────────────────────────────────────
+
+  const loadCalendarWeek = useCallback(async (weekStart) => {
+    setCalendarWeekStart(weekStart);
+    setCalendarLoading(true);
+    setCalendarError(null);
+    setCalendarSelectedDay(null);
+
+    try {
+      // Fetch existing calendar data
+      const existing = await db.fetchWeekCalendar(weekStart);
+      if (existing.length > 0) {
+        setCalendarDays(existing);
+        setCalendarLoading(false);
+        return;
+      }
+
+      // Auto-generate for the week
+      const weekEnd = db.getWeekEnd(weekStart);
+      const city = profile.location?.city;
+      let forecasts = null;
+      if (city) {
+        forecasts = await fetchForecastForTrip(city, weekStart, weekEnd);
+      }
+      setCalendarForecast(forecasts);
+
+      const forecastPayload = forecasts ? forecasts.map((f, i) => ({
+        dayIndex: i,
+        tempMax: f.tempMax,
+        tempMin: f.tempMin,
+        weatherCode: f.weatherCode,
+      })) : [];
+
+      const result = await generateWeeklyOutfits({
+        wardrobeItems: wardrobeFlat,
+        profile,
+        forecasts: forecastPayload,
+        lockedOutfits: [],
+      });
+
+      // Save to DB
+      const saved = await db.saveWeeklyOutfits({
+        weekStart,
+        outfits: result.outfits || [],
+        wardrobeItems: wardrobeFlat,
+      });
+
+      // Re-fetch to get full outfit data with items
+      const days = await db.fetchWeekCalendar(weekStart);
+      setCalendarDays(days);
+    } catch (err) {
+      console.error("Failed to load calendar:", err);
+      setCalendarError(err.message || "Failed to generate outfits");
+    } finally {
+      setCalendarLoading(false);
+    }
+  }, [wardrobeFlat, profile]);
+
+  const handleOpenCalendar = useCallback(() => {
+    const weekStart = db.getWeekStart();
+    setView("calendar");
+    loadCalendarWeek(weekStart);
+  }, [loadCalendarWeek]);
+
+  const handleCalendarWeekNav = useCallback((direction) => {
+    const newWeek = db.shiftWeek(calendarWeekStart, direction);
+    loadCalendarWeek(newWeek);
+  }, [calendarWeekStart, loadCalendarWeek]);
+
+  const handleCalendarRegenerate = useCallback(async () => {
+    if (!calendarWeekStart) return;
+    setCalendarLoading(true);
+    setCalendarError(null);
+
+    try {
+      const lockedOutfits = calendarDays
+        .filter(d => d.locked && d.outfit)
+        .map(d => ({
+          dayIndex: d.dayIndex,
+          vibe: d.outfit.vibe,
+          items: (d.outfit.items || []).map(i => i.name),
+        }));
+
+      const weekEnd = db.getWeekEnd(calendarWeekStart);
+      const city = profile.location?.city;
+      let forecasts = calendarForecast;
+      if (!forecasts && city) {
+        forecasts = await fetchForecastForTrip(city, calendarWeekStart, weekEnd);
+        setCalendarForecast(forecasts);
+      }
+
+      const forecastPayload = forecasts ? forecasts.map((f, i) => ({
+        dayIndex: i,
+        tempMax: f.tempMax,
+        tempMin: f.tempMin,
+        weatherCode: f.weatherCode,
+      })) : [];
+
+      const result = await generateWeeklyOutfits({
+        wardrobeItems: wardrobeFlat,
+        profile,
+        forecasts: forecastPayload,
+        lockedOutfits,
+      });
+
+      // Save new outfits (only unlocked days)
+      await db.saveWeeklyOutfits({
+        weekStart: calendarWeekStart,
+        outfits: result.outfits || [],
+        wardrobeItems: wardrobeFlat,
+      });
+
+      const days = await db.fetchWeekCalendar(calendarWeekStart);
+      setCalendarDays(days);
+    } catch (err) {
+      console.error("Failed to regenerate calendar:", err);
+      setCalendarError(err.message || "Failed to regenerate outfits");
+    } finally {
+      setCalendarLoading(false);
+    }
+  }, [calendarWeekStart, calendarDays, calendarForecast, wardrobeFlat, profile]);
+
+  const handleToggleDayLock = useCallback(async (dayIndex) => {
+    const day = calendarDays.find(d => d.dayIndex === dayIndex);
+    if (!day) return;
+    const newLocked = !day.locked;
+    setCalendarDays(prev => prev.map(d => d.dayIndex === dayIndex ? { ...d, locked: newLocked } : d));
+    try {
+      await db.toggleCalendarDayLock(calendarWeekStart, dayIndex, newLocked);
+    } catch (err) {
+      console.error("Failed to toggle lock:", err);
+      setCalendarDays(prev => prev.map(d => d.dayIndex === dayIndex ? { ...d, locked: !newLocked } : d));
+    }
+  }, [calendarDays, calendarWeekStart]);
+
   const navigateToGarment = useCallback((item) => {
     setLightboxItem(item);
     setGarmentPreviousView(view);
@@ -7689,6 +8138,7 @@ export default function OutfitRecommendations() {
         onOpenWardrobe={() => { setView("wardrobe"); setSidePanelOpen(false); }}
         onOpenProfile={() => { setView("profile"); setSidePanelOpen(false); }}
         onOpenSaved={() => { setView("saved"); setSidePanelOpen(false); }}
+        onOpenCalendar={() => { handleOpenCalendar(); setSidePanelOpen(false); }}
         onOpenTrips={() => { setView("trips"); setSidePanelOpen(false); }}
         savedCount={savedOutfits.length}
         chatHistory={chatHistory}
@@ -7712,11 +8162,12 @@ export default function OutfitRecommendations() {
           <button
             onClick={
               view === "garment" ? handleGarmentBack
+              : view === "calendar-detail" ? () => { setCalendarSelectedDay(null); setView("calendar"); }
               : view === "trip-detail" ? () => setView("trips")
               : view === "trip-summary" ? () => setView("trip-detail")
               : () => setSidePanelOpen(true)
             }
-            aria-label={view === "garment" || view === "trip-detail" || view === "trip-summary" ? "Go back" : "Open menu"}
+            aria-label={view === "garment" || view === "calendar-detail" || view === "trip-detail" || view === "trip-summary" ? "Go back" : "Open menu"}
             style={{
               width: 40,
               height: 40,
@@ -7734,7 +8185,7 @@ export default function OutfitRecommendations() {
               marginRight: 8,
             }}
           >
-            {(view === "garment" || view === "trip-detail" || view === "trip-summary") ? (
+            {(view === "garment" || view === "calendar-detail" || view === "trip-detail" || view === "trip-summary") ? (
               <span style={{ fontSize: 22, lineHeight: 1, color: "#1A1A1A" }}>←</span>
             ) : (
               <>
@@ -7753,7 +8204,7 @@ export default function OutfitRecommendations() {
             lineHeight: 1.1,
             flex: 1,
           }}>
-            {view === "garment" ? (lightboxItem?.name ?? "Item") : view === "wardrobe" ? "My Wardrobe" : view === "saved" ? "Saved Outfits" : view === "outfit" ? "Your Outfit" : view === "profile" ? "My Profile" : view === "trips" ? "Trips" : view === "trip-detail" ? (activeTrip?.title ?? "Trip") : view === "trip-summary" ? "Summary" : "Chat"}
+            {view === "garment" ? (lightboxItem?.name ?? "Item") : view === "wardrobe" ? "My Wardrobe" : view === "saved" ? "Saved Outfits" : view === "outfit" ? "Your Outfit" : view === "profile" ? "My Profile" : view === "calendar" ? "Weekly Calendar" : view === "calendar-detail" ? "Day Detail" : view === "trips" ? "Trips" : view === "trip-detail" ? (activeTrip?.title ?? "Trip") : view === "trip-summary" ? "Packing List" : "Chat"}
           </h1>
 
           {view === "trips" && (
@@ -7959,6 +8410,26 @@ export default function OutfitRecommendations() {
           onVisualizeClick={handleVisualizeOutfit}
           onViewVisualization={(outfitId) => setVizModalOutfitId(outfitId)}
         />
+      ) : view === "calendar" ? (
+        <WeeklyCalendarView
+          weekStart={calendarWeekStart}
+          days={calendarDays}
+          forecast={calendarForecast}
+          loading={calendarLoading}
+          error={calendarError}
+          onWeekNav={handleCalendarWeekNav}
+          onRegenerate={handleCalendarRegenerate}
+          onToggleLock={handleToggleDayLock}
+          onSelectDay={(dayIndex) => { setCalendarSelectedDay(dayIndex); setView("calendar-detail"); }}
+          onItemClick={navigateToGarment}
+        />
+      ) : view === "calendar-detail" && calendarSelectedDay !== null ? (
+        <CalendarDayDetailView
+          day={calendarDays.find(d => d.dayIndex === calendarSelectedDay)}
+          weekStart={calendarWeekStart}
+          forecast={calendarForecast}
+          onItemClick={navigateToGarment}
+        />
       ) : view === "trips" ? (
         <TripsListView
           tripPlans={tripPlans}
@@ -8001,6 +8472,7 @@ export default function OutfitRecommendations() {
           onCtaAction={(action) => {
             if (action === "navigate_outfits") setView("outfit");
           }}
+          hasOutfits={outfits.length > 0}
           pendingImage={pendingImage}
           onImageSelect={handleImageSelect}
           onImageRemove={handleImageRemove}

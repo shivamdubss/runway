@@ -17,12 +17,12 @@ async function getAuthHeaders(contentType = 'application/json') {
  * @param {Object} params.profile - User profile
  * @returns {Promise<{message: string, outfits: Array}>}
  */
-export async function sendChatMessage({ messages, wardrobeItems, profile, location }) {
+export async function sendChatMessage({ messages, wardrobeItems, profile, location, previousOutfits }) {
   const headers = await getAuthHeaders();
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ messages, wardrobeItems, profile, location }),
+    body: JSON.stringify({ messages, wardrobeItems, profile, location, previousOutfits }),
   });
 
   if (!response.ok) {
@@ -51,6 +51,7 @@ export function sendChatMessageStreaming({
   wardrobeItems,
   profile,
   location,
+  previousOutfits,
   onToken,
   onMessageDone,
   onComplete,
@@ -84,7 +85,7 @@ export function sendChatMessageStreaming({
     fetch('/api/chat/stream', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ messages, wardrobeItems, profile, location }),
+      body: JSON.stringify({ messages, wardrobeItems, profile, location, previousOutfits }),
       signal: controller.signal,
     })
       .then(response => {
@@ -197,4 +198,30 @@ export function sendChatMessageStreaming({
     finishStream();
     controller.abort();
   };
+}
+
+/**
+ * Generate weekly outfit recommendations for a 7-day calendar.
+ *
+ * @param {Object} params
+ * @param {Array} params.wardrobeItems - User's wardrobe items
+ * @param {Object} params.profile - User profile
+ * @param {Array} [params.forecasts] - Per-day weather [{dayIndex, tempMax, tempMin, weatherCode}]
+ * @param {Array} [params.lockedOutfits] - Locked day outfits [{dayIndex, vibe, items}]
+ * @returns {Promise<{message: string, outfits: Array}>}
+ */
+export async function generateWeeklyOutfits({ wardrobeItems, profile, forecasts, lockedOutfits }) {
+  const headers = await getAuthHeaders();
+  const response = await fetch('/api/generate-weekly-outfits', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ wardrobeItems, profile, forecasts, lockedOutfits }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Request failed with status ${response.status}`);
+  }
+
+  return response.json();
 }

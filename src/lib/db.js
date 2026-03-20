@@ -564,3 +564,157 @@ export async function fetchSavedOutfits() {
   }
   return results;
 }
+
+// ── Weekly Calendar ──────────────────────────────────────
+
+export function getWeekStart(date = new Date()) {
+  const d = new Date(date);
+  const day = d.getDay(); // 0=Sun, 1=Mon...
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  return d.toISOString().slice(0, 10);
+}
+
+export function getCalendarDayLabel(weekStart, dayIndex) {
+  const [y, m, d] = weekStart.split('-').map(Number);
+  const date = new Date(y, m - 1, d + dayIndex);
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+export function getWeekEnd(weekStart) {
+  const [y, m, d] = weekStart.split('-').map(Number);
+  const end = new Date(y, m - 1, d + 6);
+  return end.toISOString().slice(0, 10);
+}
+
+export function shiftWeek(weekStart, direction) {
+  const [y, m, d] = weekStart.split('-').map(Number);
+  const shifted = new Date(y, m - 1, d + (direction * 7));
+  return shifted.toISOString().slice(0, 10);
+}
+
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+export function getCalendarDayName(dayIndex) {
+  return DAY_NAMES[dayIndex] || '';
+}
+
+function toFrontendCalendarDay(row) {
+  return {
+    id: row.id,
+    weekStart: row.week_start,
+    dayIndex: row.day_index,
+    outfitId: row.outfit_id || null,
+    locked: row.locked,
+    outfit: row.outfits ? {
+      id: row.outfits.id,
+      vibe: row.outfits.vibe,
+      reasoning: row.outfits.reasoning,
+      saved: row.outfits.saved,
+      disliked: row.outfits.disliked ?? false,
+      visualizationUrl: row.outfits.visualization_url || null,
+      visualizationUrls: row.outfits.visualization_urls || (row.outfits.visualization_url ? { front: row.outfits.visualization_url } : null),
+      items: [],
+    } : null,
+  };
+}
+
+export async function fetchWeekCalendar(weekStart) {
+  const { data: rows, error } = await supabase
+    .from('weekly_calendar_days')
+    .select('*, outfits(*)')
+    .eq('week_start', weekStart)
+    .order('day_index');
+  if (error) throw error;
+  if (!rows || !rows.length) return [];
+
+  const outfitIds = [...new Set(rows.map(r => r.outfit_id).filter(Boolean))];
+  const outfitItemsMap = {};
+  if (outfitIds.length > 0) {
+    const { data: junctionRows, error: jErr } = await supabase
+      .from('outfit_items')
+      .select('outfit_id, position, wardrobe_items(*)')
+      .in('outfit_id', outfitIds)
+      .order('position', { ascending: true });
+    if (jErr) throw jErr;
+    for (const jr of junctionRows || []) {
+      if (!outfitItemsMap[jr.outfit_id]) outfitItemsMap[jr.outfit_id] = [];
+      if (jr.wardrobe_items) outfitItemsMap[jr.outfit_id].push(toFrontendItem(jr.wardrobe_items));
+    }
+  }
+
+  return rows.map(row => {
+    const day = toFrontendCalendarDay(row);
+    if (day.outfit && day.outfitId) {
+      day.outfit.items = outfitItemsMap[day.outfitId] || [];
+    }
+    return day;
+  });
+}
+
+export async function upsertCalendarDay({ weekStart, dayIndex, outfitId, locked }) {
+  const row = { week_start: weekStart, day_index: dayIndex };
+  if (outfitId !== undefined) row.outfit_id = outfitId;
+  if (locked !== undefined) row.locked = locked;
+  const { data, error } = await supabase
+    .from('weekly_calendar_days')
+    .upsert(row, { onConflict: 'user_id,week_start,day_index' })
+    .select()
+    .single();
+  if (error) throw error;
+  return toFrontendCalendarDay(data);
+}
+
+export async function toggleCalendarDayLock(weekStart, dayIndex, locked) {
+  const { data, error } = await supabase
+    .from('weekly_calendar_days')
+    .update({ locked })
+    .eq('week_start', weekStart)
+    .eq('day_index', dayIndex)
+    .select()
+    .single();
+  if (error) throw error;
+  return toFrontendCalendarDay(data);
+}
+
+export async function saveWeeklyOutfits({ weekStart, outfits, wardrobeItems }) {
+  const nameToId = new Map();
+  for (const item of wardrobeItems) {
+    nameToId.set(item.name.toLowerCase(), item.id);
+  }
+
+  const results = [];
+  for (const outfit of outfits) {
+    const { data: outfitRow, error: outfitErr } = await supabase
+      .from('outfits')
+      .insert({ vibe: outfit.vibe, reasoning: outfit.reasoning || '' })
+      .select()
+      .single();
+    if (outfitErr) throw outfitErr;
+
+    const junctionRows = (outfit.items || [])
+      .map((item, index) => {
+        const wardrobeItemId = item.id || nameToId.get((item.name || '').toLowerCase());
+        if (!wardrobeItemId) return null;
+        return { outfit_id: outfitRow.id, wardrobe_item_id: wardrobeItemId, position: index };
+      })
+      .filter(Boolean);
+
+    if (junctionRows.length > 0) {
+      const { error: junctionErr } = await supabase
+        .from('outfit_items')
+        .insert(junctionRows);
+      if (junctionErr) throw junctionErr;
+    }
+
+    await upsertCalendarDay({
+      weekStart,
+      dayIndex: outfit.dayIndex,
+      outfitId: outfitRow.id,
+      locked: false,
+    });
+
+    results.push({ ...outfit, id: outfitRow.id });
+  }
+
+  return results;
+}

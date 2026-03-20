@@ -260,9 +260,6 @@ export function buildWeatherSection(weather) {
   return lines.join('\n');
 }
 
-/**
- * Build the weekly calendar prompt for generating 7 days of outfits.
- */
 export function buildWeeklyCalendarPrompt({ wardrobeItems, profile, forecasts, lockedOutfits }) {
   const sections = [CORE_PROMPT];
 
