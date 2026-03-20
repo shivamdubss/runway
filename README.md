@@ -43,6 +43,9 @@ Set your city in profile settings. Current weather (temperature, conditions, win
 ### User Profile
 Configure body type, height, size preference, gender/style presentation, preferred styles (Classic, Minimalist, Bohemian, etc.), color preferences, and free-text style notes. Upload a reference photo for virtual try-on.
 
+### Weekly Outfit Calendar
+Open the Weekly Calendar from the sidebar and AI auto-generates 7 days of outfits for the current week, factoring in weather forecasts. Lock days you like and regenerate the rest. Navigate between weeks — previously generated weeks load instantly from the database.
+
 ### Trip Planning
 Create multi-day trip plans with destination and date range. Assign outfits to up to 5 slots per day, navigate days via a tab calendar, and view a smart packing list with deduplicated items sorted by usage.
 
@@ -199,6 +202,7 @@ All endpoints require a `Bearer` token in the `Authorization` header.
 | `POST` | `/api/generate-item-image` | Generate a product-style photo for an item |
 | `POST` | `/api/enhance-item-image` | AI enhancement of wardrobe item photos |
 | `POST` | `/api/preprocess-reference` | Validate and preprocess reference photos |
+| `POST` | `/api/generate-weekly-outfits` | Generate 7-day outfit plan (60s timeout) |
 
 ---
 

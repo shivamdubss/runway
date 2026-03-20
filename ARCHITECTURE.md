@@ -7,7 +7,7 @@
 │                    React 18 + Vite SPA                   │
 │                 (src/outfit-recommendations.jsx)         │
 │                                                         │
-│  Views: Chat │ Outfits │ Wardrobe │ Profile │ Trips     │
+│  Views: Chat │ Outfits │ Wardrobe │ Calendar │ Trips     │
 │  Libs:  db.js │ visualization.js │ api.js │ weather.js  │
 └───────────────────────┬─────────────────────────────────┘
                         │ HTTPS + Bearer JWT
@@ -84,6 +84,7 @@
 | `outfit_items` | Junction: outfit ↔ wardrobe item (with position ordering) | FK → outfits, FK → wardrobe_items |
 | `trip_plans` | Multi-day trips (title, destination, start/end date, slots_per_day) | user_id |
 | `trip_plan_slots` | Outfit assignments per trip day (day_index, slot_name, outfit_id) | FK → trip_plans, FK → outfits |
+| `weekly_calendar_days` | Weekly outfit calendar entries (week_start, day_index, outfit_id, locked) | user_id, FK → outfits |
 | `events` | Analytics telemetry (event_type, event_data JSONB) | user_id |
 
 **Triggers:** Auto-create profile on signup; auto-update `updated_at` timestamps; cascade delete messages/outfits/outfit_items when a chat is deleted.

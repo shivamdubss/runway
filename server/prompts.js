@@ -259,3 +259,88 @@ export function buildWeatherSection(weather) {
 
   return lines.join('\n');
 }
+
+export function buildWeeklyCalendarPrompt({ wardrobeItems, profile, forecasts, lockedOutfits }) {
+  const sections = [CORE_PROMPT];
+
+  const byCategory = {};
+  for (const item of wardrobeItems) {
+    const cat = item.category || item.label || 'Other';
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(item);
+  }
+
+  const wardrobeLines = ['## User\'s wardrobe'];
+  for (const [category, items] of Object.entries(byCategory)) {
+    wardrobeLines.push(`\n### ${category}`);
+    for (const item of items) {
+      wardrobeLines.push(`- ${item.name}`);
+    }
+  }
+  sections.push(wardrobeLines.join('\n'));
+
+  const profileLines = buildProfileSection(profile);
+  if (profileLines) sections.push(profileLines);
+
+  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const taskLines = ['## Weekly outfit planning task'];
+  taskLines.push('');
+  taskLines.push('Generate one complete outfit for each day of the week (Monday through Sunday).');
+  taskLines.push('Monday through Friday should lean toward workwear or smart-casual unless the user\'s style context suggests otherwise.');
+  taskLines.push('Saturday and Sunday should lean casual and relaxed.');
+  taskLines.push('');
+
+  if (Array.isArray(forecasts) && forecasts.length > 0) {
+    taskLines.push('### Weather forecast for the week');
+    for (const f of forecasts) {
+      const dayName = dayNames[f.dayIndex] || `Day ${f.dayIndex}`;
+      taskLines.push(`- ${dayName}: High ${f.tempMax}\u00B0C / Low ${f.tempMin}\u00B0C (code: ${f.weatherCode})`);
+    }
+    taskLines.push('');
+    taskLines.push('Factor each day\'s weather into its outfit. Dress appropriately for the temperature and conditions.');
+    taskLines.push('');
+  }
+
+  if (Array.isArray(lockedOutfits) && lockedOutfits.length > 0) {
+    taskLines.push('### Locked days (do NOT generate outfits for these days)');
+    for (const locked of lockedOutfits) {
+      const dayName = dayNames[locked.dayIndex] || `Day ${locked.dayIndex}`;
+      const items = (locked.items || []).map(i => typeof i === 'string' ? i : i?.name).filter(Boolean);
+      taskLines.push(`- ${dayName} (dayIndex ${locked.dayIndex}): "${locked.vibe}" \u2014 ${items.join(', ')}`);
+    }
+    taskLines.push('');
+    taskLines.push('Only generate outfits for unlocked days. Skip locked days entirely in your response.');
+    taskLines.push('');
+  }
+
+  taskLines.push('### Variety rules');
+  taskLines.push('- Avoid repeating the same anchor piece (e.g., same jeans) on consecutive days.');
+  taskLines.push('- Each day should have a distinct vibe. Vary formality, color palette, and silhouette across the week.');
+  taskLines.push('- It\'s OK to reuse items across non-consecutive days, but each outfit must feel intentionally different.');
+  sections.push(taskLines.join('\n'));
+
+  sections.push(`## Response JSON schema
+
+Respond with exactly this structure:
+
+{
+  "message": "A brief, friendly message about the week's outfits (1-2 sentences).",
+  "outfits": [
+    {
+      "dayIndex": 0,
+      "vibe": "Short Vibe Name (2-4 words)",
+      "reasoning": "Why this outfit works for this day (1-2 sentences).",
+      "items": ["Exact Item Name 1", "Exact Item Name 2", "Exact Item Name 3"]
+    }
+  ]
+}
+
+Rules:
+- Reference items by their EXACT name as listed in the wardrobe above.
+- Each outfit must include at minimum: one Top or Layer, one Bottom, and one Shoes item.
+- dayIndex 0 = Monday, 1 = Tuesday, ... 6 = Sunday.
+- Generate exactly one outfit per unlocked day.
+- Do not include locked days in your response.`);
+
+  return sections.join('\n\n');
+}
