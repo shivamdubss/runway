@@ -42,6 +42,7 @@ export function parseOutfitResponse(rawResponse, wardrobeItems) {
   // Resolve item names to full objects, filter out outfits with no resolved items
   const outfits = (parsed.outfits || []).map((outfit, index) => ({
     id: index + 1,
+    dayIndex: outfit.dayIndex ?? index,
     vibe: outfit.vibe || `Look ${index + 1}`,
     reasoning: outfit.reasoning || '',
     items: (outfit.items || [])

@@ -186,4 +186,32 @@ describe('parseOutfitResponse', () => {
     expect(result.outfits[0].items).toHaveLength(2);
     expect(result.outfits[1].items).toHaveLength(2);
   });
+
+  it('preserves dayIndex from LLM response', () => {
+    const raw = JSON.stringify({
+      message: '',
+      outfits: [
+        { dayIndex: 0, vibe: 'Monday', items: ['White Oxford Shirt'] },
+        { dayIndex: 3, vibe: 'Thursday', items: ['Navy Chinos'] },
+        { dayIndex: 6, vibe: 'Sunday', items: ['Brown Loafers'] }
+      ]
+    });
+    const result = parseOutfitResponse(raw, wardrobeItems);
+    expect(result.outfits[0].dayIndex).toBe(0);
+    expect(result.outfits[1].dayIndex).toBe(3);
+    expect(result.outfits[2].dayIndex).toBe(6);
+  });
+
+  it('falls back to array index when dayIndex is missing', () => {
+    const raw = JSON.stringify({
+      message: '',
+      outfits: [
+        { vibe: 'Look A', items: ['White Oxford Shirt'] },
+        { vibe: 'Look B', items: ['Navy Chinos'] }
+      ]
+    });
+    const result = parseOutfitResponse(raw, wardrobeItems);
+    expect(result.outfits[0].dayIndex).toBe(0);
+    expect(result.outfits[1].dayIndex).toBe(1);
+  });
 });

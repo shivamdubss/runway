@@ -708,7 +708,7 @@ export async function saveWeeklyOutfits({ weekStart, outfits, wardrobeItems }) {
 
     await upsertCalendarDay({
       weekStart,
-      dayIndex: outfit.dayIndex,
+      dayIndex: outfit.dayIndex ?? outfits.indexOf(outfit),
       outfitId: outfitRow.id,
       locked: false,
     });
