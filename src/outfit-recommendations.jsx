@@ -8239,7 +8239,7 @@ export default function OutfitRecommendations() {
             </button>
           )}
 
-          {view !== "wardrobe" && view !== "profile" && view !== "saved" && view !== "garment" && view !== "trips" && view !== "trip-detail" && view !== "trip-summary" && (
+          {view !== "wardrobe" && view !== "profile" && view !== "saved" && view !== "garment" && view !== "trips" && view !== "trip-detail" && view !== "trip-summary" && view !== "calendar" && view !== "calendar-detail" && (
             <div style={{
               display: "flex",
               background: "#F0EFED",
