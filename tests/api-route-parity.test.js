@@ -11,6 +11,7 @@ const expectedRoutes = [
   { method: 'POST', path: '/api/generate-item-image', bodyMode: 'json', requiresAuth: true },
   { method: 'POST', path: '/api/enhance-item-image', bodyMode: 'json', requiresAuth: true },
   { method: 'POST', path: '/api/preprocess-reference', bodyMode: 'json', requiresAuth: true },
+  { method: 'POST', path: '/api/generate-style-dna', bodyMode: 'json', requiresAuth: true },
 ];
 
 describe('api route manifest parity', () => {

@@ -15,6 +15,7 @@ import { handleGenerateItemImage } from './api/generate-item-image.js';
 import { handlePreprocessReference } from './api/preprocess-reference.js';
 import { handleEnhanceItemImage } from './api/enhance-item-image.js';
 import { handleGenerateWeeklyOutfits } from './api/generate-weekly-outfits.js';
+import { handleGenerateStyleDna } from './api/generate-style-dna.js';
 import { requireAuth } from './middleware/auth.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -40,6 +41,7 @@ app.post('/api/analyze-outfit-photo', requireAuth, handleAnalyzeOutfitPhoto);
 app.post('/api/generate-item-image', requireAuth, handleGenerateItemImage);
 app.post('/api/enhance-item-image', requireAuth, handleEnhanceItemImage);
 app.post('/api/generate-weekly-outfits', requireAuth, handleGenerateWeeklyOutfits);
+app.post('/api/generate-style-dna', requireAuth, handleGenerateStyleDna);
 // Serve static Vite build output
 app.use(express.static(distDir));
 

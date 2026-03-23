@@ -565,6 +565,45 @@ export async function fetchSavedOutfits() {
   return results;
 }
 
+// ── Outfit History (for Style DNA) ────────────────────────
+
+export async function fetchOutfitHistory() {
+  const [savedResult, dislikedResult] = await Promise.all([
+    supabase.from('outfits').select('id, vibe').eq('saved', true).order('created_at', { ascending: false }),
+    supabase.from('outfits').select('id, vibe').eq('disliked', true).order('created_at', { ascending: false }),
+  ]);
+  if (savedResult.error) throw savedResult.error;
+  if (dislikedResult.error) throw dislikedResult.error;
+
+  const allOutfitIds = [
+    ...(savedResult.data || []).map(o => o.id),
+    ...(dislikedResult.data || []).map(o => o.id),
+  ];
+
+  const itemsMap = {};
+  if (allOutfitIds.length > 0) {
+    const { data: junctionRows, error: jErr } = await supabase
+      .from('outfit_items')
+      .select('outfit_id, wardrobe_items(name)')
+      .in('outfit_id', allOutfitIds);
+    if (jErr) throw jErr;
+    for (const jr of junctionRows || []) {
+      if (!itemsMap[jr.outfit_id]) itemsMap[jr.outfit_id] = [];
+      if (jr.wardrobe_items) itemsMap[jr.outfit_id].push(jr.wardrobe_items.name);
+    }
+  }
+
+  const enrich = (rows) => (rows || []).map(o => ({
+    vibe: o.vibe,
+    items: itemsMap[o.id] || [],
+  }));
+
+  return {
+    saved: enrich(savedResult.data),
+    disliked: enrich(dislikedResult.data),
+  };
+}
+
 // ── Weekly Calendar ──────────────────────────────────────
 
 export function getWeekStart(date = new Date()) {

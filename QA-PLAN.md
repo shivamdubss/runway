@@ -20,7 +20,8 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 10. [Profile Settings](#10-profile-settings)
 10. [Weather Integration](#10-weather-integration)
 11. [API Endpoints](#11-api-endpoints)
-12. [Cross-Cutting Concerns](#12-cross-cutting-concerns)
+12. [Style DNA Report](#12-style-dna-report)
+13. [Cross-Cutting Concerns](#13-cross-cutting-concerns)
 
 ---
 
@@ -573,7 +574,43 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 
 ---
 
-## 12. Cross-Cutting Concerns
+## 12. Style DNA Report
+
+### 12.1 Navigation & Access
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| DNA-01 | P1 | Open Style DNA from sidebar | Tap hamburger > Style DNA | Style DNA view opens with empty state |
+| DNA-02 | P1 | Title bar shows "Style DNA" | Navigate to Style DNA view | Top bar displays "Style DNA" |
+| DNA-03 | P1 | Back navigation returns to sidebar | In Style DNA view, tap hamburger | Side panel opens |
+
+### 12.2 Report Generation
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| DNA-04 | P0 | Generate report with wardrobe items | Tap "Generate Report" with items in wardrobe | Loading spinner appears, then full report renders |
+| DNA-05 | P0 | Empty wardrobe shows error | Tap "Generate Report" with empty wardrobe | Error message: "Add some items to your wardrobe first." |
+| DNA-06 | P1 | Report shows archetype | Generate report | Archetype card shows label and description |
+| DNA-07 | P1 | Report shows color profile | Generate report | Dominant, accent, and missing colors with swatches |
+| DNA-08 | P1 | Report shows category balance | Generate report | Bar chart with category names, counts, percentages |
+| DNA-09 | P1 | Report shows style insights | Generate report | 3-4 insight cards with titles and bodies |
+| DNA-10 | P1 | Report shows gap analysis | Generate report | 3 gap suggestions with item names, reasons, outfit counts |
+| DNA-11 | P1 | Regenerate replaces existing report | Tap "Regenerate Report" | New report replaces old one |
+| DNA-12 | P2 | Loading state shows spinner | Tap "Generate Report" | Spinner + "Analyzing your wardrobe..." text shown |
+| DNA-13 | P2 | Error state shows retry button | API fails during generation | Error message + "Try Again" button |
+
+### 12.3 API Endpoint
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| DNA-14 | P0 | Valid request returns report | POST /api/generate-style-dna with valid body | 200 OK with archetype, colorProfile, categoryBalance, styleInsights, gapAnalysis |
+| DNA-15 | P0 | Missing wardrobeItems returns 400 | POST with empty body | 400 error: "wardrobeItems array is required" |
+| DNA-16 | P0 | No auth token returns 401 | POST without Authorization header | 401 Unauthorized |
+| DNA-17 | P1 | Non-POST method returns 405 | GET /api/generate-style-dna | 405 Method not allowed |
+
+---
+
+## 13. Cross-Cutting Concerns
 
 ### 12.1 Responsive Design
 

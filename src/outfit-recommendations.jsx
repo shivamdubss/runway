@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import { Pencil, Trash2, Wand2, Eye, Loader2 } from "lucide-react";
-import { sendChatMessageStreaming, generateWeeklyOutfits } from "./lib/api";
+import { sendChatMessageStreaming, generateWeeklyOutfits, generateStyleDna } from "./lib/api";
 import { track } from "./lib/analytics";
 import { uploadImage } from "./lib/upload";
 import { buildConversationHistory } from "./lib/conversation-history";
@@ -6732,7 +6732,257 @@ function CalendarDayDetailView({ day, weekStart, forecast, onItemClick, onToggle
   );
 }
 
-function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, onOpenSaved, onOpenCalendar, onOpenTrips, savedCount, chatHistory, onSelectChat, onToggleStar, onDeleteChat, onSignOut }) {
+// ── Style DNA Report View ────────────────────────────────
+
+const COLOR_MAP = {
+  black: '#1A1A1A', white: '#F5F5F5', grey: '#9E9E9E', gray: '#9E9E9E',
+  navy: '#1B3A5C', blue: '#4A90D9', red: '#D94A4A', green: '#4A9E6B',
+  brown: '#8B6914', beige: '#D4C5A9', cream: '#FAF0DB', pink: '#E8A0BF',
+  purple: '#8B5CF6', orange: '#E8864A', yellow: '#E8D44A', olive: '#808000',
+  burgundy: '#800020', maroon: '#800000', teal: '#008080', coral: '#FF7F50',
+  tan: '#D2B48C', khaki: '#C3B091', lavender: '#B4A7D6', mint: '#98FF98',
+  gold: '#D4AF37', silver: '#C0C0C0', charcoal: '#36454F', ivory: '#FFFFF0',
+};
+
+function getColorHex(name) {
+  if (!name) return '#CCC';
+  const lower = name.toLowerCase().trim();
+  if (COLOR_MAP[lower]) return COLOR_MAP[lower];
+  // Check partial matches
+  for (const [key, val] of Object.entries(COLOR_MAP)) {
+    if (lower.includes(key)) return val;
+  }
+  return '#CCC';
+}
+
+function StyleDnaView({ report, loading, error, onRegenerate }) {
+  if (loading) {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 }}>
+        <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: '#999' }} />
+        <p style={{ fontSize: 'var(--font-body)', color: '#999', fontFamily: "'DM Sans', sans-serif", textAlign: 'center' }}>
+          Analyzing your wardrobe...
+        </p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 }}>
+        <p style={{ fontSize: 'var(--font-body)', color: '#D94A4A', fontFamily: "'DM Sans', sans-serif", textAlign: 'center' }}>
+          {error}
+        </p>
+        <button
+          onClick={onRegenerate}
+          style={{ padding: '8px 20px', borderRadius: 20, border: '1px solid #E0E0E0', background: '#fff', color: '#1A1A1A', fontSize: 'var(--font-small)', fontFamily: "'DM Sans', sans-serif", fontWeight: 600, cursor: 'pointer' }}
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
+  if (!report) {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 }}>
+        <div style={{ fontSize: 48 }}>🧬</div>
+        <h2 style={{ fontSize: 'var(--font-body)', fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: 0 }}>
+          Your Style DNA
+        </h2>
+        <p style={{ fontSize: 'var(--font-small)', color: '#777', fontFamily: "'DM Sans', sans-serif", textAlign: 'center', maxWidth: 280, lineHeight: 1.5, margin: 0 }}>
+          Get an AI-powered analysis of your wardrobe — discover your style archetype, color patterns, and what to add next.
+        </p>
+        <button
+          onClick={onRegenerate}
+          style={{ padding: '10px 24px', borderRadius: 24, border: 'none', background: '#1A1A1A', color: '#fff', fontSize: 'var(--font-small)', fontFamily: "'DM Sans', sans-serif", fontWeight: 600, cursor: 'pointer', marginTop: 4 }}
+        >
+          Generate Report
+        </button>
+      </div>
+    );
+  }
+
+  const totalItems = (report.categoryBalance?.breakdown || []).reduce((sum, b) => sum + b.count, 0);
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '0 var(--container-padding-x) calc(var(--safe-bottom) + 16px)' }}>
+
+      {/* Archetype Card */}
+      <div style={{ background: '#1A1A1A', borderRadius: 16, padding: '24px 20px', marginBottom: 16, color: '#fff' }}>
+        <div style={{ fontSize: 13, textTransform: 'uppercase', letterSpacing: 1.5, color: 'rgba(255,255,255,0.5)', fontFamily: "'DM Sans', sans-serif", fontWeight: 600, marginBottom: 8 }}>
+          Your Style Archetype
+        </div>
+        <h2 style={{ fontSize: 'var(--font-title)', fontFamily: "'Instrument Serif', serif", fontWeight: 400, margin: '0 0 8px', lineHeight: 1.1 }}>
+          {report.archetype?.label}
+        </h2>
+        <p style={{ fontSize: 'var(--font-small)', color: 'rgba(255,255,255,0.7)', fontFamily: "'DM Sans', sans-serif", margin: 0, lineHeight: 1.5 }}>
+          {report.archetype?.description}
+        </p>
+      </div>
+
+      {/* Color Profile */}
+      <div style={{ background: '#fff', borderRadius: 16, padding: '20px', marginBottom: 16, border: '1px solid rgba(0,0,0,0.06)' }}>
+        <h3 style={{ fontSize: 'var(--font-body)', fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: '0 0 16px' }}>
+          Color Profile
+        </h3>
+
+        {/* Color swatches - Dominant */}
+        {report.colorProfile?.dominant?.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 'var(--font-caption)', color: '#999', fontFamily: "'DM Sans', sans-serif", fontWeight: 500, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Dominant
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {report.colorProfile.dominant.map((color, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f9f9f9', borderRadius: 20, padding: '4px 12px 4px 4px' }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 10, background: getColorHex(color), border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 'var(--font-caption)', color: '#555', fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>{color}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Color swatches - Accent */}
+        {report.colorProfile?.accent?.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 'var(--font-caption)', color: '#999', fontFamily: "'DM Sans', sans-serif", fontWeight: 500, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Accent
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {report.colorProfile.accent.map((color, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f9f9f9', borderRadius: 20, padding: '4px 12px 4px 4px' }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 10, background: getColorHex(color), border: '1px solid rgba(0,0,0,0.1)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 'var(--font-caption)', color: '#555', fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>{color}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Missing colors */}
+        {report.colorProfile?.missing?.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 'var(--font-caption)', color: '#999', fontFamily: "'DM Sans', sans-serif", fontWeight: 500, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Missing
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {report.colorProfile.missing.map((color, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#f9f9f9', borderRadius: 20, padding: '4px 12px 4px 4px', opacity: 0.6 }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 10, background: getColorHex(color), border: '2px dashed rgba(0,0,0,0.2)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 'var(--font-caption)', color: '#555', fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>{color}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <p style={{ fontSize: 'var(--font-small)', color: '#555', fontFamily: "'DM Sans', sans-serif", margin: '12px 0 0', lineHeight: 1.5 }}>
+          {report.colorProfile?.insight}
+        </p>
+      </div>
+
+      {/* Category Balance */}
+      <div style={{ background: '#fff', borderRadius: 16, padding: '20px', marginBottom: 16, border: '1px solid rgba(0,0,0,0.06)' }}>
+        <h3 style={{ fontSize: 'var(--font-body)', fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: '0 0 16px' }}>
+          Wardrobe Balance
+        </h3>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {(report.categoryBalance?.breakdown || []).map((cat, i) => {
+            const pct = totalItems > 0 ? Math.round((cat.count / totalItems) * 100) : 0;
+            const barColor = cat.assessment === 'over' ? '#E8864A' : cat.assessment === 'under' ? '#D94A4A' : '#4A9E6B';
+            return (
+              <div key={i}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontSize: 'var(--font-small)', color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>
+                    {cat.category}
+                  </span>
+                  <span style={{ fontSize: 'var(--font-caption)', color: '#999', fontFamily: "'DM Sans', sans-serif" }}>
+                    {cat.count} items · {pct}%
+                  </span>
+                </div>
+                <div style={{ height: 6, borderRadius: 3, background: '#F0EFED', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${Math.max(pct, 4)}%`, borderRadius: 3, background: barColor, transition: 'width 0.5s ease' }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <p style={{ fontSize: 'var(--font-small)', color: '#555', fontFamily: "'DM Sans', sans-serif", margin: '14px 0 0', lineHeight: 1.5 }}>
+          {report.categoryBalance?.insight}
+        </p>
+      </div>
+
+      {/* Style Insights */}
+      {report.styleInsights?.length > 0 && (
+        <div style={{ background: '#fff', borderRadius: 16, padding: '20px', marginBottom: 16, border: '1px solid rgba(0,0,0,0.06)' }}>
+          <h3 style={{ fontSize: 'var(--font-body)', fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: '0 0 14px' }}>
+            Insights
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {report.styleInsights.map((insight, i) => (
+              <div key={i} style={{ borderLeft: '3px solid #1A1A1A', paddingLeft: 12 }}>
+                <div style={{ fontSize: 'var(--font-small)', fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", marginBottom: 2 }}>
+                  {insight.title}
+                </div>
+                <div style={{ fontSize: 'var(--font-small)', color: '#555', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}>
+                  {insight.body}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Gap Analysis */}
+      {report.gapAnalysis?.length > 0 && (
+        <div style={{ background: '#fff', borderRadius: 16, padding: '20px', marginBottom: 16, border: '1px solid rgba(0,0,0,0.06)' }}>
+          <h3 style={{ fontSize: 'var(--font-body)', fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif", margin: '0 0 14px' }}>
+            What to Add Next
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {report.gapAnalysis.map((gap, i) => (
+              <div key={i} style={{ background: '#f9f9f9', borderRadius: 12, padding: '14px 16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                  <span style={{ fontSize: 'var(--font-small)', fontWeight: 600, color: '#1A1A1A', fontFamily: "'DM Sans', sans-serif" }}>
+                    {gap.item}
+                  </span>
+                  {gap.outfitsUnlocked > 0 && (
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, color: '#4A9E6B', fontFamily: "'DM Sans', sans-serif",
+                      background: 'rgba(74,158,107,0.1)', borderRadius: 10, padding: '2px 8px', whiteSpace: 'nowrap', flexShrink: 0, marginLeft: 8,
+                    }}>
+                      +{gap.outfitsUnlocked} outfits
+                    </span>
+                  )}
+                </div>
+                <p style={{ fontSize: 'var(--font-small)', color: '#555', fontFamily: "'DM Sans', sans-serif", margin: 0, lineHeight: 1.5 }}>
+                  {gap.reason}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Regenerate button */}
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 16px' }}>
+        <button
+          onClick={onRegenerate}
+          style={{ padding: '8px 20px', borderRadius: 20, border: '1px solid #E0E0E0', background: '#fff', color: '#555', fontSize: 'var(--font-small)', fontFamily: "'DM Sans', sans-serif", fontWeight: 500, cursor: 'pointer' }}
+        >
+          Regenerate Report
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, onOpenSaved, onOpenCalendar, onOpenTrips, onOpenStyleDna, savedCount, chatHistory, onSelectChat, onToggleStar, onDeleteChat, onSignOut }) {
   const starredChats = chatHistory.filter((c) => c.starred);
   const recentChats = chatHistory.filter((c) => !c.starred);
 
@@ -6953,6 +7203,38 @@ function SidePanel({ isOpen, onClose, onNewChat, onOpenWardrobe, onOpenProfile, 
           </button>
 
           <button
+            onClick={onOpenStyleDna}
+            style={{
+              width: "100%",
+              height: 40,
+              borderRadius: 8,
+              border: "none",
+              background: "transparent",
+              color: "#1A1A1A",
+              fontSize: "var(--font-body)",
+              fontWeight: 500,
+              fontFamily: "'DM Sans', sans-serif",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-start",
+              padding: "0 12px",
+              gap: 8,
+              transition: "background 0.15s ease",
+            }}
+            onPointerDown={(e) => e.currentTarget.style.background = "rgba(0,0,0,0.05)"}
+            onPointerUp={(e) => e.currentTarget.style.background = "transparent"}
+            onPointerLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1A1A1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+            </svg>
+            Style DNA
+          </button>
+
+          <button
             onClick={onOpenProfile}
             style={{
               width: "100%",
@@ -7114,6 +7396,9 @@ export default function OutfitRecommendations() {
   const [calendarForecast, setCalendarForecast] = useState(null);
   const [calendarSelectedDay, setCalendarSelectedDay] = useState(null);
   const [calendarError, setCalendarError] = useState(null);
+  const [styleDnaReport, setStyleDnaReport] = useState(null);
+  const [styleDnaLoading, setStyleDnaLoading] = useState(false);
+  const [styleDnaError, setStyleDnaError] = useState(null);
   const chatSessionRef = useRef(0);
   const streamAbortRef = useRef(null);
 
@@ -8079,6 +8364,30 @@ export default function OutfitRecommendations() {
     }
   }, [calendarDays, calendarWeekStart]);
 
+  const handleGenerateStyleDna = useCallback(async () => {
+    if (wardrobeFlat.length === 0) {
+      setStyleDnaError("Add some items to your wardrobe first.");
+      return;
+    }
+    setStyleDnaLoading(true);
+    setStyleDnaError(null);
+    try {
+      const outfitHistory = await db.fetchOutfitHistory();
+      const report = await generateStyleDna({
+        wardrobeItems: wardrobeFlat,
+        profile,
+        outfitHistory,
+      });
+      setStyleDnaReport(report);
+      track('style_dna_generated', { wardrobe_size: wardrobeFlat.length });
+    } catch (err) {
+      console.error("Failed to generate Style DNA:", err);
+      setStyleDnaError(err.message || "Failed to generate report");
+    } finally {
+      setStyleDnaLoading(false);
+    }
+  }, [wardrobeFlat, profile]);
+
   const navigateToGarment = useCallback((item) => {
     setLightboxItem(item);
     setGarmentPreviousView(view);
@@ -8140,6 +8449,7 @@ export default function OutfitRecommendations() {
         onOpenSaved={() => { setView("saved"); setSidePanelOpen(false); }}
         onOpenCalendar={() => { handleOpenCalendar(); setSidePanelOpen(false); }}
         onOpenTrips={() => { setView("trips"); setSidePanelOpen(false); }}
+        onOpenStyleDna={() => { setView("style-dna"); setSidePanelOpen(false); }}
         savedCount={savedOutfits.length}
         chatHistory={chatHistory}
         onSelectChat={handleSelectChat}
@@ -8204,7 +8514,7 @@ export default function OutfitRecommendations() {
             lineHeight: 1.1,
             flex: 1,
           }}>
-            {view === "garment" ? (lightboxItem?.name ?? "Item") : view === "wardrobe" ? "My Wardrobe" : view === "saved" ? "Saved Outfits" : view === "outfit" ? "Your Outfit" : view === "profile" ? "My Profile" : view === "calendar" ? "Weekly Calendar" : view === "calendar-detail" ? "Day Detail" : view === "trips" ? "Trips" : view === "trip-detail" ? (activeTrip?.title ?? "Trip") : view === "trip-summary" ? "Packing List" : "Chat"}
+            {view === "garment" ? (lightboxItem?.name ?? "Item") : view === "wardrobe" ? "My Wardrobe" : view === "saved" ? "Saved Outfits" : view === "outfit" ? "Your Outfit" : view === "profile" ? "My Profile" : view === "calendar" ? "Weekly Calendar" : view === "calendar-detail" ? "Day Detail" : view === "trips" ? "Trips" : view === "trip-detail" ? (activeTrip?.title ?? "Trip") : view === "trip-summary" ? "Packing List" : view === "style-dna" ? "Style DNA" : "Chat"}
           </h1>
 
           {view === "trips" && (
@@ -8239,7 +8549,7 @@ export default function OutfitRecommendations() {
             </button>
           )}
 
-          {view !== "wardrobe" && view !== "profile" && view !== "saved" && view !== "garment" && view !== "trips" && view !== "trip-detail" && view !== "trip-summary" && view !== "calendar" && view !== "calendar-detail" && (
+          {view !== "wardrobe" && view !== "profile" && view !== "saved" && view !== "garment" && view !== "trips" && view !== "trip-detail" && view !== "trip-summary" && view !== "calendar" && view !== "calendar-detail" && view !== "style-dna" && (
             <div style={{
               display: "flex",
               background: "#F0EFED",
@@ -8454,6 +8764,13 @@ export default function OutfitRecommendations() {
         <TripSummaryView
           trip={activeTrip}
           onBack={() => setView("trip-detail")}
+        />
+      ) : view === "style-dna" ? (
+        <StyleDnaView
+          report={styleDnaReport}
+          loading={styleDnaLoading}
+          error={styleDnaError}
+          onRegenerate={handleGenerateStyleDna}
         />
       ) : view === "profile" ? (
         <ProfileView
