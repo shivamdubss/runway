@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-03-23
+
+### Style DNA Report
+- New "Style DNA" view accessible from the sidebar — an AI-powered analysis of your wardrobe
+- Generates a personal style archetype label and description (e.g., "Modern Minimalist", "Bold Eclectic")
+- Color profile section shows your dominant, accent, and missing wardrobe colors with visual swatches
+- Wardrobe balance breakdown shows category distribution with percentage bars and over/under assessments
+- 3-4 personalized style insights identify patterns, contradictions, and strengths in your wardrobe
+- Gap analysis suggests exactly 3 items to add, with reasoning and estimated new outfits each would unlock
+- Analysis factors in your saved and disliked outfit history for deeper pattern detection
+- Regenerate the report at any time to reflect wardrobe changes
+
 ## 2026-03-20
 
 ### Weekly Outfit Calendar

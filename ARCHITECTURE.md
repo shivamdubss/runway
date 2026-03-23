@@ -30,7 +30,7 @@
 
 ## Frontend
 
-**Single-page app** with no client-side router. View state is managed via React `useState` in the main component (`src/outfit-recommendations.jsx`, ~6k lines). Views include Chat, Outfits, Wardrobe, Saved Outfits, Profile, and Trip Planning.
+**Single-page app** with no client-side router. View state is managed via React `useState` in the main component (`src/outfit-recommendations.jsx`, ~6k lines). Views include Chat, Outfits, Wardrobe, Saved Outfits, Profile, Trip Planning, Weekly Calendar, and Style DNA.
 
 **Why no router:** The app has a small number of views that share significant state (active chat, wardrobe data, user profile). A router would add complexity without meaningful benefit — deep-linking isn't needed since all state is user-specific and session-driven.
 
@@ -69,6 +69,7 @@
 | POST | `/api/generate-item-image` | Product photo generation for wardrobe | 30s |
 | POST | `/api/enhance-item-image` | AI enhancement of wardrobe item photos | 30s |
 | POST | `/api/preprocess-reference` | Reference photo validation | 30s |
+| POST | `/api/generate-style-dna` | Style DNA wardrobe analysis report | 60s |
 
 ## Database
 
@@ -103,6 +104,7 @@ All AI features use the **OpenAI API** through a shared client factory (`api/_li
 | Virtual try-on | Image Edit API | Renders outfit onto user's reference photo. Three poses generated in parallel (front, 3/4 angle, seated). |
 | Product photo generation | Image generation | Creates flat-lay product photos for items extracted from outfit photos. |
 | Image enhancement | Image Edit API | Improves wardrobe item photos (lighting, background, clarity). |
+| Style DNA analysis | GPT (chat completions) | Analyzes wardrobe composition, outfit feedback history, and user profile to generate a style fingerprint with archetype, color profile, category balance, insights, and gap analysis. |
 
 **System prompt construction** (`api/_lib/prompts.js`): Builds context-rich prompts that include the user's complete wardrobe (item names, categories, colors), profile data (body type, size, style preferences), and current weather conditions. This ensures recommendations are grounded in what the user actually owns.
 

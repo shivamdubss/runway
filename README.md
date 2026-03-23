@@ -49,6 +49,9 @@ Open the Weekly Calendar from the sidebar and AI auto-generates 7 days of outfit
 ### Trip Planning
 Create multi-day trip plans with destination and date range. Assign outfits to up to 5 slots per day, navigate days via a tab calendar, and view a smart packing list with deduplicated items sorted by usage.
 
+### Style DNA Report
+Get an AI-powered analysis of your wardrobe. Discover your style archetype, color profile with visual swatches, wardrobe category balance, personalized style insights, and a gap analysis showing which purchases would unlock the most new outfits.
+
 ### Chat History
 All conversations persist to the database. Star important chats, browse recents, and switch between past sessions from the side panel.
 
@@ -101,6 +104,7 @@ runway/
 │   ├── generate-outfit-visualization.js # Virtual try-on generation
 │   ├── generate-item-image.js    # Product photo generation
 │   ├── enhance-item-image.js     # AI photo enhancement
+│   ├── generate-style-dna.js     # Style DNA report generation
 │   ├── preprocess-reference.js   # Reference photo validation
 │   └── _lib/                     # Shared server utilities
 │       ├── auth.js               # JWT verification
@@ -203,6 +207,7 @@ All endpoints require a `Bearer` token in the `Authorization` header.
 | `POST` | `/api/enhance-item-image` | AI enhancement of wardrobe item photos |
 | `POST` | `/api/preprocess-reference` | Validate and preprocess reference photos |
 | `POST` | `/api/generate-weekly-outfits` | Generate 7-day outfit plan (60s timeout) |
+| `POST` | `/api/generate-style-dna` | Generate Style DNA wardrobe analysis (60s timeout) |
 
 ---
 

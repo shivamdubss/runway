@@ -225,3 +225,28 @@ export async function generateWeeklyOutfits({ wardrobeItems, profile, forecasts,
 
   return response.json();
 }
+
+/**
+ * Generate a Style DNA report analyzing the user's wardrobe and outfit history.
+ *
+ * @param {Object} params
+ * @param {Array} params.wardrobeItems - User's wardrobe items
+ * @param {Object} params.profile - User profile
+ * @param {Object} params.outfitHistory - { saved: [...], disliked: [...] }
+ * @returns {Promise<Object>} Style DNA report
+ */
+export async function generateStyleDna({ wardrobeItems, profile, outfitHistory }) {
+  const headers = await getAuthHeaders();
+  const response = await fetch('/api/generate-style-dna', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ wardrobeItems, profile, outfitHistory }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Request failed with status ${response.status}`);
+  }
+
+  return response.json();
+}

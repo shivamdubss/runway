@@ -264,7 +264,33 @@ Users can plan outfits for multi-day trips with a visual calendar interface.
 
 ---
 
-### 10. Chat History & Navigation
+### 10. Style DNA Report
+
+An AI-powered wardrobe analysis that generates a personal "style fingerprint."
+
+#### Access
+- "Style DNA" button in the sidebar, between Trips and My Profile.
+- First visit shows an empty state with a "Generate Report" button.
+
+#### Report Sections
+- **Style Archetype:** A 2-3 word label (e.g., "Modern Minimalist", "Bold Eclectic") with a 2-3 sentence description.
+- **Color Profile:** Dominant colors, accent colors, and missing colors displayed as visual swatches. Includes an insight about color tendencies.
+- **Wardrobe Balance:** Horizontal bar chart showing category distribution (Tops, Bottoms, Layers, Shoes, Accessories) with count, percentage, and over/balanced/under assessment.
+- **Style Insights:** 3-4 data-driven observations about patterns, contradictions, or strengths (e.g., "You own 40% neutrals but save 70% bold-color outfits").
+- **Gap Analysis:** 3 specific item suggestions, each with reasoning about which existing items it would pair with and an estimated count of new outfits it would unlock.
+
+#### Data Sources
+- Wardrobe items (names, categories, colors)
+- Saved and disliked outfit history (patterns of preference)
+- User profile (style preferences, body info)
+
+#### Regeneration
+- "Regenerate Report" button at the bottom to get a fresh analysis reflecting wardrobe changes.
+- Reports are generated on-demand (not persisted) so they always reflect current wardrobe state.
+
+---
+
+### 11. Chat History & Navigation
 
 #### Side Panel
 - Slides in from the left via hamburger menu.
