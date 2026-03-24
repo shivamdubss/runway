@@ -344,3 +344,118 @@ Rules:
 
   return sections.join('\n\n');
 }
+
+/**
+ * Build the Style DNA report prompt.
+ *
+ * @param {Object} params
+ * @param {Array} params.wardrobeItems - Array of { category, name, color, accent }
+ * @param {Object} params.profile - User profile
+ * @param {Object} params.outfitHistory - { saved: [...], disliked: [...] }
+ */
+export function buildStyleDnaPrompt({ wardrobeItems, profile, outfitHistory }) {
+  const sections = [];
+
+  sections.push(`You are a fashion data analyst and personal stylist. Your job is to analyze
+a user's wardrobe inventory, their outfit save/dislike history, and their profile
+to produce a comprehensive "Style DNA" report — a personal style fingerprint.
+
+Be insightful, specific, and honest. Avoid generic compliments. Point out
+genuine patterns, contradictions, and opportunities.`);
+
+  // Wardrobe with colors
+  const byCategory = {};
+  for (const item of wardrobeItems) {
+    const cat = item.category || item.label || 'Other';
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(item);
+  }
+
+  const wardrobeLines = ['## Wardrobe inventory'];
+  for (const [category, items] of Object.entries(byCategory)) {
+    wardrobeLines.push(`\n### ${category} (${items.length} items)`);
+    for (const item of items) {
+      const colorInfo = item.accent && item.accent !== '#E8E8E8'
+        ? `${item.color} / ${item.accent}`
+        : item.color || 'unknown';
+      wardrobeLines.push(`- ${item.name} (${colorInfo})`);
+    }
+  }
+  sections.push(wardrobeLines.join('\n'));
+
+  // Profile
+  const profileLines = buildProfileSection(profile);
+  if (profileLines) sections.push(profileLines);
+
+  // Outfit history
+  if (outfitHistory) {
+    const historyLines = ['## Outfit feedback history'];
+    if (outfitHistory.saved?.length > 0) {
+      historyLines.push('\n### Saved outfits (user liked these)');
+      for (const o of outfitHistory.saved) {
+        const items = (o.items || []).map(i => typeof i === 'string' ? i : i?.name).filter(Boolean);
+        historyLines.push(`- "${o.vibe}": ${items.join(', ')}`);
+      }
+    }
+    if (outfitHistory.disliked?.length > 0) {
+      historyLines.push('\n### Disliked outfits (user rejected these)');
+      for (const o of outfitHistory.disliked) {
+        const items = (o.items || []).map(i => typeof i === 'string' ? i : i?.name).filter(Boolean);
+        historyLines.push(`- "${o.vibe}": ${items.join(', ')}`);
+      }
+    }
+    if (outfitHistory.saved?.length > 0 || outfitHistory.disliked?.length > 0) {
+      sections.push(historyLines.join('\n'));
+    }
+  }
+
+  // Task
+  sections.push(`## Task
+
+Analyze the wardrobe and feedback history above. Produce a Style DNA report.
+
+## Response JSON schema
+
+Respond with exactly this structure:
+
+{
+  "archetype": {
+    "label": "2-3 word style archetype name (e.g., 'Modern Minimalist', 'Bold Eclectic', 'Relaxed Classic')",
+    "description": "2-3 sentence description of their overall style identity."
+  },
+  "colorProfile": {
+    "dominant": ["Top 3-5 most common colors in the wardrobe"],
+    "accent": ["1-3 accent/pop colors that appear less frequently"],
+    "missing": ["1-2 colors noticeably absent that could expand their palette"],
+    "insight": "1-2 sentence observation about their color tendencies and what it reveals."
+  },
+  "categoryBalance": {
+    "breakdown": [
+      { "category": "Tops", "count": 0, "assessment": "over|balanced|under" }
+    ],
+    "insight": "1-2 sentence observation about wardrobe balance."
+  },
+  "styleInsights": [
+    {
+      "title": "Short insight title (3-5 words)",
+      "body": "1-2 sentence insight about a pattern, contradiction, or strength."
+    }
+  ],
+  "gapAnalysis": [
+    {
+      "item": "Specific item type to add (e.g., 'structured blazer', 'white sneakers')",
+      "reason": "Why adding this one piece would unlock new outfit combinations (1-2 sentences).",
+      "outfitsUnlocked": 0
+    }
+  ]
+}
+
+Rules:
+- categoryBalance.breakdown must include every category present in the wardrobe.
+- styleInsights should contain 3-4 observations. Look for: repeated patterns, save-vs-dislike contradictions, comfort zone boundaries, wardrobe strengths.
+- gapAnalysis should contain exactly 3 suggestions. Each should reference specific existing items it would pair with. outfitsUnlocked is your estimate of how many new distinct outfits this item would enable.
+- Be data-driven. Reference actual counts and item names. Avoid vague platitudes.
+- If there's no outfit history, focus analysis purely on wardrobe composition.`);
+
+  return sections.join('\n\n');
+}
