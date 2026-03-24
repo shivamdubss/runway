@@ -70,6 +70,7 @@
 | POST | `/api/enhance-item-image` | AI enhancement of wardrobe item photos | 30s |
 | POST | `/api/preprocess-reference` | Reference photo validation | 30s |
 | POST | `/api/generate-style-dna` | Style DNA wardrobe analysis report | 60s |
+| POST | `/api/outfit-feedback` | AI style critique for outfit photos (vision) | 30s |
 
 ## Database
 

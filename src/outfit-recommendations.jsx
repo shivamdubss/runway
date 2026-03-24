@@ -6,7 +6,7 @@ import { uploadImage } from "./lib/upload";
 import { buildConversationHistory } from "./lib/conversation-history";
 import { preprocessReferencePhotoClient } from "./lib/preprocess";
 import { analyzeImage } from "./lib/analyze";
-import { analyzeOutfitPhoto, generateItemImage, enhanceItemImage } from "./lib/import-from-photo";
+import { analyzeOutfitPhoto, generateItemImage, enhanceItemImage, getOutfitFeedback } from "./lib/import-from-photo";
 import * as db from "./lib/db";
 import { compareOutfitItems } from "./lib/outfit-sort";
 import {
@@ -1447,6 +1447,15 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
   const [importAnalysisError, setImportAnalysisError] = useState(null);
   const [importItems, setImportItems] = useState([]);
   const [genProgress, setGenProgress] = useState({ completed: 0, total: 0 });
+
+  // --- Outfit feedback state ---
+  const [feedbackPhase, setFeedbackPhase] = useState("upload"); // 'upload' | 'analyzing' | 'result'
+  const [feedbackPreviewUrl, setFeedbackPreviewUrl] = useState(null);
+  const [feedbackIsUploading, setFeedbackIsUploading] = useState(false);
+  const [feedbackIsDragOver, setFeedbackIsDragOver] = useState(false);
+  const [feedbackError, setFeedbackError] = useState(null);
+  const [feedbackResult, setFeedbackResult] = useState(null);
+  const feedbackFileInputRef = useRef(null);
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState("");
   const [editCategory, setEditCategory] = useState("Tops");
@@ -1466,6 +1475,7 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
       images.forEach(img => { if (img.previewUrl) URL.revokeObjectURL(img.previewUrl); });
       bulkQueue.forEach(item => { if (item.previewUrl) URL.revokeObjectURL(item.previewUrl); });
       if (importPreviewUrl) URL.revokeObjectURL(importPreviewUrl);
+      if (feedbackPreviewUrl) URL.revokeObjectURL(feedbackPreviewUrl);
     };
   }, []);
 
@@ -1780,6 +1790,288 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
     ));
     setEditingId(null);
   };
+
+  // --- Outfit feedback handler ---
+  const handleFeedbackFileSelected = async (file) => {
+    if (!file) return;
+    setFeedbackError(null);
+    setFeedbackResult(null);
+
+    const preview = URL.createObjectURL(file);
+    setFeedbackPreviewUrl(preview);
+
+    let imageUrl;
+    try {
+      setFeedbackIsUploading(true);
+      imageUrl = await uploadImage(file);
+    } catch (err) {
+      console.error("Feedback photo upload failed:", err);
+      setFeedbackError("Failed to upload image. Please try again.");
+      URL.revokeObjectURL(preview);
+      setFeedbackPreviewUrl(null);
+      return;
+    } finally {
+      setFeedbackIsUploading(false);
+    }
+
+    try {
+      setFeedbackPhase("analyzing");
+      const result = await getOutfitFeedback(imageUrl);
+      setFeedbackResult(result);
+      setFeedbackPhase("result");
+    } catch (err) {
+      console.error("Outfit feedback failed:", err);
+      setFeedbackError("Could not get feedback. Try a well-lit, full-body photo.");
+      setFeedbackPhase("upload");
+    }
+  };
+
+  // --- Outfit feedback UI ---
+  if (mode === "feedback") {
+    return (
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed", inset: 0, zIndex: 100,
+          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "var(--space-lightbox-padding)", animation: "fadeIn 0.2s ease",
+        }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            background: "#fff", borderRadius: 24, width: "92vw", maxWidth: 480,
+            maxHeight: "85vh", display: "flex", flexDirection: "column",
+            animation: "scaleIn 0.25s ease", position: "relative", overflow: "hidden",
+          }}
+        >
+          {/* Header */}
+          <div style={{ padding: "20px 20px 0", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                onClick={() => { setMode("single"); setFeedbackPhase("upload"); setFeedbackResult(null); setFeedbackError(null); if (feedbackPreviewUrl) { URL.revokeObjectURL(feedbackPreviewUrl); setFeedbackPreviewUrl(null); } }}
+                style={{
+                  width: 28, height: 28, borderRadius: 14, border: "none", background: "#F3F2F0",
+                  fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >{"\u2190"}</button>
+              <span style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 600, fontSize: 17 }}>Outfit Feedback</span>
+            </div>
+            <button onClick={onClose} style={{
+              width: 32, height: 32, borderRadius: 16, border: "none", background: "#F3F2F0",
+              fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            }}>{"\u2715"}</button>
+          </div>
+
+          {/* Content */}
+          <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
+            {/* Upload phase */}
+            {feedbackPhase === "upload" && (
+              <div>
+                <input
+                  ref={feedbackFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={(e) => { const f = e.target.files[0]; if (f) handleFeedbackFileSelected(f); e.target.value = ""; }}
+                />
+                <div
+                  onClick={() => feedbackFileInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); setFeedbackIsDragOver(true); }}
+                  onDragLeave={() => setFeedbackIsDragOver(false)}
+                  onDrop={(e) => { setFeedbackIsDragOver(false); const f = getImageFileFromDrop(e); if (f) handleFeedbackFileSelected(f); }}
+                  style={{
+                    width: "100%", aspectRatio: "3/4", background: feedbackIsDragOver ? "#f0f0ff" : "#F3F2F0",
+                    borderRadius: 16, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", border: feedbackIsDragOver ? "2px dashed #667eea" : "2px dashed rgba(0,0,0,0.08)",
+                    transition: "all 0.15s ease", gap: 8,
+                  }}
+                >
+                  {feedbackIsUploading ? (
+                    <>
+                      <div style={{
+                        width: 36, height: 36, border: "3px solid #eee", borderTopColor: "#1A1A1A",
+                        borderRadius: "50%", animation: "spin 0.8s linear infinite",
+                      }} />
+                      <span style={{ fontSize: 14, color: "#888", fontFamily: "'DM Sans', sans-serif" }}>Uploading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: 36 }}>{"\ud83d\udc57"}</span>
+                      <span style={{ fontSize: 14, color: "#888", fontFamily: "'DM Sans', sans-serif", fontWeight: 500, textAlign: "center", padding: "0 20px" }}>
+                        Upload a photo of your outfit for feedback
+                      </span>
+                      <span style={{ fontSize: 12, color: "#bbb", fontFamily: "'DM Sans', sans-serif" }}>
+                        Get styling tips, color analysis, and more
+                      </span>
+                    </>
+                  )}
+                </div>
+                {feedbackError && (
+                  <div style={{ color: "#c0392b", fontSize: 13, marginTop: 8, fontFamily: "'DM Sans', sans-serif" }}>{feedbackError}</div>
+                )}
+              </div>
+            )}
+
+            {/* Analyzing phase */}
+            {feedbackPhase === "analyzing" && (
+              <div style={{ position: "relative" }}>
+                {feedbackPreviewUrl && (
+                  <img src={feedbackPreviewUrl} alt="Outfit" style={{ width: "100%", aspectRatio: "3/4", objectFit: "cover", borderRadius: 16, opacity: 0.5 }} />
+                )}
+                <div style={{
+                  position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center", gap: 12,
+                }}>
+                  <div style={{
+                    width: 36, height: 36, border: "3px solid #eee", borderTopColor: "#1A1A1A",
+                    borderRadius: "50%", animation: "spin 0.8s linear infinite",
+                  }} />
+                  <span style={{ fontSize: 14, color: "#1A1A1A", fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>
+                    Analyzing your outfit...
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Result phase */}
+            {feedbackPhase === "result" && feedbackResult && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {/* Photo + rating header */}
+                <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+                  {feedbackPreviewUrl && (
+                    <img src={feedbackPreviewUrl} alt="Outfit" style={{
+                      width: 100, height: 133, objectFit: "cover", borderRadius: 12, flexShrink: 0,
+                    }} />
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                      <div style={{
+                        width: 44, height: 44, borderRadius: 22,
+                        background: feedbackResult.overall_rating >= 7 ? "#E8F5E9" : feedbackResult.overall_rating >= 4 ? "#FFF8E1" : "#FFEBEE",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 18, fontWeight: 700, fontFamily: "'DM Sans', sans-serif",
+                        color: feedbackResult.overall_rating >= 7 ? "#2E7D32" : feedbackResult.overall_rating >= 4 ? "#F57F17" : "#C62828",
+                      }}>
+                        {feedbackResult.overall_rating}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", fontFamily: "'DM Sans', sans-serif" }}>
+                          {feedbackResult.style_vibe || "Your Look"}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#999", fontFamily: "'DM Sans', sans-serif" }}>out of 10</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 13.5, color: "#555", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}>
+                      {feedbackResult.summary}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Strengths */}
+                {feedbackResult.strengths.length > 0 && (
+                  <div style={{
+                    background: "#F6FAF7", borderRadius: 14, padding: 16,
+                  }}>
+                    <div style={{
+                      fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em",
+                      color: "#2E7D32", fontFamily: "'DM Sans', sans-serif", marginBottom: 10,
+                    }}>What works</div>
+                    {feedbackResult.strengths.map((s, i) => (
+                      <div key={i} style={{
+                        fontSize: 13.5, color: "#333", fontFamily: "'DM Sans', sans-serif",
+                        lineHeight: 1.5, marginBottom: i < feedbackResult.strengths.length - 1 ? 8 : 0,
+                        paddingLeft: 16, position: "relative",
+                      }}>
+                        <span style={{ position: "absolute", left: 0 }}>{"\u2713"}</span>
+                        {s}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Suggestions */}
+                {feedbackResult.suggestions.length > 0 && (
+                  <div style={{
+                    background: "#FFF9F0", borderRadius: 14, padding: 16,
+                  }}>
+                    <div style={{
+                      fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em",
+                      color: "#E65100", fontFamily: "'DM Sans', sans-serif", marginBottom: 10,
+                    }}>Suggestions</div>
+                    {feedbackResult.suggestions.map((s, i) => (
+                      <div key={i} style={{
+                        fontSize: 13.5, color: "#333", fontFamily: "'DM Sans', sans-serif",
+                        lineHeight: 1.5, marginBottom: i < feedbackResult.suggestions.length - 1 ? 8 : 0,
+                        paddingLeft: 16, position: "relative",
+                      }}>
+                        <span style={{ position: "absolute", left: 0 }}>{"\u2192"}</span>
+                        {s}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Color analysis & occasion */}
+                <div style={{ display: "flex", gap: 10 }}>
+                  {feedbackResult.color_analysis && (
+                    <div style={{
+                      flex: 1, background: "#F5F4F2", borderRadius: 14, padding: 14,
+                    }}>
+                      <div style={{
+                        fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em",
+                        color: "#888", fontFamily: "'DM Sans', sans-serif", marginBottom: 6,
+                      }}>Colors</div>
+                      <div style={{ fontSize: 12.5, color: "#444", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}>
+                        {feedbackResult.color_analysis}
+                      </div>
+                    </div>
+                  )}
+                  {feedbackResult.occasion_fit && (
+                    <div style={{
+                      flex: 1, background: "#F5F4F2", borderRadius: 14, padding: 14,
+                    }}>
+                      <div style={{
+                        fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em",
+                        color: "#888", fontFamily: "'DM Sans', sans-serif", marginBottom: 6,
+                      }}>Best for</div>
+                      <div style={{ fontSize: 12.5, color: "#444", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}>
+                        {feedbackResult.occasion_fit}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom action bar - try another */}
+          {feedbackPhase === "result" && (
+            <div style={{
+              padding: "12px 20px calc(12px + var(--safe-bottom))", flexShrink: 0,
+              borderTop: "1px solid rgba(0,0,0,0.06)",
+            }}>
+              <button
+                onClick={() => { setFeedbackPhase("upload"); setFeedbackResult(null); if (feedbackPreviewUrl) { URL.revokeObjectURL(feedbackPreviewUrl); setFeedbackPreviewUrl(null); } }}
+                style={{
+                  width: "100%", height: 48, borderRadius: 14, border: "none",
+                  background: "#1A1A1A", color: "#fff",
+                  fontSize: 15, fontWeight: 600, fontFamily: "'DM Sans', sans-serif",
+                  cursor: "pointer", transition: "all 0.15s ease",
+                }}
+                onPointerDown={(e) => { e.currentTarget.style.transform = "scale(0.97)"; }}
+                onPointerUp={(e) => e.currentTarget.style.transform = "scale(1)"}
+                onPointerLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+              >
+                Try another outfit
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // --- Bulk processing / review UI ---
   if (mode === "bulk") {
@@ -2417,6 +2709,42 @@ function AddItemModal({ onClose, onAdd, onBulkAdd }) {
                   fontSize: 12.5, color: "#999", fontFamily: "'DM Sans', sans-serif", marginTop: 3, lineHeight: 1.4,
                 }}>
                   Upload one photo — we'll find each item automatically
+                </div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </button>
+
+            {/* Card 3: Outfit feedback */}
+            <button
+              onClick={() => setMode("feedback")}
+              style={{
+                width: "100%", padding: "18px 16px", borderRadius: 18,
+                border: "1.5px solid rgba(0,0,0,0.07)", background: "#FAFAF9",
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 14,
+                transition: "background 0.15s ease, border-color 0.15s ease", textAlign: "left",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+              }}
+            >
+              <div style={{
+                width: 52, height: 52, borderRadius: 14, background: "#FFF0E8",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, fontSize: 26,
+              }}>
+                {"\ud83d\udc57"}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontSize: 15, fontWeight: 600, color: "#1a1a1a",
+                  fontFamily: "'DM Sans', sans-serif", letterSpacing: "-0.01em",
+                }}>
+                  Get outfit feedback
+                </div>
+                <div style={{
+                  fontSize: 12.5, color: "#999", fontFamily: "'DM Sans', sans-serif", marginTop: 3, lineHeight: 1.4,
+                }}>
+                  Upload a photo and get AI styling tips
                 </div>
               </div>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>

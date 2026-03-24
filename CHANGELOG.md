@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-03-24
+
+### Outfit Feedback
+- New "Get outfit feedback" option in the Add to Wardrobe modal
+- Upload any outfit photo and receive an AI style critique with a 1-10 rating
+- Feedback includes what works well, actionable styling suggestions, color coordination analysis, occasion suitability, and style vibe label
+- Try multiple outfits in a row with the "Try another outfit" button
+
 ## 2026-03-23
 
 ### Style DNA Report

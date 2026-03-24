@@ -21,7 +21,8 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 10. [Weather Integration](#10-weather-integration)
 11. [API Endpoints](#11-api-endpoints)
 12. [Style DNA Report](#12-style-dna-report)
-13. [Cross-Cutting Concerns](#13-cross-cutting-concerns)
+13. [Outfit Photo Feedback](#13-outfit-photo-feedback)
+14. [Cross-Cutting Concerns](#14-cross-cutting-concerns)
 
 ---
 
@@ -610,7 +611,44 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 
 ---
 
-## 13. Cross-Cutting Concerns
+## 13. Outfit Photo Feedback
+
+### 13.1 Access & Upload
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| OFB-01 | P0 | Open feedback from Add modal | Tap "+" > "Get outfit feedback" | Feedback modal opens with upload area |
+| OFB-02 | P0 | Upload outfit photo | Select a full-body photo | Photo uploads, analyzing spinner shows, then feedback displays |
+| OFB-03 | P1 | Drag and drop photo | Drag a photo into the upload zone | Same as file picker upload |
+| OFB-04 | P1 | Back button returns to mode selection | Tap back arrow | Returns to Add to Wardrobe mode picker |
+| OFB-05 | P2 | Upload error shows message | Upload fails (e.g., network error) | Error message: "Failed to upload image. Please try again." |
+
+### 13.2 Feedback Display
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| OFB-06 | P0 | Rating displays correctly | Upload a valid outfit photo | Rating circle shows 1-10 score with color coding |
+| OFB-07 | P0 | Strengths section shows | Upload photo | Green "What works" section with checkmark-prefixed items |
+| OFB-08 | P0 | Suggestions section shows | Upload photo | Orange "Suggestions" section with arrow-prefixed items |
+| OFB-09 | P1 | Color analysis shows | Upload photo | "Colors" card with analysis text |
+| OFB-10 | P1 | Occasion fit shows | Upload photo | "Best for" card with occasion text |
+| OFB-11 | P1 | Style vibe label shows | Upload photo | Style vibe label appears next to rating |
+| OFB-12 | P1 | Try another outfit | Tap "Try another outfit" | Resets to upload phase for new photo |
+
+### 13.3 API Endpoint
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| OFB-13 | P0 | Valid request returns feedback | POST /api/outfit-feedback with imageUrl | 200 OK with rating, summary, strengths, suggestions, color_analysis, occasion_fit, style_vibe |
+| OFB-14 | P0 | Missing imageUrl returns 400 | POST with empty body | 400 error: "imageUrl is required" |
+| OFB-15 | P0 | No auth token returns 401 | POST without Authorization header | 401 Unauthorized |
+| OFB-16 | P1 | Non-POST method returns 405 | GET /api/outfit-feedback | 405 Method not allowed |
+| OFB-17 | P1 | Rate limit returns 429 | Exceed OpenAI rate limit | 429 error with retry message |
+| OFB-18 | P2 | Analysis error shows message | API returns 500 | Error: "Could not get feedback. Try a well-lit, full-body photo." |
+
+---
+
+## 14. Cross-Cutting Concerns
 
 ### 12.1 Responsive Design
 

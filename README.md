@@ -208,6 +208,7 @@ All endpoints require a `Bearer` token in the `Authorization` header.
 | `POST` | `/api/preprocess-reference` | Validate and preprocess reference photos |
 | `POST` | `/api/generate-weekly-outfits` | Generate 7-day outfit plan (60s timeout) |
 | `POST` | `/api/generate-style-dna` | Generate Style DNA wardrobe analysis (60s timeout) |
+| `POST` | `/api/outfit-feedback` | Get AI style critique for an outfit photo |
 
 ---
 

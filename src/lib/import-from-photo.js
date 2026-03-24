@@ -46,6 +46,23 @@ export async function enhanceItemImage(imageUrl, item) {
   });
 }
 
+export async function getOutfitFeedback(imageUrl) {
+  const headers = await getAuthHeaders();
+
+  const res = await fetch('/api/outfit-feedback', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ imageUrl }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Outfit feedback failed (${res.status})`);
+  }
+
+  return res.json();
+}
+
 export async function generateItemImage(item) {
   return enqueueApiCall(async () => {
     const headers = await getAuthHeaders();

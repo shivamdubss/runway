@@ -304,6 +304,34 @@ An AI-powered wardrobe analysis that generates a personal "style fingerprint."
 
 ---
 
+### 12. Outfit Photo Feedback
+
+Upload a full-body outfit photo and receive an AI-powered style critique.
+
+#### Access
+- Third card option ("Get outfit feedback") in the Add to Wardrobe modal.
+
+#### Feedback Includes
+- **Overall Rating:** 1-10 score with color-coded indicator (green 7+, yellow 4-6, red 1-3).
+- **Style Vibe:** 2-3 word aesthetic label (e.g., "Casual chic", "Smart casual").
+- **Summary:** One-sentence overall impression.
+- **Strengths:** 2-4 specific positives about fit, color, and styling.
+- **Suggestions:** 1-3 actionable improvement tips referencing specific items.
+- **Color Analysis:** Brief note on color coordination.
+- **Occasion Fit:** What occasions the outfit suits best.
+
+#### Flow
+1. Upload a full-body photo (drag-drop or file picker).
+2. Photo is uploaded to Vercel Blob, then sent to OpenAI Vision for analysis.
+3. Results display inline with the photo thumbnail.
+4. "Try another outfit" button resets for a new photo.
+
+#### Limitations
+- Feedback is not persisted — it's generated on-demand per photo.
+- Requires a clear, well-lit full-body photo for best results.
+
+---
+
 ## Data Model
 
 | Table | Purpose | Key Fields |
