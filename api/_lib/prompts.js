@@ -200,7 +200,7 @@ export function buildPreviousOutfitsSection(previousOutfits) {
   return lines.join('\n');
 }
 
-function buildProfileSection(profile) {
+export function buildProfileSection(profile) {
   if (!profile) return null;
 
   const parts = ['## User profile'];
@@ -234,6 +234,25 @@ function buildProfileSection(profile) {
 
   if (profile.styleContext?.notes?.trim()) {
     parts.push(`- Additional context: ${profile.styleContext.notes.trim()}`);
+    hasContent = true;
+  }
+
+  if (profile.styleQuiz?.primaryArchetype) {
+    parts.push('');
+    parts.push('### Style DNA (from style quiz)');
+    parts.push(`- Primary archetype: ${profile.styleQuiz.primaryArchetype}`);
+    if (profile.styleQuiz.secondaryArchetype) {
+      parts.push(`- Secondary influence: ${profile.styleQuiz.secondaryArchetype}`);
+    }
+    if (profile.styleQuiz.description) {
+      parts.push(`- Profile: ${profile.styleQuiz.description}`);
+    }
+    if (profile.styleQuiz.topTraits?.length > 0) {
+      parts.push(`- Key traits: ${profile.styleQuiz.topTraits.join(', ')}`);
+    }
+    parts.push('');
+    parts.push('Use this style DNA to inform your recommendations. Lean into the user\'s');
+    parts.push('archetype and traits when choosing pieces and building outfits.');
     hasContent = true;
   }
 
