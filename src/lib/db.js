@@ -757,3 +757,36 @@ export async function saveWeeklyOutfits({ weekStart, outfits, wardrobeItems }) {
 
   return results;
 }
+
+export async function fetchTodayCalendarOutfit() {
+  const weekStart = getWeekStart();
+  const today = new Date();
+  const dow = today.getDay(); // 0=Sun
+  const dayIndex = dow === 0 ? 6 : dow - 1; // convert to Mon=0..Sun=6
+
+  const { data: row, error } = await supabase
+    .from('weekly_calendar_days')
+    .select('*, outfits(*)')
+    .eq('week_start', weekStart)
+    .eq('day_index', dayIndex)
+    .maybeSingle();
+  if (error) throw error;
+  if (!row || !row.outfits) return null;
+
+  const day = toFrontendCalendarDay(row);
+
+  // Fetch outfit items
+  if (day.outfitId) {
+    const { data: junctionRows, error: jErr } = await supabase
+      .from('outfit_items')
+      .select('outfit_id, position, wardrobe_items(*)')
+      .eq('outfit_id', day.outfitId)
+      .order('position', { ascending: true });
+    if (jErr) throw jErr;
+    day.outfit.items = (junctionRows || [])
+      .filter(jr => jr.wardrobe_items)
+      .map(jr => toFrontendItem(jr.wardrobe_items));
+  }
+
+  return day;
+}
