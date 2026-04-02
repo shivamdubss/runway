@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-04-02
+
+### Today's Pick
+- When you open the app, a hero card on the chat screen shows today's outfit from your weekly calendar
+- Displays item thumbnails and vibe label — tap to see full outfit details
+- If no weekly plan exists, a prompt invites you to generate one
+- No extra taps to see what to wear today — it's right there when you open the app
+
 ## 2026-03-23
 
 ### Style DNA Report

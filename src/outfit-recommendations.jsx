@@ -3299,6 +3299,9 @@ function ChatView({
   weather,
   hasLocation,
   onOpenProfile,
+  todaysPick,
+  onTodaysPickTap,
+  onPlanWeek,
 }) {
   const chatMessagesRef = useRef(null);
   const isInitialMount = useRef(true);
@@ -3452,6 +3455,85 @@ function ChatView({
             }}>
               {getGreeting().text}
             </span>
+            {todaysPick?.outfit ? (
+              <button
+                onClick={onTodaysPickTap}
+                style={{
+                  width: "100%",
+                  maxWidth: 320,
+                  background: "#fff",
+                  borderRadius: 14,
+                  border: "1px solid rgba(0,0,0,0.08)",
+                  padding: "14px 16px",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  marginTop: 4,
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                  transition: "box-shadow 0.15s ease",
+                }}
+                onPointerDown={(e) => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)"; }}
+                onPointerUp={(e) => { e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.04)"; }}
+                onPointerLeave={(e) => { e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.04)"; }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <span style={{ fontSize: "var(--font-small)", fontWeight: 600, color: "#1A1A1A", fontFamily: "'DM Sans', sans-serif" }}>
+                    Today's Pick
+                  </span>
+                  <span style={{ fontSize: "var(--font-small)", color: "#555", fontFamily: "'DM Sans', sans-serif", fontWeight: 500 }}>
+                    {todaysPick.outfit.vibe}
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
+                  {(todaysPick.outfit.items || []).map((item, i) => (
+                    <div
+                      key={item.id || i}
+                      style={{
+                        width: 48, height: 48, borderRadius: 8, overflow: "hidden",
+                        background: "#f5f5f5", flexShrink: 0,
+                      }}
+                    >
+                      {item.image ? (
+                        <img src={item.image} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      ) : (
+                        <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", fontSize: 20 }}>
+                          {item.emoji || "👕"}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginTop: 8 }}>
+                  <span style={{ fontSize: "var(--font-caption)", color: "#999", fontFamily: "'DM Sans', sans-serif" }}>
+                    Tap to view details →
+                  </span>
+                </div>
+              </button>
+            ) : todaysPick === null && onPlanWeek ? (
+              <button
+                onClick={onPlanWeek}
+                style={{
+                  width: "100%",
+                  maxWidth: 320,
+                  background: "transparent",
+                  borderRadius: 14,
+                  border: "1px dashed rgba(0,0,0,0.15)",
+                  padding: "14px 16px",
+                  cursor: "pointer",
+                  textAlign: "center",
+                  marginTop: 4,
+                  color: "#888",
+                  fontSize: "var(--font-small)",
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontWeight: 500,
+                  transition: "background 0.15s ease",
+                }}
+                onPointerDown={(e) => { e.currentTarget.style.background = "#F3F2F0"; }}
+                onPointerUp={(e) => { e.currentTarget.style.background = "transparent"; }}
+                onPointerLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+              >
+                Want me to plan your outfits this week?
+              </button>
+            ) : null}
             <span style={{
               fontSize: "var(--font-body)",
               fontFamily: "'DM Sans', sans-serif",
@@ -7399,6 +7481,7 @@ export default function OutfitRecommendations() {
   const [styleDnaReport, setStyleDnaReport] = useState(null);
   const [styleDnaLoading, setStyleDnaLoading] = useState(false);
   const [styleDnaError, setStyleDnaError] = useState(null);
+  const [todaysPick, setTodaysPick] = useState(undefined); // undefined=loading, null=no plan, object=has pick
   const chatSessionRef = useRef(0);
   const streamAbortRef = useRef(null);
 
@@ -7467,7 +7550,7 @@ export default function OutfitRecommendations() {
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const [grouped, flat, chats, dbProfile, saved, trips, slotCounts] = await Promise.all([
+        const [grouped, flat, chats, dbProfile, saved, trips, slotCounts, todayPick] = await Promise.all([
           db.fetchWardrobeItems(),
           db.fetchWardrobeItemsFlat(),
           db.fetchChats(),
@@ -7475,6 +7558,7 @@ export default function OutfitRecommendations() {
           db.fetchSavedOutfits(),
           db.fetchTripPlans(),
           db.fetchTripSlotCounts(),
+          db.fetchTodayCalendarOutfit().catch(() => null),
         ]);
         setWardrobeItems(grouped);
         setWardrobeFlat(flat);
@@ -7482,6 +7566,7 @@ export default function OutfitRecommendations() {
         setSavedOutfits(saved);
         setTripPlans(trips);
         setTripSlotCounts(slotCounts);
+        setTodaysPick(todayPick);
 
         if (dbProfile && Object.keys(dbProfile).length > 0) {
           setProfile(prev => ({ ...prev, ...dbProfile }));
@@ -8293,6 +8378,15 @@ export default function OutfitRecommendations() {
     loadCalendarWeek(weekStart);
   }, [loadCalendarWeek]);
 
+  const handleTodaysPickTap = useCallback(() => {
+    const weekStart = db.getWeekStart();
+    const dow = new Date().getDay();
+    const dayIndex = dow === 0 ? 6 : dow - 1;
+    loadCalendarWeek(weekStart);
+    setCalendarSelectedDay(dayIndex);
+    setView("calendar-detail");
+  }, [loadCalendarWeek]);
+
   const handleCalendarWeekNav = useCallback((direction) => {
     const newWeek = db.shiftWeek(calendarWeekStart, direction);
     loadCalendarWeek(newWeek);
@@ -8798,6 +8892,9 @@ export default function OutfitRecommendations() {
           weather={weather}
           hasLocation={!!profile.location?.city}
           onOpenProfile={() => { setFocusLocation(true); setView("profile"); }}
+          todaysPick={todaysPick}
+          onTodaysPickTap={handleTodaysPickTap}
+          onPlanWeek={handleOpenCalendar}
         />
       )}
 

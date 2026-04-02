@@ -18,7 +18,9 @@ Runway is an AI-powered personal styling assistant. Users upload their real ward
 Sign in (Google OAuth)
     |
     v
-Chat screen with time-of-day greeting + quick-start chips
+Chat screen with time-of-day greeting + Today's Pick card + quick-start chips
+    |
+    +---> Today's Pick card shows today's outfit from Weekly Calendar (if planned)
     |
     +---> Tap a chip or type a message (e.g., "date night outfit")
     |         |
@@ -57,6 +59,11 @@ The primary interface. Users describe what they need; the AI responds with outfi
 - Time-of-day greeting: "Good morning — what are we styling?" / "Good afternoon — what are we wearing?" / "Good evening — what's the occasion?"
 - If location is set, a weather chip shows current temp, condition emoji, and city name.
 - If location is not set, a link prompts: "Set location for weather-aware outfits."
+
+#### Today's Pick
+- If a Weekly Calendar outfit exists for today, a hero card appears on the chat greeting screen showing item thumbnails and the outfit's vibe label.
+- Tapping the card navigates to the calendar day detail view for the full outfit breakdown.
+- If no weekly plan exists for the current week, a dashed prompt appears: "Want me to plan your outfits this week?" — tapping it opens the Weekly Calendar and triggers auto-generation.
 
 #### Quick-Start Chips
 Six preset occasion shortcuts displayed below the greeting:

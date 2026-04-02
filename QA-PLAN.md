@@ -10,7 +10,7 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 
 1. [Authentication](#1-authentication)
 2. [Sidebar & Navigation](#2-sidebar--navigation)
-3. [Chat Interface](#3-chat-interface) (includes [Outfit Refinement](#34-outfit-refinement))
+3. [Chat Interface](#3-chat-interface) (includes [Outfit Refinement](#34-outfit-refinement), [Today's Pick](#31-empty-state))
 4. [Outfit Recommendations](#4-outfit-recommendations)
 5. [Wardrobe Management](#5-wardrobe-management)
 6. [Outfit Visualization](#6-outfit-visualization)
@@ -98,6 +98,11 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 | CHAT-03 | P1 | Quick action chip triggers message | 1. Click any quick action chip (e.g., "Date night") | Message sent with chip text; AI begins generating response |
 | CHAT-04 | P2 | Weather displayed in empty state | 1. Set location in profile 2. Open new chat | Weather chip shows temperature, condition emoji, and city name |
 | CHAT-05 | P2 | "Set location" CTA | 1. Open new chat without location set | Shows "Set location for weather-aware outfits" clickable prompt |
+| CHAT-50 | P1 | Today's Pick card shown | 1. Generate a weekly calendar 2. Return to chat (new chat, no messages) | Today's Pick hero card appears with item thumbnails and vibe label |
+| CHAT-51 | P1 | Today's Pick tap navigates | 1. View Today's Pick card 2. Tap it | Navigates to calendar day detail view for today |
+| CHAT-52 | P2 | "Plan your week" prompt | 1. Open new chat with no weekly calendar for current week | Dashed prompt "Want me to plan your outfits this week?" appears |
+| CHAT-53 | P2 | "Plan your week" tap | 1. Tap the "Want me to plan your outfits this week?" prompt | Opens Weekly Calendar view and triggers auto-generation |
+| CHAT-54 | P2 | No Today's Pick while loading | 1. Open app fresh | Today's Pick card does not flash or show stale data while initial data loads |
 
 ### 3.2 Message Composition
 
