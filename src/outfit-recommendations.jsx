@@ -38,6 +38,7 @@ import {
 } from "./lib/visualization";
 import { useAuth } from "./lib/auth";
 import { fetchWeatherForDisplay, getWeatherFromCache, weatherIconToEmoji, searchCities, detectLocationFromBrowser, fetchForecastForTrip, wmoCodeToEmoji } from "./lib/weather";
+import { STYLE_QUIZ_QUESTIONS, computeStyleDnaFromQuiz } from "./lib/style-quiz";
 
 // Inject CSS animations for streaming states
 const style = document.createElement('style');
@@ -5302,7 +5303,407 @@ function ReferencePhotoCard({ profile, onSave }) {
   );
 }
 
-function ProfileView({ profile, onSave, focusLocation, onClearFocusLocation }) {
+// ── Style Quiz ──────────────────────────────────────────────────────────────
+
+function StyleQuiz({ onComplete, onSkip, isOnboarding = false }) {
+  const [step, setStep] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [showResults, setShowResults] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const question = STYLE_QUIZ_QUESTIONS[step];
+  const totalSteps = STYLE_QUIZ_QUESTIONS.length;
+  const progress = ((step + 1) / totalSteps) * 100;
+
+  const handleSelect = (value) => {
+    const newAnswers = { ...answers, [question.id]: value };
+    setAnswers(newAnswers);
+
+    if (step < totalSteps - 1) {
+      setTimeout(() => setStep(step + 1), 300);
+    } else {
+      const dna = computeStyleDnaFromQuiz(newAnswers);
+      setResult(dna);
+      setTimeout(() => setShowResults(true), 300);
+    }
+  };
+
+  const handleBack = () => {
+    if (step > 0) setStep(step - 1);
+  };
+
+  const handleFinish = () => {
+    onComplete(result);
+  };
+
+  if (showResults && result) {
+    return (
+      <div style={{
+        padding: "var(--container-padding-y) var(--container-padding-x)",
+        overflowY: "auto",
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+      }}>
+        <div style={{
+          textAlign: "center",
+          marginBottom: 32,
+          maxWidth: 400,
+        }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>&#x2728;</div>
+          <h2 style={{
+            fontFamily: "'Instrument Serif', serif",
+            fontSize: "var(--font-h2)",
+            fontWeight: 400,
+            color: "#1A1A1A",
+            marginBottom: 8,
+          }}>
+            Your Style DNA
+          </h2>
+          <p style={{
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: "var(--font-body)",
+            color: "#666",
+            margin: 0,
+          }}>
+            Here's what we learned about your style
+          </p>
+        </div>
+
+        {/* Primary Archetype Card */}
+        <div style={{
+          background: "#1A1A1A",
+          borderRadius: 20,
+          padding: 28,
+          marginBottom: 16,
+          width: "100%",
+          maxWidth: 400,
+        }}>
+          <div style={{
+            fontSize: "var(--font-caption)",
+            color: "rgba(255,255,255,0.5)",
+            fontFamily: "'DM Sans', sans-serif",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+            marginBottom: 8,
+          }}>
+            Your Primary Style
+          </div>
+          <div style={{
+            fontFamily: "'Instrument Serif', serif",
+            fontSize: 28,
+            color: "#fff",
+            marginBottom: 12,
+          }}>
+            {result.primaryArchetype}
+          </div>
+          <p style={{
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: "var(--font-body)",
+            color: "rgba(255,255,255,0.7)",
+            margin: 0,
+            lineHeight: 1.5,
+          }}>
+            {result.description}
+          </p>
+        </div>
+
+        {/* Secondary Archetype */}
+        {result.secondaryArchetype && (
+          <div style={{
+            background: "#fff",
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 16,
+            border: "1px solid rgba(0,0,0,0.08)",
+            width: "100%",
+            maxWidth: 400,
+          }}>
+            <div style={{
+              fontSize: "var(--font-caption)",
+              color: "#999",
+              fontFamily: "'DM Sans', sans-serif",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              marginBottom: 4,
+            }}>
+              With Notes Of
+            </div>
+            <div style={{
+              fontFamily: "'Instrument Serif', serif",
+              fontSize: 22,
+              color: "#1A1A1A",
+            }}>
+              {result.secondaryArchetype}
+            </div>
+          </div>
+        )}
+
+        {/* Top Traits */}
+        <div style={{
+          background: "#fff",
+          borderRadius: 16,
+          padding: 20,
+          marginBottom: 16,
+          border: "1px solid rgba(0,0,0,0.08)",
+          width: "100%",
+          maxWidth: 400,
+        }}>
+          <div style={{
+            fontSize: "var(--font-caption)",
+            color: "#999",
+            fontFamily: "'DM Sans', sans-serif",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+            marginBottom: 12,
+          }}>
+            Your Style Traits
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {result.topTraits.map((trait) => (
+              <span key={trait} style={{
+                padding: "6px 14px",
+                borderRadius: 20,
+                background: "#F5F3FF",
+                color: "#6B5CE7",
+                fontSize: "var(--font-caption)",
+                fontFamily: "'DM Sans', sans-serif",
+                fontWeight: 500,
+              }}>
+                {trait}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* CTA */}
+        <button
+          onClick={handleFinish}
+          style={{
+            width: "100%",
+            maxWidth: 400,
+            height: 52,
+            borderRadius: 26,
+            border: "none",
+            background: "#1A1A1A",
+            color: "#fff",
+            fontSize: "var(--font-body)",
+            fontWeight: 600,
+            fontFamily: "'DM Sans', sans-serif",
+            cursor: "pointer",
+            marginTop: 8,
+          }}
+        >
+          {isOnboarding ? "Start Styling" : "Save & Update My Profile"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      padding: "var(--container-padding-y) var(--container-padding-x)",
+      overflowY: "auto",
+      flex: 1,
+      display: "flex",
+      flexDirection: "column",
+    }}>
+      {/* Progress bar */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        marginBottom: 24,
+      }}>
+        {step > 0 && (
+          <button
+            onClick={handleBack}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              border: "1px solid rgba(0,0,0,0.12)",
+              background: "transparent",
+              color: "#1A1A1A",
+              fontSize: 18,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            &#x2190;
+          </button>
+        )}
+        <div style={{
+          flex: 1,
+          height: 4,
+          background: "#F0EFED",
+          borderRadius: 2,
+          overflow: "hidden",
+        }}>
+          <div style={{
+            width: `${progress}%`,
+            height: "100%",
+            background: "#1A1A1A",
+            borderRadius: 2,
+            transition: "width 0.3s ease",
+          }} />
+        </div>
+        <span style={{
+          fontSize: "var(--font-caption)",
+          color: "#999",
+          fontFamily: "'DM Sans', sans-serif",
+          fontWeight: 500,
+          flexShrink: 0,
+        }}>
+          {step + 1}/{totalSteps}
+        </span>
+      </div>
+
+      {/* Question */}
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{
+          fontFamily: "'Instrument Serif', serif",
+          fontSize: "var(--font-h2)",
+          fontWeight: 400,
+          color: "#1A1A1A",
+          marginBottom: 6,
+        }}>
+          {question.title}
+        </h2>
+        <p style={{
+          fontFamily: "'DM Sans', sans-serif",
+          fontSize: "var(--font-body)",
+          color: "#666",
+          margin: 0,
+        }}>
+          {question.subtitle}
+        </p>
+      </div>
+
+      {/* Options grid */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(2, 1fr)",
+        gap: 12,
+        flex: 1,
+      }}>
+        {question.options.map((option) => {
+          const isSelected = answers[question.id] === option.value;
+          return (
+            <button
+              key={option.value}
+              onClick={() => handleSelect(option.value)}
+              style={{
+                position: "relative",
+                borderRadius: 16,
+                border: isSelected ? "2px solid #1A1A1A" : "2px solid transparent",
+                background: "#fff",
+                overflow: "hidden",
+                cursor: "pointer",
+                padding: 0,
+                textAlign: "left",
+                transition: "all 0.2s ease",
+                boxShadow: isSelected ? "0 4px 12px rgba(0,0,0,0.15)" : "0 1px 4px rgba(0,0,0,0.08)",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              {/* Image */}
+              <div style={{
+                width: "100%",
+                paddingTop: "110%",
+                position: "relative",
+                overflow: "hidden",
+                background: "#F0EFED",
+              }}>
+                <img
+                  src={option.image}
+                  alt={option.label}
+                  loading="lazy"
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  }}
+                />
+                {isSelected && (
+                  <div style={{
+                    position: "absolute",
+                    top: 8,
+                    right: 8,
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    background: "#1A1A1A",
+                    color: "#fff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 16,
+                  }}>
+                    &#x2713;
+                  </div>
+                )}
+              </div>
+              {/* Label */}
+              <div style={{ padding: "10px 12px 12px" }}>
+                <div style={{
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontSize: "var(--font-item-name)",
+                  fontWeight: 600,
+                  color: "#1A1A1A",
+                  marginBottom: 2,
+                }}>
+                  {option.label}
+                </div>
+                <div style={{
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontSize: "var(--font-caption)",
+                  color: "#999",
+                  lineHeight: 1.3,
+                }}>
+                  {option.description}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Skip link */}
+      {isOnboarding && step === 0 && (
+        <button
+          onClick={onSkip}
+          style={{
+            marginTop: 16,
+            padding: "12px 0",
+            border: "none",
+            background: "transparent",
+            color: "#999",
+            fontSize: "var(--font-body)",
+            fontFamily: "'DM Sans', sans-serif",
+            cursor: "pointer",
+            textAlign: "center",
+          }}
+        >
+          Skip for now
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ProfileView({ profile, onSave, focusLocation, onClearFocusLocation, onOpenStyleQuiz }) {
   const isComplete = profile.body.height.value &&
                      profile.style.preferredStyles.length > 0;
 
@@ -5336,6 +5737,113 @@ function ProfileView({ profile, onSave, focusLocation, onClearFocusLocation }) {
           Your profile is incomplete. Fill out more details to get better recommendations!
         </div>
       )}
+
+      {/* Style Quiz Card */}
+      <div style={{
+        background: "#fff",
+        borderRadius: 16,
+        padding: 20,
+        marginBottom: 16,
+        border: "1px solid #E5E5E5",
+      }}>
+        <h3 style={{
+          fontSize: "var(--font-body)",
+          fontWeight: 600,
+          color: "#1A1A1A",
+          marginBottom: 8,
+          fontFamily: "'DM Sans', sans-serif",
+        }}>
+          &#x1F9EC; Style Quiz
+        </h3>
+        {profile.styleQuiz?.completedAt ? (
+          <>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 12,
+            }}>
+              <span style={{
+                fontFamily: "'Instrument Serif', serif",
+                fontSize: 20,
+                color: "#1A1A1A",
+              }}>
+                {profile.styleQuiz.primaryArchetype}
+              </span>
+              {profile.styleQuiz.secondaryArchetype && (
+                <span style={{
+                  fontSize: "var(--font-caption)",
+                  color: "#999",
+                  fontFamily: "'DM Sans', sans-serif",
+                }}>
+                  + {profile.styleQuiz.secondaryArchetype}
+                </span>
+              )}
+            </div>
+            {profile.styleQuiz.topTraits?.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                {profile.styleQuiz.topTraits.map((trait) => (
+                  <span key={trait} style={{
+                    padding: "4px 10px",
+                    borderRadius: 14,
+                    background: "#F5F3FF",
+                    color: "#6B5CE7",
+                    fontSize: 11,
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontWeight: 500,
+                  }}>
+                    {trait}
+                  </span>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={onOpenStyleQuiz}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 20,
+                border: "1px solid rgba(0,0,0,0.12)",
+                background: "transparent",
+                color: "#1A1A1A",
+                fontSize: "var(--font-caption)",
+                fontWeight: 500,
+                fontFamily: "'DM Sans', sans-serif",
+                cursor: "pointer",
+              }}
+            >
+              Retake Quiz
+            </button>
+          </>
+        ) : (
+          <>
+            <p style={{
+              fontSize: "var(--font-caption)",
+              color: "#666",
+              fontFamily: "'DM Sans', sans-serif",
+              marginBottom: 12,
+              lineHeight: 1.4,
+            }}>
+              Take a quick visual quiz to uncover your style DNA. Your answers help us make better recommendations.
+            </p>
+            <button
+              onClick={onOpenStyleQuiz}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 20,
+                border: "none",
+                background: "#1A1A1A",
+                color: "#fff",
+                fontSize: "var(--font-caption)",
+                fontWeight: 600,
+                fontFamily: "'DM Sans', sans-serif",
+                cursor: "pointer",
+              }}
+            >
+              Take Style Quiz
+            </button>
+          </>
+        )}
+      </div>
 
       <ReferencePhotoCard profile={profile} onSave={onSave} />
       <LocationCard profile={profile} onSave={onSave} focusLocation={focusLocation} onClearFocusLocation={onClearFocusLocation} />
@@ -7399,6 +7907,7 @@ export default function OutfitRecommendations() {
   const [styleDnaReport, setStyleDnaReport] = useState(null);
   const [styleDnaLoading, setStyleDnaLoading] = useState(false);
   const [styleDnaError, setStyleDnaError] = useState(null);
+  const [showStyleQuiz, setShowStyleQuiz] = useState(false);
   const chatSessionRef = useRef(0);
   const streamAbortRef = useRef(null);
 
@@ -7483,8 +7992,10 @@ export default function OutfitRecommendations() {
         setTripPlans(trips);
         setTripSlotCounts(slotCounts);
 
+        let mergedProfile = null;
         if (dbProfile && Object.keys(dbProfile).length > 0) {
           setProfile(prev => ({ ...prev, ...dbProfile }));
+          mergedProfile = dbProfile;
         } else {
           // One-time migration from localStorage
           try {
@@ -7493,6 +8004,7 @@ export default function OutfitRecommendations() {
               const parsed = JSON.parse(localProfile);
               await db.saveProfile(parsed);
               setProfile(prev => ({ ...prev, ...parsed }));
+              mergedProfile = parsed;
               localStorage.removeItem(PROFILE_STORAGE_KEY);
             }
           } catch (migrationErr) {
@@ -7500,6 +8012,10 @@ export default function OutfitRecommendations() {
           }
         }
         setProfileLoaded(true);
+        // Show style quiz on first visit if never completed
+        if (!mergedProfile?.styleQuiz?.completedAt) {
+          setShowStyleQuiz(true);
+        }
       } catch (err) {
         console.error("Failed to load initial data:", err);
         setProfileLoaded(true);
@@ -8388,6 +8904,33 @@ export default function OutfitRecommendations() {
     }
   }, [wardrobeFlat, profile]);
 
+  const handleStyleQuizComplete = useCallback((quizResult) => {
+    setProfile(prev => ({
+      ...prev,
+      styleQuiz: quizResult,
+      style: {
+        ...prev.style,
+        preferredStyles: quizResult.derivedStyles.length > 0
+          ? quizResult.derivedStyles
+          : prev.style.preferredStyles,
+        colorPreferences: quizResult.derivedColors.length > 0
+          ? quizResult.derivedColors
+          : prev.style.colorPreferences,
+      },
+      lastUpdated: new Date().toISOString(),
+    }));
+    setShowStyleQuiz(false);
+    track('style_quiz_completed', {
+      primaryArchetype: quizResult.primaryArchetype,
+      secondaryArchetype: quizResult.secondaryArchetype,
+    });
+  }, []);
+
+  const handleStyleQuizSkip = useCallback(() => {
+    setShowStyleQuiz(false);
+    track('style_quiz_skipped');
+  }, []);
+
   const navigateToGarment = useCallback((item) => {
     setLightboxItem(item);
     setGarmentPreviousView(view);
@@ -8475,9 +9018,10 @@ export default function OutfitRecommendations() {
               : view === "calendar-detail" ? () => { setCalendarSelectedDay(null); setView("calendar"); }
               : view === "trip-detail" ? () => setView("trips")
               : view === "trip-summary" ? () => setView("trip-detail")
+              : view === "style-quiz" ? () => setView("profile")
               : () => setSidePanelOpen(true)
             }
-            aria-label={view === "garment" || view === "calendar-detail" || view === "trip-detail" || view === "trip-summary" ? "Go back" : "Open menu"}
+            aria-label={view === "garment" || view === "calendar-detail" || view === "trip-detail" || view === "trip-summary" || view === "style-quiz" ? "Go back" : "Open menu"}
             style={{
               width: 40,
               height: 40,
@@ -8495,7 +9039,7 @@ export default function OutfitRecommendations() {
               marginRight: 8,
             }}
           >
-            {(view === "garment" || view === "calendar-detail" || view === "trip-detail" || view === "trip-summary") ? (
+            {(view === "garment" || view === "calendar-detail" || view === "trip-detail" || view === "trip-summary" || view === "style-quiz") ? (
               <span style={{ fontSize: 22, lineHeight: 1, color: "#1A1A1A" }}>←</span>
             ) : (
               <>
@@ -8514,7 +9058,7 @@ export default function OutfitRecommendations() {
             lineHeight: 1.1,
             flex: 1,
           }}>
-            {view === "garment" ? (lightboxItem?.name ?? "Item") : view === "wardrobe" ? "My Wardrobe" : view === "saved" ? "Saved Outfits" : view === "outfit" ? "Your Outfit" : view === "profile" ? "My Profile" : view === "calendar" ? "Weekly Calendar" : view === "calendar-detail" ? "Day Detail" : view === "trips" ? "Trips" : view === "trip-detail" ? (activeTrip?.title ?? "Trip") : view === "trip-summary" ? "Packing List" : view === "style-dna" ? "Style DNA" : "Chat"}
+            {view === "garment" ? (lightboxItem?.name ?? "Item") : view === "wardrobe" ? "My Wardrobe" : view === "saved" ? "Saved Outfits" : view === "outfit" ? "Your Outfit" : view === "profile" ? "My Profile" : view === "calendar" ? "Weekly Calendar" : view === "calendar-detail" ? "Day Detail" : view === "trips" ? "Trips" : view === "trip-detail" ? (activeTrip?.title ?? "Trip") : view === "trip-summary" ? "Packing List" : view === "style-dna" ? "Style DNA" : view === "style-quiz" ? "Style Quiz" : "Chat"}
           </h1>
 
           {view === "trips" && (
@@ -8549,7 +9093,7 @@ export default function OutfitRecommendations() {
             </button>
           )}
 
-          {view !== "wardrobe" && view !== "profile" && view !== "saved" && view !== "garment" && view !== "trips" && view !== "trip-detail" && view !== "trip-summary" && view !== "calendar" && view !== "calendar-detail" && view !== "style-dna" && (
+          {view !== "wardrobe" && view !== "profile" && view !== "saved" && view !== "garment" && view !== "trips" && view !== "trip-detail" && view !== "trip-summary" && view !== "calendar" && view !== "calendar-detail" && view !== "style-dna" && view !== "style-quiz" && (
             <div style={{
               display: "flex",
               background: "#F0EFED",
@@ -8772,12 +9316,19 @@ export default function OutfitRecommendations() {
           error={styleDnaError}
           onRegenerate={handleGenerateStyleDna}
         />
+      ) : view === "style-quiz" ? (
+        <StyleQuiz
+          onComplete={handleStyleQuizComplete}
+          onSkip={() => setView("profile")}
+          isOnboarding={false}
+        />
       ) : view === "profile" ? (
         <ProfileView
           profile={profile}
           onSave={setProfile}
           focusLocation={focusLocation}
           onClearFocusLocation={() => setFocusLocation(false)}
+          onOpenStyleQuiz={() => setView("style-quiz")}
         />
       ) : (
         <ChatView
@@ -8799,6 +9350,44 @@ export default function OutfitRecommendations() {
           hasLocation={!!profile.location?.city}
           onOpenProfile={() => { setFocusLocation(true); setView("profile"); }}
         />
+      )}
+
+      {/* Onboarding Style Quiz Overlay */}
+      {showStyleQuiz && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "#FAFAF8",
+          zIndex: 10000,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}>
+          {/* Onboarding header */}
+          <div style={{
+            padding: `calc(var(--space-top-bar) + var(--safe-top)) var(--container-padding-x) 0`,
+            flexShrink: 0,
+          }}>
+            <h1 style={{
+              fontSize: "var(--font-title)",
+              fontWeight: 400,
+              color: "#1A1A1A",
+              margin: 0,
+              fontFamily: "'Instrument Serif', serif",
+              lineHeight: 1.1,
+            }}>
+              Style Quiz
+            </h1>
+          </div>
+          <StyleQuiz
+            onComplete={handleStyleQuizComplete}
+            onSkip={handleStyleQuizSkip}
+            isOnboarding={true}
+          />
+        </div>
       )}
 
     </div>
