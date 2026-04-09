@@ -21,6 +21,7 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 10. [Weather Integration](#10-weather-integration)
 11. [API Endpoints](#11-api-endpoints)
 12. [Style DNA Report](#12-style-dna-report)
+12.5. [Forgotten Gems](#125-forgotten-gems)
 13. [Cross-Cutting Concerns](#13-cross-cutting-concerns)
 
 ---
@@ -610,6 +611,37 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 
 ---
 
+## 12.5. Forgotten Gems
+
+### 12.5.1 Nudge Display
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| GEM-01 | P1 | Gem card appears on empty chat | Open app with 3+ wardrobe items, at least one unused in 30+ days | Forgotten Gem card visible between subtitle and quick chips |
+| GEM-02 | P1 | Gem card hidden when no eligible items | All wardrobe items used in outfits within last 30 days | No gem card shown |
+| GEM-03 | P1 | Gem card hidden with fewer than 3 items | Wardrobe has only 1-2 items | No gem card shown |
+| GEM-04 | P2 | Gem shows item thumbnail | Item has uploaded image | Card shows 36x36 rounded thumbnail |
+| GEM-05 | P2 | Gem shows emoji fallback | Item has no image but has emoji | Card shows emoji instead of thumbnail |
+| GEM-06 | P1 | Gem card disappears after sending message | Tap gem or send any message | Chat messages replace empty state, gem card no longer visible |
+
+### 12.5.2 Nudge Interaction
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| GEM-07 | P1 | Tapping gem sends styling request | Tap the gem card | Chat sends "Build me an outfit around my [item name]" |
+| GEM-08 | P1 | AI responds with outfit featuring the item | Tap gem, wait for AI response | At least one outfit includes the featured item |
+| GEM-09 | P2 | Same gem shows all day | Reload app multiple times on the same day | Same item is featured each time |
+| GEM-10 | P2 | Different gem shows on different days | Check on two different days | Featured item changes (assuming multiple eligible items) |
+
+### 12.5.3 Analytics
+
+| ID | Priority | Scenario | Steps | Expected Result |
+|----|----------|----------|-------|-----------------|
+| GEM-11 | P2 | Impression tracked on display | Open app with eligible gem | `forgotten_gem_shown` event logged in events table |
+| GEM-12 | P2 | Tap tracked on interaction | Tap the gem card | `forgotten_gem_tapped` event logged with item_id and days_since |
+
+---
+
 ## 13. Cross-Cutting Concerns
 
 ### 12.1 Responsive Design
@@ -702,3 +734,4 @@ Comprehensive quality assurance plan for the Runway AI styling assistant. Covers
 | `trip-editing.test.js` | Trip editing and date validation |
 | `wardrobe-notes.test.js` | Garment notes CRUD |
 | `wardrobe-categories.test.js` | Category management including Dresses & Jumpsuits |
+| `forgotten-gem.test.js` | Forgotten Gems nudge eligibility and deterministic pick |

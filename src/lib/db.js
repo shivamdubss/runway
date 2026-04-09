@@ -604,6 +604,86 @@ export async function fetchOutfitHistory() {
   };
 }
 
+// ── Forgotten Gems ──────────────────────────────────────
+
+/**
+ * Find a wardrobe item that hasn't appeared in any outfit recently.
+ * Uses a deterministic pick based on the current date so the same gem
+ * is shown all day (no flicker on re-renders / page reloads).
+ *
+ * @param {number} [staleDays=30] - Items not in any outfit for this many days are eligible
+ * @returns {Promise<{item: Object, daysSince: number|null}|null>}
+ */
+export async function fetchForgottenGem(staleDays = 30) {
+  // 1. Get all wardrobe items
+  const { data: allItems, error: itemsErr } = await supabase
+    .from('wardrobe_items')
+    .select('id, name, category, image_urls, emoji, created_at')
+    .order('created_at', { ascending: true });
+  if (itemsErr) throw itemsErr;
+  if (!allItems || allItems.length < 3) return null; // too few items to nudge
+
+  // 2. Get the most recent outfit appearance for each wardrobe item
+  const { data: recentAppearances, error: appearErr } = await supabase
+    .from('outfit_items')
+    .select('wardrobe_item_id, outfits(created_at)')
+    .order('id', { ascending: false });
+  if (appearErr) throw appearErr;
+
+  // Build a map: wardrobe_item_id → most recent outfit date
+  const lastUsed = {};
+  for (const row of (recentAppearances || [])) {
+    const wid = row.wardrobe_item_id;
+    const outfitDate = row.outfits?.created_at;
+    if (!outfitDate) continue;
+    if (!lastUsed[wid] || outfitDate > lastUsed[wid]) {
+      lastUsed[wid] = outfitDate;
+    }
+  }
+
+  // 3. Filter to items that are "forgotten" — not used in staleDays or never used
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - staleDays);
+  const cutoffIso = cutoff.toISOString();
+
+  const forgotten = allItems.filter(item => {
+    const last = lastUsed[item.id];
+    if (!last) return true; // never appeared in an outfit
+    return last < cutoffIso;
+  });
+
+  if (forgotten.length === 0) return null;
+
+  // 4. Deterministic daily pick: hash the date to pick consistently
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  let hash = 0;
+  for (let i = 0; i < today.length; i++) {
+    hash = ((hash << 5) - hash) + today.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % forgotten.length;
+  const pick = forgotten[index];
+
+  const last = lastUsed[pick.id];
+  const daysSince = last
+    ? Math.floor((Date.now() - new Date(last).getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+
+  const images = Array.isArray(pick.image_urls) && pick.image_urls.length > 0
+    ? pick.image_urls : [];
+
+  return {
+    item: {
+      id: pick.id,
+      name: pick.name,
+      category: pick.category,
+      image: images[0] || null,
+      emoji: pick.emoji,
+    },
+    daysSince,
+  };
+}
+
 // ── Weekly Calendar ──────────────────────────────────────
 
 export function getWeekStart(date = new Date()) {

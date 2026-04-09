@@ -3300,6 +3300,7 @@ function ChatView({
   weather,
   hasLocation,
   onOpenProfile,
+  forgottenGem,
 }) {
   const chatMessagesRef = useRef(null);
   const isInitialMount = useRef(true);
@@ -3324,6 +3325,18 @@ function ChatView({
     ta.style.height = "auto";
     ta.style.height = ta.scrollHeight + "px";
   }, [inputValue]);
+
+  const gemTrackedRef = useRef(false);
+  useEffect(() => {
+    if (forgottenGem && messages.length === 0 && !gemTrackedRef.current) {
+      gemTrackedRef.current = true;
+      track('forgotten_gem_shown', {
+        item_id: forgottenGem.item.id,
+        item_name: forgottenGem.item.name,
+        days_since: forgottenGem.daysSince,
+      });
+    }
+  }, [forgottenGem, messages.length]);
 
   return (
     <div
@@ -3463,6 +3476,84 @@ function ChatView({
             }}>
               Describe the occasion and I'll pull outfit options from your wardrobe.
             </span>
+            {forgottenGem && (
+              <button
+                onClick={() => {
+                  track('forgotten_gem_tapped', {
+                    item_id: forgottenGem.item.id,
+                    item_name: forgottenGem.item.name,
+                    days_since: forgottenGem.daysSince,
+                  });
+                  onChipTap(`Build me an outfit around my ${forgottenGem.item.name}`);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 16px",
+                  borderRadius: 14,
+                  border: "1px solid rgba(139, 92, 246, 0.2)",
+                  background: "linear-gradient(135deg, rgba(139, 92, 246, 0.06), rgba(236, 72, 153, 0.06))",
+                  cursor: "pointer",
+                  maxWidth: 320,
+                  width: "100%",
+                  textAlign: "left",
+                  marginTop: 8,
+                  transition: "all 0.15s ease",
+                }}
+                onPointerDown={(e) => {
+                  e.currentTarget.style.transform = "scale(0.98)";
+                }}
+                onPointerUp={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                }}
+                onPointerLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                }}
+              >
+                {forgottenGem.item.image ? (
+                  <img
+                    src={forgottenGem.item.image}
+                    alt={forgottenGem.item.name}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
+                      objectFit: "cover",
+                      flexShrink: 0,
+                    }}
+                  />
+                ) : (
+                  <span style={{ fontSize: 24, flexShrink: 0 }}>
+                    {forgottenGem.item.emoji || "👗"}
+                  </span>
+                )}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{
+                    fontSize: "var(--font-caption)",
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontWeight: 600,
+                    color: "#7C3AED",
+                    marginBottom: 1,
+                  }}>
+                    💎 Forgotten Gem
+                  </div>
+                  <div style={{
+                    fontSize: "var(--font-caption)",
+                    fontFamily: "'DM Sans', sans-serif",
+                    color: "#666",
+                    lineHeight: 1.3,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}>
+                    {forgottenGem.daysSince
+                      ? `Your ${forgottenGem.item.name} hasn't been styled in ${forgottenGem.daysSince} days`
+                      : `Your ${forgottenGem.item.name} hasn't been in an outfit yet`}
+                  </div>
+                </div>
+              </button>
+            )}
             <div style={{
               display: "flex",
               flexWrap: "wrap",
@@ -7908,6 +7999,7 @@ export default function OutfitRecommendations() {
   const [styleDnaLoading, setStyleDnaLoading] = useState(false);
   const [styleDnaError, setStyleDnaError] = useState(null);
   const [showStyleQuiz, setShowStyleQuiz] = useState(false);
+  const [forgottenGem, setForgottenGem] = useState(null);
   const chatSessionRef = useRef(0);
   const streamAbortRef = useRef(null);
 
@@ -8016,6 +8108,8 @@ export default function OutfitRecommendations() {
         if (!mergedProfile?.styleQuiz?.completedAt) {
           setShowStyleQuiz(true);
         }
+        // Load forgotten gem nudge (non-blocking)
+        db.fetchForgottenGem().then(setForgottenGem).catch(() => {});
       } catch (err) {
         console.error("Failed to load initial data:", err);
         setProfileLoaded(true);
@@ -9349,6 +9443,7 @@ export default function OutfitRecommendations() {
           weather={weather}
           hasLocation={!!profile.location?.city}
           onOpenProfile={() => { setFocusLocation(true); setView("profile"); }}
+          forgottenGem={forgottenGem}
         />
       )}
 

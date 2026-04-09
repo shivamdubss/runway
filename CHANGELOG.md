@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-04-09
+
+### Forgotten Gems
+- Daily nudge card on the chat screen highlights a wardrobe item that hasn't appeared in any outfit recently
+- Items are eligible if they haven't been in an outfit for 30+ days, or have never been recommended
+- Tapping the card auto-sends a styling request to the AI built around that item
+- Deterministic daily pick — the same gem shows all day, a new one surfaces tomorrow
+- Tracks impressions and taps for engagement analytics
+
 ## 2026-03-23
 
 ### Style DNA Report

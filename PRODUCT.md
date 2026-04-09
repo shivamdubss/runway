@@ -220,6 +220,19 @@ Users can save or dislike outfits to refine future recommendations.
 
 ---
 
+### 7.5. Forgotten Gems
+
+A daily nudge that surfaces under-worn wardrobe items to encourage rediscovery and drive outfit variety.
+
+- **Location:** Appears on the chat empty state, between the subtitle text and the quick-start chips.
+- **Eligibility:** Wardrobe items that have not appeared in any outfit for 30+ days, or have never been included in an outfit recommendation. Requires at least 3 items in the wardrobe.
+- **Daily rotation:** A deterministic hash of the current date selects which eligible item to feature, so the same gem appears all day without flickering on re-renders.
+- **Card display:** Shows the item thumbnail (or emoji fallback), the label "Forgotten Gem," and a contextual message ("Your [item] hasn't been styled in X days" or "Your [item] hasn't been in an outfit yet").
+- **Action:** Tapping the card sends a chat message: "Build me an outfit around my [item name]."
+- **Analytics:** Tracks `forgotten_gem_shown` (impression) and `forgotten_gem_tapped` (interaction) events.
+
+---
+
 ### 8. Trip Planning
 
 Users can plan outfits for multi-day trips with a visual calendar interface.
